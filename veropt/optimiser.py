@@ -1,5 +1,5 @@
 from veropt.kernels import *
-from sklearn import preprocessing
+# from sklearn import preprocessing
 from veropt.acq_funcs import *
 import matplotlib.pyplot as plt
 from scipy.stats import truncnorm
@@ -9,6 +9,7 @@ import datetime
 import torch
 import botorch
 from veropt.kernels import BayesOptModel
+from veropt.utility import NormaliserZeroMeanUnitVariance
 
 
 class PriorClass:
@@ -73,10 +74,24 @@ class ObjFunction:
 
 class BayesOptimiser:
 
-    def __init__(self, n_init_points, n_bayes_points, obj_func: ObjFunction, acq_func: AcqFunction = None,
-                 model: BayesOptModel = None, obj_weights=None, using_priors=False, normalise=True,
-                 points_before_fitting=15, test_mode=False, n_evals_per_step=1, file_name=None, verbose=True,
-                 normaliser=None, renormalise_each_step=None):
+    def __init__(
+            self,
+            n_init_points,
+            n_bayes_points,
+            obj_func: ObjFunction,
+            acq_func: AcqFunction = None,
+            model: BayesOptModel = None,
+            obj_weights=None,
+            using_priors=False,
+            normalise=True,
+            points_before_fitting=15,
+            test_mode=False,
+            n_evals_per_step=1,
+            file_name=None,
+            verbose=True,
+            normaliser=None,
+            renormalise_each_step=None
+    ):
 
         self.n_init_points = n_init_points
         self.n_bayes_points = n_bayes_points
@@ -163,8 +178,11 @@ class BayesOptimiser:
         self.suggested_steps_filename = None
 
         if normalise:
+            
+            raise NotImplementedError("Need to think and make sure this implementation is right.")
+
             if normaliser is None:
-                normaliser = preprocessing.StandardScaler
+                normaliser = NormaliserZeroMeanUnitVariance
 
             self.normaliser_class = normaliser
 
@@ -243,9 +261,10 @@ class BayesOptimiser:
         if self.obj_func.saver:
             if not self.need_new_suggestions or self.opt_mode == 'init':
                 suggested_steps = self.suggest_opt_steps()
+
                 if self.normalise and self.data_fitted:
-                    suggested_steps = self.normaliser_x.inverse_transform(suggested_steps.squeeze(0))
-                    suggested_steps = torch.tensor(suggested_steps).unsqueeze(0)
+                    suggested_steps = self.normaliser_x.inverse_transform(suggested_steps)
+
                 filenames = self.obj_func.saver(suggested_steps, self.current_step + 1)
                 self.suggested_steps_filename = filenames
 
@@ -277,9 +296,13 @@ class BayesOptimiser:
     def refresh_acq_func(self):
         acq_func_args = {}
 
-        if self.acq_func.acqfunc_name == 'EI':
+        if self.acq_func.acqfunc_name in ['EI']:
+            warnings.warn("Look into the correct shape of best_f")
+            # TODO: Figure out if this is supposed to be a scalar or a vector?
+            #   - I.e. shouldn't it give the best value for *each* obj func?
             acq_func_args['best_f'] = self.obj_func_vals.max()
-        elif self.acq_func.acqfunc_name == 'EHVI' or self.acq_func.acqfunc_name == 'qEHVI':
+
+        elif self.acq_func.acqfunc_name in ['EHVI', 'qEHVI']:
 
             po_coords, po_vals, _ = self.pareto_optimal_points()
 
@@ -300,6 +323,15 @@ class BayesOptimiser:
                     'partitioning'] = botorch.utils.multi_objective.box_decomposition.NondominatedPartitioning(
                     self.n_objs, self.obj_func_vals
                 )
+
+        elif self.acq_func.acqfunc_name in ['qLogEHVI']:
+            warnings.warn("Look into the correct shape of best_f")
+            # TODO: Figure out if this is supposed to be a scalar or a vector?
+            #   - I.e. shouldn't it give the best value for *each* obj func?
+            acq_func_args['best_f'] = self.obj_func_vals.max()
+
+            acq_func_args['objective'] = botorch.acquisition.objective.LinearMCObjective(self.obj_weights)
+
 
         self.acq_func.refresh(self.model.model, **acq_func_args)
 
@@ -358,8 +390,9 @@ class BayesOptimiser:
             warnings.warn(f"Imported {amount_evals} points but expected {self.n_evals_per_step}.")
 
         if self.data_fitted:
-            if self.renormalise_each_step:
-                self.renormalise()
+            if self.normalise:
+                if self.renormalise_each_step:
+                    self.renormalise()
             self.update_model()
 
         elif self.data_fitted is False and self.points_evaluated >= self.points_before_fitting:
@@ -481,8 +514,7 @@ class BayesOptimiser:
     def renormalise(self):
 
         if self.n_init_points > 0 and self.made_init_steps:
-            org_init_steps = self.normaliser_x.inverse_transform(self.init_steps.squeeze(0))
-            org_init_steps = torch.tensor(org_init_steps).unsqueeze(0)
+            org_init_steps = self.normaliser_x.inverse_transform(self.init_steps)
         else:
             org_init_steps = None
 
@@ -490,22 +522,12 @@ class BayesOptimiser:
         self.init_normaliser(init_steps=org_init_steps)
 
     def fit_normaliser(self):
-        # .fit might not actually do anything if it's StandardScaler (but it might matter otherwise)
 
-        normaliser_x = self.normaliser_class()
-        normaliser_y = self.normaliser_class()
+        self.normaliser_x = self.normaliser_class(self.obj_func_coords_real_units())
+        self.normaliser_y = self.normaliser_class(self.obj_func_vals_real_units())
 
-        normaliser_x.fit(self.obj_func_coords_real_units().squeeze(0))
-        normaliser_y.fit(self.obj_func_vals_real_units().squeeze(0))
-
-        self.obj_func_coords = normaliser_x.transform(self.obj_func_coords_real_units().squeeze(0))
-        self.obj_func_coords = torch.tensor(self.obj_func_coords).unsqueeze(0)
-
-        self.obj_func_vals = normaliser_y.transform(self.obj_func_vals_real_units().squeeze(0))
-        self.obj_func_vals = torch.tensor(self.obj_func_vals).unsqueeze(0)
-
-        self.normaliser_x = normaliser_x
-        self.normaliser_y = normaliser_y
+        self.obj_func_coords = self.normaliser_x.transform(self.obj_func_coords_real_units())
+        self.obj_func_vals = self.normaliser_y.transform(self.obj_func_vals_real_units())
 
     def init_normaliser(self, init_steps=None):
 
@@ -514,8 +536,7 @@ class BayesOptimiser:
             if init_steps is None:
                 init_steps = self.init_steps
 
-            self.init_steps = self.normaliser_x.transform(init_steps.squeeze(0))
-            self.init_steps = torch.tensor(self.init_steps).unsqueeze(0)
+            self.init_steps = self.normaliser_x.transform(init_steps)
 
         self.bounds = self.normaliser_x.transform(self.obj_func.bounds)
         self.bounds = torch.tensor(self.bounds)
@@ -586,7 +607,7 @@ class BayesOptimiser:
                     fun_arr[var_val_no] = self.obj_function_normalised(current_point.unsqueeze(0))
                 else:
                     fun_arr[var_val_no] = self.obj_func.run(torch.tensor(
-                        self.normaliser_x.inverse_transform(current_point.unsqueeze(0))))
+                        self.normaliser_x.inverse_transform(current_point)))
 
             acq_fun_vals[var_val_no] = self.acq_func.function(
                 torch.tensor(coords_arr[var_val_no]).unsqueeze(0)).detach().numpy()
@@ -643,8 +664,15 @@ class BayesOptimiser:
 
         return title, var_arr, model_mean, model_lower_std, model_upper_std, acq_fun_vals, fun_arr, eval_point, samples
 
-    def plot_prediction(self, obj_ind, var_ind, in_real_units=False, plot_acq_func=True, logscale=False,
-                        plot_samples=10):
+    def plot_prediction(
+            self,
+            obj_ind,
+            var_ind,
+            in_real_units=False,
+            plot_acq_func=True,
+            logscale=False,
+            plot_samples=10
+    ):
 
         if self.data_fitted is False:
 
@@ -1024,7 +1052,7 @@ class BayesOptimiser:
         if self.test_mode:
             if 'true_vals' in self.obj_func.__dict__:
                 if self.normalise and self.data_fitted:
-                    true_optimum = self.normaliser_y.transform(self.obj_func.function(self.obj_func.true_vals).unsqueeze(0))
+                    true_optimum = self.normaliser_y.transform(self.obj_func.function(self.obj_func.true_vals))
                 else:
                     true_optimum = self.obj_func.run(self.obj_func.true_vals)
                 plt.plot([0, self.points_evaluated], [float(true_optimum)] * 2, 'k',

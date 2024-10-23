@@ -7,153 +7,153 @@ import warnings
 from typing import List
 
 
-class UpperConfidenceBoundRandom(botorch.acquisition.AnalyticAcquisitionFunction):
-    from typing import Optional, Union
-    from torch import Tensor
-    from botorch.models.model import Model
-    from botorch.acquisition.objective import ScalarizedObjective
-    from botorch.utils.transforms import t_batch_mode_transform
+# class UpperConfidenceBoundRandom(botorch.acquisition.AnalyticAcquisitionFunction):
+#     from typing import Optional, Union
+#     from torch import Tensor
+#     from botorch.models.model import Model
+#     from botorch.acquisition.objective import ScalarizedObjective
+#     from botorch.utils.transforms import t_batch_mode_transform
+#
+#     def __init__(
+#             self,
+#             model: Model,
+#             beta: Union[float, Tensor],
+#             gamma: Union[float, Tensor],
+#             objective: Optional[ScalarizedObjective] = None,
+#             maximize: bool = True,
+#     ) -> None:
+#         super().__init__(model=model, objective=objective)
+#         self.maximize = maximize
+#         if not torch.is_tensor(beta):
+#             beta = torch.tensor(beta)
+#         if not torch.is_tensor(gamma):
+#             gamma = torch.tensor(gamma)
+#         self.register_buffer("beta", beta)
+#         self.register_buffer("gamma", gamma)
+#
+#     @t_batch_mode_transform(expected_q=1)
+#     def forward(self, X: Tensor) -> Tensor:
+#         r"""Evaluate the Upper Confidence Bound on the candidate set X.
+#
+#         Args:
+#             X: A `(b) x 1 x d`-dim Tensor of `(b)` t-batches of `d`-dim design
+#                 points each.
+#
+#         Returns:
+#             A `(b)`-dim Tensor of Upper Confidence Bound values at the given
+#             design points `X`.
+#         """
+#         self.beta = self.beta.to(X)
+#         self.gamma = self.gamma.to(X)
+#         posterior = self._get_posterior(X=X)
+#         batch_shape = X.shape[:-2]
+#         mean = posterior.mean.view(batch_shape)
+#         variance = posterior.variance.view(batch_shape)
+#         delta = self.beta.expand_as(mean) * variance.sqrt()
+#         rand_number = (torch.randn(1).to(X) * self.gamma).expand_as(mean)
+#         if self.maximize:
+#             return mean + delta + rand_number
+#         else:
+#             return mean - delta + rand_number
 
-    def __init__(
-            self,
-            model: Model,
-            beta: Union[float, Tensor],
-            gamma: Union[float, Tensor],
-            objective: Optional[ScalarizedObjective] = None,
-            maximize: bool = True,
-    ) -> None:
-        super().__init__(model=model, objective=objective)
-        self.maximize = maximize
-        if not torch.is_tensor(beta):
-            beta = torch.tensor(beta)
-        if not torch.is_tensor(gamma):
-            gamma = torch.tensor(gamma)
-        self.register_buffer("beta", beta)
-        self.register_buffer("gamma", gamma)
 
-    @t_batch_mode_transform(expected_q=1)
-    def forward(self, X: Tensor) -> Tensor:
-        r"""Evaluate the Upper Confidence Bound on the candidate set X.
-
-        Args:
-            X: A `(b) x 1 x d`-dim Tensor of `(b)` t-batches of `d`-dim design
-                points each.
-
-        Returns:
-            A `(b)`-dim Tensor of Upper Confidence Bound values at the given
-            design points `X`.
-        """
-        self.beta = self.beta.to(X)
-        self.gamma = self.gamma.to(X)
-        posterior = self._get_posterior(X=X)
-        batch_shape = X.shape[:-2]
-        mean = posterior.mean.view(batch_shape)
-        variance = posterior.variance.view(batch_shape)
-        delta = self.beta.expand_as(mean) * variance.sqrt()
-        rand_number = (torch.randn(1).to(X) * self.gamma).expand_as(mean)
-        if self.maximize:
-            return mean + delta + rand_number
-        else:
-            return mean - delta + rand_number
-
-
-class UpperConfidenceBoundRandomVar(botorch.acquisition.AnalyticAcquisitionFunction):
-    from typing import Optional, Union
-    from torch import Tensor
-    from botorch.models.model import Model
-    from botorch.acquisition.objective import ScalarizedObjective
-    from botorch.utils.transforms import t_batch_mode_transform
-
-    def __init__(
-            self,
-            model: Model,
-            beta: Union[float, Tensor],
-            gamma: Union[float, Tensor],
-            objective: Optional[ScalarizedObjective] = None,
-            maximize: bool = True,
-    ) -> None:
-        super().__init__(model=model, objective=objective)
-        self.maximize = maximize
-        if not torch.is_tensor(beta):
-            beta = torch.tensor(beta)
-        if not torch.is_tensor(gamma):
-            gamma = torch.tensor(gamma)
-        self.register_buffer("beta", beta)
-        self.register_buffer("gamma", gamma)
-
-    @t_batch_mode_transform(expected_q=1)
-    def forward(self, X: Tensor) -> Tensor:
-        r"""Evaluate the Upper Confidence Bound on the candidate set X.
-
-        Args:
-            X: A `(b) x 1 x d`-dim Tensor of `(b)` t-batches of `d`-dim design
-                points each.
-
-        Returns:
-            A `(b)`-dim Tensor of Upper Confidence Bound values at the given
-            design points `X`.
-        """
-        self.beta = self.beta.to(X)
-        self.gamma = self.gamma.to(X)
-        posterior = self._get_posterior(X=X)
-        batch_shape = X.shape[:-2]
-        mean = posterior.mean.view(batch_shape)
-        variance = posterior.variance.view(batch_shape)
-        delta = self.beta.expand_as(mean) * variance.sqrt()
-        rand_number = delta * (torch.randn(1).to(X) * self.gamma).expand_as(mean)
-        if self.maximize:
-            return mean + delta + rand_number
-        else:
-            return mean - delta + rand_number
-
-    def perturb_opt_acq_result(self, candidate_point, bounds, n_initsearch=1000, n_randsearch=5000):
-
-        posterior = self.model.posterior
-
-        post_candidate = posterior(candidate_point)
-        candidate_value = post_candidate.mean
-        candidate_var = post_candidate.variance
-
-        local_bounds = torch.zeros(bounds.shape)
-
-        for parameter_ind in range(len(bounds.T)):
-
-            par_vals = torch.linspace(bounds.T[parameter_ind][0], bounds.T[parameter_ind][1], steps=n_initsearch)
-
-            all_pars_vals = np.repeat(deepcopy(candidate_point), n_initsearch, axis=0)
-            all_pars_vals[:, parameter_ind] = par_vals
-
-            f_0 = candidate_value - candidate_var.sqrt() * (self.beta + self.beta * self.gamma * 1.6)
-
-            post_x = posterior(all_pars_vals)
-
-            g_x = post_x.mean + post_x.variance.sqrt() * (self.beta + self.beta * self.gamma * 1.6)
-
-            # TODO: Debug the bounds, maybe set the 1.6 down a bit? Idk. It's a bit troubling that beta keeps the
-            #  bounds wide even when gamma is low
-
-            lowerbound_ind = np.argmax(g_x > f_0)
-            upperbound_ind = n_initsearch - 1 - torch.tensor(np.argmax(np.flip(np.array(g_x > f_0))))
-
-            local_bounds.T[parameter_ind, 0] = par_vals[int(lowerbound_ind)]
-            local_bounds.T[parameter_ind, 1] = par_vals[upperbound_ind]
-
-        rand_search_pars = torch.rand([n_randsearch, len(bounds.T)])
-
-        for parameter_ind in range(len(bounds.T)):
-            rand_search_pars[:, parameter_ind] = (local_bounds.T[parameter_ind, 1] -
-                                                  local_bounds.T[parameter_ind, 0]) * \
-                                                 rand_search_pars[:, parameter_ind] + local_bounds.T[parameter_ind, 0]
-
-        rand_search_vals = torch.zeros(n_randsearch)
-
-        for par_vals_ind in range(len(rand_search_vals)):
-            rand_search_vals[par_vals_ind] = self.forward(rand_search_pars[par_vals_ind].unsqueeze(0).unsqueeze(0))
-
-        print("Bounds: ", bounds)
-        print("Local Bounds: ", local_bounds)
-
-        return rand_search_pars[rand_search_vals.argmax()].unsqueeze(0)
+# class UpperConfidenceBoundRandomVar(botorch.acquisition.AnalyticAcquisitionFunction):
+#     from typing import Optional, Union
+#     from torch import Tensor
+#     from botorch.models.model import Model
+#     from botorch.acquisition.objective import ScalarizedObjective
+#     from botorch.utils.transforms import t_batch_mode_transform
+#
+#     def __init__(
+#             self,
+#             model: Model,
+#             beta: Union[float, Tensor],
+#             gamma: Union[float, Tensor],
+#             objective: Optional[ScalarizedObjective] = None,
+#             maximize: bool = True,
+#     ) -> None:
+#         super().__init__(model=model, objective=objective)
+#         self.maximize = maximize
+#         if not torch.is_tensor(beta):
+#             beta = torch.tensor(beta)
+#         if not torch.is_tensor(gamma):
+#             gamma = torch.tensor(gamma)
+#         self.register_buffer("beta", beta)
+#         self.register_buffer("gamma", gamma)
+#
+#     @t_batch_mode_transform(expected_q=1)
+#     def forward(self, X: Tensor) -> Tensor:
+#         r"""Evaluate the Upper Confidence Bound on the candidate set X.
+#
+#         Args:
+#             X: A `(b) x 1 x d`-dim Tensor of `(b)` t-batches of `d`-dim design
+#                 points each.
+#
+#         Returns:
+#             A `(b)`-dim Tensor of Upper Confidence Bound values at the given
+#             design points `X`.
+#         """
+#         self.beta = self.beta.to(X)
+#         self.gamma = self.gamma.to(X)
+#         posterior = self._get_posterior(X=X)
+#         batch_shape = X.shape[:-2]
+#         mean = posterior.mean.view(batch_shape)
+#         variance = posterior.variance.view(batch_shape)
+#         delta = self.beta.expand_as(mean) * variance.sqrt()
+#         rand_number = delta * (torch.randn(1).to(X) * self.gamma).expand_as(mean)
+#         if self.maximize:
+#             return mean + delta + rand_number
+#         else:
+#             return mean - delta + rand_number
+#
+#     def perturb_opt_acq_result(self, candidate_point, bounds, n_initsearch=1000, n_randsearch=5000):
+#
+#         posterior = self.model.posterior
+#
+#         post_candidate = posterior(candidate_point)
+#         candidate_value = post_candidate.mean
+#         candidate_var = post_candidate.variance
+#
+#         local_bounds = torch.zeros(bounds.shape)
+#
+#         for parameter_ind in range(len(bounds.T)):
+#
+#             par_vals = torch.linspace(bounds.T[parameter_ind][0], bounds.T[parameter_ind][1], steps=n_initsearch)
+#
+#             all_pars_vals = np.repeat(deepcopy(candidate_point), n_initsearch, axis=0)
+#             all_pars_vals[:, parameter_ind] = par_vals
+#
+#             f_0 = candidate_value - candidate_var.sqrt() * (self.beta + self.beta * self.gamma * 1.6)
+#
+#             post_x = posterior(all_pars_vals)
+#
+#             g_x = post_x.mean + post_x.variance.sqrt() * (self.beta + self.beta * self.gamma * 1.6)
+#
+#             # TODO: Debug the bounds, maybe set the 1.6 down a bit? Idk. It's a bit troubling that beta keeps the
+#             #  bounds wide even when gamma is low
+#
+#             lowerbound_ind = np.argmax(g_x > f_0)
+#             upperbound_ind = n_initsearch - 1 - torch.tensor(np.argmax(np.flip(np.array(g_x > f_0))))
+#
+#             local_bounds.T[parameter_ind, 0] = par_vals[int(lowerbound_ind)]
+#             local_bounds.T[parameter_ind, 1] = par_vals[upperbound_ind]
+#
+#         rand_search_pars = torch.rand([n_randsearch, len(bounds.T)])
+#
+#         for parameter_ind in range(len(bounds.T)):
+#             rand_search_pars[:, parameter_ind] = (local_bounds.T[parameter_ind, 1] -
+#                                                   local_bounds.T[parameter_ind, 0]) * \
+#                                                  rand_search_pars[:, parameter_ind] + local_bounds.T[parameter_ind, 0]
+#
+#         rand_search_vals = torch.zeros(n_randsearch)
+#
+#         for par_vals_ind in range(len(rand_search_vals)):
+#             rand_search_vals[par_vals_ind] = self.forward(rand_search_pars[par_vals_ind].unsqueeze(0).unsqueeze(0))
+#
+#         print("Bounds: ", bounds)
+#         print("Local Bounds: ", local_bounds)
+#
+#         return rand_search_pars[rand_search_vals.argmax()].unsqueeze(0)
 
 
 class qUpperConfidenceBoundRandomVar(botorch.acquisition.monte_carlo.MCAcquisitionFunction):
@@ -230,76 +230,76 @@ class qUpperConfidenceBoundRandomVar(botorch.acquisition.monte_carlo.MCAcquisiti
         return ucb_samples.max(dim=-1)[0].mean(dim=0)
 
 
-class UpperConfidenceBoundRandomVarDist(botorch.acquisition.AnalyticAcquisitionFunction):
-    from typing import Optional, Union
-    from torch import Tensor
-    from botorch.models.model import Model
-    from botorch.acquisition.objective import ScalarizedObjective
-    from botorch.utils.transforms import t_batch_mode_transform
-
-    def __init__(
-            self,
-            model: Model,
-            beta: Union[float, Tensor],
-            gamma: Union[float, Tensor],
-            alpha: Union[float, Tensor],
-            omega: Union[float, Tensor],
-            objective: Optional[ScalarizedObjective] = None,
-            maximize: bool = True,
-    ) -> None:
-        super().__init__(model=model, objective=objective)
-        self.maximize = maximize
-        if not torch.is_tensor(beta):
-            beta = torch.tensor(beta)
-        if not torch.is_tensor(gamma):
-            gamma = torch.tensor(gamma)
-        if not torch.is_tensor(alpha):
-            alpha = torch.tensor(alpha)
-        if not torch.is_tensor(omega):
-            omega = torch.tensor(omega)
-        self.register_buffer("beta", beta)
-        self.register_buffer("gamma", gamma)
-        self.register_buffer("alpha", alpha)
-        self.register_buffer("omega", omega)
-
-    # @t_batch_mode_transform(expected_q=1)
-    def forward(self, X: Tensor, other_points=None) -> Tensor:
-        r"""Evaluate the Upper Confidence Bound on the candidate set X.
-
-        Args:
-            X: A `(b) x 1 x d`-dim Tensor of `(b)` t-batches of `d`-dim design
-                points each.
-            other_points: List containing the other points chosen in this step
-
-        Returns:
-            A `(b)`-dim Tensor of Upper Confidence Bound values at the given
-            design points `X`.
-        """
-        if other_points is None:
-            other_points = []
-        X = X if X.dim() > 2 else X.unsqueeze(0)
-        self.beta = self.beta.to(X)
-        self.gamma = self.gamma.to(X)
-        self.alpha = self.alpha.to(X)
-        self.omega = self.omega.to(X)
-        posterior = self._get_posterior(X=X)
-        batch_shape = X.shape[:-2]
-        mean = posterior.mean.view(batch_shape)
-        variance = posterior.variance.view(batch_shape)
-        delta = self.beta.expand_as(mean) * variance.sqrt()
-        rand_number = delta * (torch.randn(1).to(X) * self.gamma).expand_as(mean)
-
-        # TODO: Check computations
-        # TODO: THIS IS WRONG. ADD ALPHA
-        proximity_punish = torch.tensor([0.0])
-        scaling = (mean + delta) * self.omega
-        for point in other_points:
-            proximity_punish += scaling * torch.exp(-((torch.sum(X - point) / self.alpha)**2))
-        
-        if self.maximize:
-            return mean + delta + rand_number - proximity_punish
-        else:
-            return mean - delta + rand_number + proximity_punish
+# class UpperConfidenceBoundRandomVarDist(botorch.acquisition.AnalyticAcquisitionFunction):
+#     from typing import Optional, Union
+#     from torch import Tensor
+#     from botorch.models.model import Model
+#     from botorch.acquisition.objective import ScalarizedObjective
+#     from botorch.utils.transforms import t_batch_mode_transform
+#
+#     def __init__(
+#             self,
+#             model: Model,
+#             beta: Union[float, Tensor],
+#             gamma: Union[float, Tensor],
+#             alpha: Union[float, Tensor],
+#             omega: Union[float, Tensor],
+#             objective: Optional[ScalarizedObjective] = None,
+#             maximize: bool = True,
+#     ) -> None:
+#         super().__init__(model=model, objective=objective)
+#         self.maximize = maximize
+#         if not torch.is_tensor(beta):
+#             beta = torch.tensor(beta)
+#         if not torch.is_tensor(gamma):
+#             gamma = torch.tensor(gamma)
+#         if not torch.is_tensor(alpha):
+#             alpha = torch.tensor(alpha)
+#         if not torch.is_tensor(omega):
+#             omega = torch.tensor(omega)
+#         self.register_buffer("beta", beta)
+#         self.register_buffer("gamma", gamma)
+#         self.register_buffer("alpha", alpha)
+#         self.register_buffer("omega", omega)
+#
+#     # @t_batch_mode_transform(expected_q=1)
+#     def forward(self, X: Tensor, other_points=None) -> Tensor:
+#         r"""Evaluate the Upper Confidence Bound on the candidate set X.
+#
+#         Args:
+#             X: A `(b) x 1 x d`-dim Tensor of `(b)` t-batches of `d`-dim design
+#                 points each.
+#             other_points: List containing the other points chosen in this step
+#
+#         Returns:
+#             A `(b)`-dim Tensor of Upper Confidence Bound values at the given
+#             design points `X`.
+#         """
+#         if other_points is None:
+#             other_points = []
+#         X = X if X.dim() > 2 else X.unsqueeze(0)
+#         self.beta = self.beta.to(X)
+#         self.gamma = self.gamma.to(X)
+#         self.alpha = self.alpha.to(X)
+#         self.omega = self.omega.to(X)
+#         posterior = self._get_posterior(X=X)
+#         batch_shape = X.shape[:-2]
+#         mean = posterior.mean.view(batch_shape)
+#         variance = posterior.variance.view(batch_shape)
+#         delta = self.beta.expand_as(mean) * variance.sqrt()
+#         rand_number = delta * (torch.randn(1).to(X) * self.gamma).expand_as(mean)
+#
+#         # TODO: Check computations
+#         # TODO: THIS IS WRONG. ADD ALPHA
+#         proximity_punish = torch.tensor([0.0])
+#         scaling = (mean + delta) * self.omega
+#         for point in other_points:
+#             proximity_punish += scaling * torch.exp(-((torch.sum(X - point) / self.alpha)**2))
+#
+#         if self.maximize:
+#             return mean + delta + rand_number - proximity_punish
+#         else:
+#             return mean - delta + rand_number + proximity_punish
 
 
 class OptimiseWithDistPunish:
@@ -458,8 +458,17 @@ class PredefinedAcqOptimiser(AcqOptimiser):
 
 
 class AcqFunction:
-    def __init__(self, function_class, bounds, n_objs, optimiser: AcqOptimiser = None, params=None, n_evals_per_step=1,
-                 acqfunc_name=None):
+    def __init__(
+            self,
+            function_class,
+            bounds,
+            n_objs,
+            optimiser:
+            AcqOptimiser = None,
+            params=None,
+            n_evals_per_step=1,
+            acqfunc_name=None
+    ):
 
         self.function_class = function_class
         self.bounds = bounds
@@ -503,8 +512,16 @@ class AcqFunction:
 
 
 class PredefinedAcqFunction(AcqFunction):
-    def __init__(self, bounds, n_objs, n_evals_per_step, acqfunc_name=None, optimiser_name=None,
-                 seq_dist_punish=True, **kwargs):
+    def __init__(
+            self,
+            bounds,
+            n_objs,
+            n_evals_per_step,
+            acqfunc_name=None,
+            optimiser_name=None,
+            seq_dist_punish=True,
+            **kwargs
+    ):
 
         if acqfunc_name is None:
             if n_objs > 1:
@@ -565,6 +582,12 @@ class PredefinedAcqFunction(AcqFunction):
         elif acqfunc_name == 'qEHVI':
             acq_func_class = botorch.acquisition.multi_objective.qExpectedHypervolumeImprovement
 
+        elif acqfunc_name == 'qLogEHVI':
+            acq_func_class = botorch.acquisition.logei.qLogExpectedImprovement
+
+        else:
+            raise ValueError(f"Acquisition function name '{acqfunc_name}' is not recognised.")
+
         self.seq_dist_punish = seq_dist_punish
 
         if seq_dist_punish is True:
@@ -585,12 +608,24 @@ class PredefinedAcqFunction(AcqFunction):
         else:
             params_seq_opt = None
 
-        optimiser = PredefinedAcqOptimiser(bounds, n_objs, n_evals_per_step=n_evals_per_step,
-                                           optimiser_name=optimiser_name, seq_dist_punish=seq_dist_punish,
-                                           params_seq_opt=params_seq_opt)
+        optimiser = PredefinedAcqOptimiser(
+            bounds=bounds,
+            n_objs=n_objs,
+            n_evals_per_step=n_evals_per_step,
+            optimiser_name=optimiser_name,
+            seq_dist_punish=seq_dist_punish,
+            params_seq_opt=params_seq_opt
+        )
 
-        super().__init__(acq_func_class, bounds, n_objs, optimiser, n_evals_per_step=n_evals_per_step,
-                         acqfunc_name=acqfunc_name, params=params)
+        super().__init__(
+            function_class=acq_func_class,
+            bounds=bounds,
+            n_objs=n_objs,
+            optimiser=optimiser,
+            n_evals_per_step=n_evals_per_step,
+            acqfunc_name=acqfunc_name,
+            params=params
+        )
 
 
 

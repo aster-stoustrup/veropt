@@ -14,7 +14,7 @@ import os
 import time
 import subprocess
 import sys
-from sklearn import preprocessing
+# from sklearn import preprocessing
 
 
 class BayesExperiment:
@@ -287,7 +287,7 @@ class BayesExperiment:
 
         self.normed_vals = torch.tensor(self.normed_vals)
 
-        self.obj_weights = self.obj_weights.type(dtype=torch.float64)
+        # self.obj_weights = self.obj_weights.type(dtype=torch.float64)
 
         weighted_sums = self.normed_vals @ self.obj_weights
 
