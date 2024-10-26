@@ -253,7 +253,7 @@ class BayesOptimiser:
             print("\n")
             print("\n")
 
-        self.suggested_steps = suggested_steps.unsqueeze(0)
+        self.suggested_steps = suggested_steps
         self.suggested_steps_acq_val = self.acq_func.function(
             self.suggested_steps.reshape(self.n_evals_per_step, 1, self.n_params))
 
@@ -355,8 +355,8 @@ class BayesOptimiser:
         return new_x, new_y
 
     def normalise_batch(self, new_x, new_y):
-        new_x = torch.tensor(self.normaliser_x.transform(new_x.squeeze(0))).unsqueeze(0)
-        new_y = torch.tensor(self.normaliser_y.transform(new_y.squeeze(0))).unsqueeze(0)
+        new_x = torch.tensor(self.normaliser_x.transform(new_x))
+        new_y = torch.tensor(self.normaliser_y.transform(new_y))
         return new_x, new_y
 
     def add_new_points(self, new_x, new_y):
@@ -613,7 +613,8 @@ class BayesOptimiser:
                         self.normaliser_x.inverse_transform(current_point)))
 
             acq_fun_vals[var_val_no] = self.acq_func.function(
-                torch.tensor(coords_arr[var_val_no]).unsqueeze(0)).detach().numpy()
+                torch.tensor(coords_arr[var_val_no]).unsqueeze(0)
+            ).detach().numpy()
 
         samples = [[]] * self.n_objs
         samples = torch.zeros([self.n_objs, plot_samples, n])

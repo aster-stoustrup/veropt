@@ -3,8 +3,8 @@
 import torch
 torch.set_default_dtype(torch.float64)
 
-import matplotlib
-matplotlib.use('WebAgg')
+# import matplotlib
+# matplotlib.use('WebAgg')
 
 from veropt import BayesOptimiser
 from veropt.obj_funcs.test_functions import *
@@ -45,7 +45,6 @@ kernel = BayesOptModel(
     n_params=obj_func.n_params,
     n_objs=obj_func.n_objs,
     model_class_list=model_list,
-    init_train_its=1000,
     constraint_dict_list=constraints
 )
 
@@ -59,10 +58,11 @@ optimiser = BayesOptimiser(
     normalise=True
 )
 
-# TODO: Find out why(/if) it's the same point all four times
-# for i in range(5):
-#     optimiser.run_opt_step()
+
+# # TODO: Find out why(/if) it's the same point all four times
+for i in range(5):
+    optimiser.run_opt_step()
 
 # optimiser.plot_prediction(0, 1)
 
-veropt_gui.run(optimiser)
+# veropt_gui.run(optimiser)

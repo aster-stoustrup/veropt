@@ -200,8 +200,8 @@ class BayesOptWindow(QMainWindow):
         if var_no_list[0] == -1:
             var_no_list = torch.arange(self.optimiser.n_params)
 
-        normalised = bool(self.ui.checkBox_plotp_norm.checkState())
-        two_dims = bool(self.ui.checkBox_plotp_2d.checkState())
+        normalised = bool(self.ui.checkBox_plotp_norm.isChecked())
+        two_dims = bool(self.ui.checkBox_plotp_2d.isChecked())
 
         if not two_dims:
             for obj_no in obj_no_list:

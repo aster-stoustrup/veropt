@@ -6,7 +6,11 @@ from copy import deepcopy
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Type, TypedDict, Unpack, NotRequired
+from dataclasses import dataclass
+
+import warnings
+from yaml import warnings
 
 
 class ExactGPModel(gpytorch.models.ExactGP):
@@ -185,10 +189,30 @@ class DKModelBO(DKModel, botorch.models.gpytorch.GPyTorchModel):
         super().__init__(train_X, train_Y.squeeze(-1), gpytorch.likelihoods.GaussianLikelihood(), feature_extractor,
                          n_params)
 
+class TrainingParameters(TypedDict):
+    loss_change_to_stop: NotRequired[float]
+    max_iter: NotRequired[int]
+    init_max_iter: NotRequired[int]
+
+@dataclass
+class DefaultTrainingParameters:
+    loss_change_to_stop: float = 1e-6  # TODO: Find optimal value for this?
+    max_iter: int = 1000
+    init_max_iter: int = 10000
+
 
 class BayesOptModel:
-    def __init__(self, n_params, n_objs, model_class_list: List[MaternModelBO] = None, init_train_its=1000,
-                 train_its=200, lr=0.1, opt_params_list=None, using_priors=False, constraint_dict_list=None):
+    def __init__(
+            self,
+            n_params,
+            n_objs,
+            model_class_list: List[Type[MaternModelBO]] = None,
+            lr=0.1,
+            opt_params_list=None,
+            using_priors=False,
+            constraint_dict_list=None,
+            **kwargs: Unpack[TrainingParameters]
+    ):
 
         self.n_params = n_params
         self.n_objs = n_objs
@@ -197,8 +221,23 @@ class BayesOptModel:
         else:
             self.multi_obj = False
 
-        self.init_train_its = init_train_its
-        self.train_its = train_its
+        # TODO: Remember the sweet way to do this
+        #   - Also might technically need to copy with the way it's done now >:(
+        if 'loss_change_to_stop' in kwargs:
+            self.loss_change_to_stop = kwargs['loss_change_to_stop']
+        else:
+            self.loss_change_to_stop = DefaultTrainingParameters.loss_change_to_stop
+
+        if 'init_max_iter' in kwargs:
+            self.init_max_iter = kwargs['init_max_iter']
+        else:
+            self.init_max_iter = DefaultTrainingParameters.init_max_iter
+
+        if 'max_iter' in kwargs:
+            self.max_iter = kwargs['max_iter']
+        else:
+            self.max_iter = DefaultTrainingParameters.max_iter
+
         self.lr = lr
 
         self.model_list = None
@@ -399,7 +438,7 @@ class BayesOptModel:
 
         self.update_constraints()
 
-        self.train_backwards(self.init_train_its)
+        self.train_backwards(max_iter=self.init_max_iter)
 
     def update_model(self, x: torch.Tensor, y: torch.Tensor):
 
@@ -455,25 +494,40 @@ class BayesOptModel:
 
         self.optimiser = torch.optim.Adam(opt_list, lr=self.lr)
 
-    def train_backwards(self, its: int = None):
+    def train_backwards(self, max_iter=None):
 
         running_on_slurm = "SLURM_JOB_ID" in os.environ
         verbose = not running_on_slurm
 
-        if its is None:
-            its = self.train_its
+        if max_iter is None:
+            max_iter = self.max_iter
 
-        for train_it in range(its):
+        loss_difference = 1e5  # initial values
+        loss = 1e20  # TODO: Find a way to make sure this number is always big enough
+        assert self.loss_change_to_stop < loss_difference
+        iteration = 1
+
+        while bool(loss_difference > self.loss_change_to_stop):
+
             self.optimiser.zero_grad()  # Zero gradients from previous iteration
-            # output = self.model(x)
             output = self.model(*self.model.train_inputs)
-            # loss = -self.mll(output, y)  # Calc loss and backprop gradients
-            loss = -self.mll(output, self.model.train_targets)
+            previous_loss = loss
+            loss = -self.mll(output, self.model.train_targets)  # Calc loss and backprop gradients
             loss.backward()
             if verbose:
-                print("Training model... Iteration %d/%d - Loss: %.3f" % (train_it + 1, its, loss.item()), end="\r")
+                print(
+                    f"Training model... Iteration {iteration} (of a maximum {max_iter}) - Loss: {loss.item():.3f}",
+                    end="\r"
+                )
             self.loss_list.append(loss.item())
             self.optimiser.step()
+
+            loss_difference = torch.abs(previous_loss - loss)
+
+            iteration += 1
+            if iteration > max_iter:
+                warnings.warn("Stopped training due to maximum iterations reached.")
+                break
 
         if verbose:
             print("\n")

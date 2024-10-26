@@ -23,8 +23,13 @@ gamma = 0.01
 acq_func = PredefinedAcqFunction(obj_func.bounds, n_objs, n_evals_per_step, acqfunc_name="UCB_Var", beta=beta,
                                  gamma=gamma, seq_dist_punish=True)
 
-kernel = BayesOptModel(obj_func.n_params, n_objs, model_class_list=[MaternModelBO], init_train_its=1000,
-                       using_priors=False)
+kernel = BayesOptModel(
+    obj_func.n_params,
+    n_objs,
+    model_class_list=[MaternModelBO],
+    init_max_iter=1000,
+    using_priors=False
+)
 
 
 optimiser = BayesOptimiser(n_init_points, n_bayes_points, obj_func, acq_func, model=kernel,
