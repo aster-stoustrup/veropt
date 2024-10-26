@@ -178,8 +178,10 @@ class BayesOptimiser:
         self.suggested_steps_filename = None
 
         if normalise:
-            
-            raise NotImplementedError("Need to think and make sure this implementation is right.")
+
+            # TODO: Need to do a deeper test than the test matrix before we remove this warning
+            #   - There's some row/column stuff that has to be right
+            warnings.warn("Normaliser is still under construction.")
 
             if normaliser is None:
                 normaliser = NormaliserZeroMeanUnitVariance
@@ -539,7 +541,8 @@ class BayesOptimiser:
             self.init_steps = self.normaliser_x.transform(init_steps)
 
         self.bounds = self.normaliser_x.transform(self.obj_func.bounds)
-        self.bounds = torch.tensor(self.bounds)
+        # Squeezing the dimensions here because the obj_func coords and vals are in (1, dim, dim)
+        self.bounds = torch.tensor(self.bounds).squeeze(0)
 
         if self.using_priors:
             self.init_vals = self.normaliser_x.transform(self.obj_func.init_vals)

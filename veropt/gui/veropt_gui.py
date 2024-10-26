@@ -438,11 +438,9 @@ class OptWorker(QObject):
 
     def do_opt_steps(self):
 
-        # print(self.optimiser.current_point)
-
         self.run_opt_step()
 
-        while self.window.ui.checkBox_keep_running.checkState() \
+        while self.window.ui.checkBox_keep_running.isChecked() \
                 and self.optimiser.current_step < self.optimiser.n_steps:
 
             self.run_opt_step()

@@ -65,4 +65,4 @@ optimiser = BayesOptimiser(
 
 # optimiser.plot_prediction(0, 1)
 
-# veropt_gui.run(optimiser)
+veropt_gui.run(optimiser)

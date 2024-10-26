@@ -413,7 +413,8 @@ class PredefinedAcqOptimiser(AcqOptimiser):
         acq_opt_result = optimize.dual_annealing(
             func=lambda x: -acq_func(torch.tensor(x).unsqueeze(0)).detach().numpy(),
             bounds=self.bounds.T,
-            maxiter=1000)
+            maxiter=1000
+        )
 
         candidates, acq_fun_value = [torch.tensor(acq_opt_result.x).unsqueeze(0),
                                      -torch.tensor(acq_opt_result.fun).unsqueeze(0)]

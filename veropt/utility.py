@@ -19,15 +19,12 @@ class NormaliserType:
 
 
 class NormaliserZeroMeanUnitVariance(NormaliserType):
-    def __init__(self, matrix: torch.Tensor):
-        self.mean = matrix.mean()
-        self.variance = matrix.var()
+    def __init__(self, matrix: torch.Tensor, norm_dim=1):
+        self.means = matrix.mean(dim=norm_dim)
+        self.variances = matrix.var(dim=norm_dim)
 
     def transform(self, matrix: torch.Tensor):
-        # TODO: Probably need to do this per row or something
-        #   - Basically needs to be per parameter and per objective
-        #   - So need to sort out dimensions
-        return (matrix - self.mean) / torch.sqrt(self.variance)
+        return (matrix - self.means[:, None]) / torch.sqrt(self.variances[:, None])
 
     def inverse_transform(self, matrix):
-        return matrix * torch.sqrt(self.variance) + self.mean
+        return matrix * torch.sqrt(self.variances[:, None]) + self.means[:, None]
