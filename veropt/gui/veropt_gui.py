@@ -1,7 +1,7 @@
 from veropt.gui.gui_setup import Ui_MainWindow
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QWidget
 from PySide6.QtGui import QTextCursor
-from PySide6.QtCore import QThread, QObject, Signal
+from PySide6.QtCore import QThread, QObject, Signal, Slot
 from veropt import BayesOptimiser
 import sys
 from queue import Queue
@@ -10,6 +10,9 @@ import os
 
 
 class BayesOptWindow(QMainWindow):
+
+    refit_model_signal = Signal()
+
     def __init__(self, optimiser: BayesOptimiser, opt_worker):
         super(BayesOptWindow, self).__init__()
 
@@ -47,6 +50,7 @@ class BayesOptWindow(QMainWindow):
         self.ui.checkBox_plotp_2d.setDisabled(True)
 
     def connect_signals_to_slots(self):
+        self.refit_model_signal.connect(self.opt_worker.refit_model)
         self.ui.pushButton_refit_kernel.clicked.connect(self.opt_worker.refit_model)
         self.ui.pushButton_renormalise.clicked.connect(self.opt_worker.renormalise_model)
 
@@ -302,7 +306,9 @@ class BayesOptWindow(QMainWindow):
 
     def update_constraint_labels(self):
         for obj_no in range(self.optimiser.n_objs):
-            if 'Matern' in self.optimiser.model.model_class_list[obj_no].__name__ or 'RBF' in self.optimiser.model.model_class_list[obj_no].__name__:
+            if ('Matern' in self.optimiser.model.model_class_list[obj_no].__name__ or
+                    'RBF' in self.optimiser.model.model_class_list[obj_no].__name__):
+
                 constraint_vals = self.optimiser.model.constraint_dict_list[obj_no]["covar_module"]["raw_lengthscale"]
                 self.ls_tab_widgets[obj_no]["label_constraints"].setText(
                     f"Constraints: [{constraint_vals[0]}, {constraint_vals[1]}]")
@@ -320,15 +326,22 @@ class BayesOptWindow(QMainWindow):
             self.change_constraints(self.obj_no)
 
     def change_constraints(self, obj_no):
+
         try:
             new_val_0 = float(self.ls_tab_widgets[obj_no]["lineEdit_constraint_0"].text())
             new_val_1 = float(self.ls_tab_widgets[obj_no]["lineEdit_constraint_1"].text())
             self.optimiser.model.constraint_dict_list[obj_no]["covar_module"]["raw_lengthscale"] = [new_val_0, new_val_1]
             self.update_constraint_labels()
-            self.write_to_textfield("Constraints changed! The model will now be refitted.\n")
-            self.opt_worker.refit_model()
+            if self.optimiser.data_fitted:
+                self.write_to_textfield("Constraints changed. The model will now be refitted.\n")
+                self.refit_model_signal.emit()
+                # self.opt_worker.refit_model()
+            else:
+                self.write_to_textfield("Constraints changed. \n")
+
         except ValueError:
             self.write_to_textfield("Invalid value encountered. Write a float in both constraint fields.")
+
         self.ls_tab_widgets[obj_no]["lineEdit_constraint_0"].setText('')
         self.ls_tab_widgets[obj_no]["lineEdit_constraint_1"].setText('')
 
@@ -510,7 +523,6 @@ def run(optimiser):
     sys.stdout = WriteStream(queue)
 
     window = BayesOptWindow(optimiser, opt_worker)
-    window.show()
 
     write_thread = QThread()
     receiver = Receiver(queue)
@@ -520,6 +532,8 @@ def run(optimiser):
     app.aboutToQuit.connect(write_thread.quit)
 
     write_thread.start()
+
+    window.show()
 
     # app.exec_()
 

@@ -253,9 +253,10 @@ class BayesOptimiser:
             print("\n")
             print("\n")
 
-        self.suggested_steps = suggested_steps
+        self.suggested_steps = self.reshape_x(suggested_steps)
         self.suggested_steps_acq_val = self.acq_func.function(
-            self.suggested_steps.reshape(self.n_evals_per_step, 1, self.n_params))
+            self.suggested_steps.reshape(self.n_evals_per_step, 1, self.n_params)
+        )
 
         self.need_new_suggestions = False
 
@@ -337,20 +338,34 @@ class BayesOptimiser:
 
         self.acq_func.refresh(self.model.model, **acq_func_args)
 
-    def reshape_batch(self, new_x, new_y):
+    def reshape_x(self, new_x):
+
         if not torch.is_tensor(new_x):
             new_x = torch.tensor(new_x)
-
-        if not torch.is_tensor(new_y):
-            new_y = torch.tensor(new_y)
 
         amount_evals = new_x.numel() // self.n_params
 
         if new_x.dim() < 3:
             new_x = new_x.reshape(1, amount_evals, self.n_params)
 
+        return new_x
+
+    def reshape_y(self, new_y):
+
+        if not torch.is_tensor(new_y):
+            new_y = torch.tensor(new_y)
+
+        amount_evals = new_y.numel() // self.n_objs
+
         if new_y.dim() < 3:
             new_y = new_y.reshape(1, amount_evals, self.n_objs)
+
+        return new_y
+
+    def reshape_batch(self, new_x, new_y):
+
+        new_x = self.reshape_x(new_x)
+        new_y = self.reshape_y(new_y)
 
         return new_x, new_y
 
@@ -575,6 +590,7 @@ class BayesOptimiser:
         return norm_val
 
     def calculate_prediction(self, var_ind, in_real_units=False, plot_samples=10):
+
         if self.suggested_steps is None or self.need_new_suggestions:
             max_ind = (self.obj_func_vals * self.obj_weights).sum(2).argmax()
             eval_point = deepcopy(self.obj_func_coords[0, max_ind])
@@ -616,7 +632,6 @@ class BayesOptimiser:
                 torch.tensor(coords_arr[var_val_no]).unsqueeze(0)
             ).detach().numpy()
 
-        samples = [[]] * self.n_objs
         samples = torch.zeros([self.n_objs, plot_samples, n])
 
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
@@ -675,7 +690,8 @@ class BayesOptimiser:
             in_real_units=False,
             plot_acq_func=True,
             logscale=False,
-            plot_samples=10
+            plot_samples=10,
+            block=False
     ):
 
         if self.data_fitted is False:
@@ -911,7 +927,7 @@ class BayesOptimiser:
 
             self.model.set_train()
 
-            plt.show()
+            plt.show(block=block)
 
     # TODO: Update to support MO
     def calculate_prediction_3d(self, var_0_ind, var_1_ind, in_real_units=False):
@@ -996,7 +1012,7 @@ class BayesOptimiser:
         self.model.set_train()
 
     # TODO: Implement true obj value for multi_obj (for test_mode)
-    def plot_progress(self, in_real_units=True):
+    def plot_progress(self, in_real_units=True, block=False):
 
         plt.figure()
 
@@ -1066,9 +1082,9 @@ class BayesOptimiser:
         plt.xlabel("Point")
         plt.ylabel("Obj func value")
 
-        plt.show()
+        plt.show(block=block)
 
-    def plot_variable_values(self):
+    def plot_variable_values(self, block=False):
 
         if self.data_fitted:
             self.model.set_eval()
@@ -1083,12 +1099,12 @@ class BayesOptimiser:
             plt.legend(np.core.defchararray.add(np.array(["Variable number "] * self.n_params),
                                                 np.arange(self.n_params).astype(str)))
 
-        plt.show()
+        plt.show(block=block)
 
         if self.data_fitted:
             self.model.set_train()
 
-    def plot_pareto_front(self, var_0_ind, var_1_ind):
+    def plot_pareto_front(self, var_0_ind, var_1_ind, block=False):
 
         _, pareto_optimal_vals, _ = self.pareto_optimal_points()
 
@@ -1153,9 +1169,9 @@ class BayesOptimiser:
 
         plt.legend(loc='lower left')
 
-        plt.show()
+        plt.show(block=block)
 
-    def plot_pareto_front_3d(self, var_0_ind, var_1_ind, var_2_ind):
+    def plot_pareto_front_3d(self, var_0_ind, var_1_ind, var_2_ind, block=False):
 
         _, pareto_optimal_vals, po_inds = self.pareto_optimal_points()
 
@@ -1199,6 +1215,8 @@ class BayesOptimiser:
         plt.xlabel(obj_name_0)
         plt.ylabel(obj_name_1)
         ax.set_zlabel(obj_name_2)
+
+        plt.show(block=block)
 
     @staticmethod
     def close_plots():

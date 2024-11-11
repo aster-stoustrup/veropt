@@ -308,10 +308,18 @@ class OptimiseWithDistPunish:
         self.omega = omega
 
     def add_dist_punishment(self, x, acq_func_val, other_points):
-        proximity_punish = torch.tensor([0.0])
-        scaling = acq_func_val * self.omega
+
+        # TODO: Need to consider this math more
+        #   - Suspect scale of obj func coords is not accounted for?
+        #       - So if we don't normalise, an alpha value of 1 suddenly has different behaviour for different scales
+
+        # TODO: Make awesome lovely unit tests that confirm that this scales with coordinates + acq func value
+
+        proximity_punish = 0.0
+        scaling = torch.abs(acq_func_val * self.omega)
         for point in other_points:
-            proximity_punish += scaling * torch.exp(-(torch.sum((x - point)**2) / (self.alpha**2)))
+            proximity_punish += scaling * np.exp(-(torch.sum((x - point)**2) / (self.alpha**2)))
+        proximity_punish = float(proximity_punish)
 
         return acq_func_val - proximity_punish
 
@@ -369,7 +377,10 @@ class PredefinedAcqOptimiser(AcqOptimiser):
         elif self.optimiser_name == 'botorch':
             function = self.botorch_optim
 
-        if n_evals_per_step < 2:
+        else:
+            raise ValueError(f"Acquisition function optimiser name '{optimiser_name}' not recognised")
+
+        if n_evals_per_step == 1:
             self.seq_dist_punish = False
         else:
             self.seq_dist_punish = seq_dist_punish
@@ -377,8 +388,13 @@ class PredefinedAcqOptimiser(AcqOptimiser):
         if self.seq_dist_punish is True:
             self.seq_optimiser = OptimiseWithDistPunish(params_seq_opt['alpha'], params_seq_opt['omega'])
 
-        super(PredefinedAcqOptimiser, self).__init__(bounds, function, n_objs, n_evals_per_step=n_evals_per_step,
-                                                     params=params_seq_opt)
+        super(PredefinedAcqOptimiser, self).__init__(
+            bounds,
+            function,
+            n_objs,
+            n_evals_per_step=n_evals_per_step,
+            params=params_seq_opt
+        )
 
     def optimise(self, acq_func):
         if not self.seq_dist_punish:

@@ -15,6 +15,7 @@ from veropt.gui import veropt_gui
 n_init_points = 16
 n_bayes_points = 64
 
+# TODO: Look into bug at = 1
 n_evals_per_step = 4
 
 
@@ -30,14 +31,16 @@ acq_func = PredefinedAcqFunction(
     n_objs=n_objs,
     n_evals_per_step=n_evals_per_step,
     acqfunc_name='qLogEHVI',
-    seq_dist_punish=True
+    seq_dist_punish=True,
+    alpha=1.0,
+    omega=1.0
 )
 
 
-constraints = n_objs * [{
+constraints = {
     "covar_module": {
         "raw_lengthscale": [0.1, 2.0]}
-}]
+}
 
 model_list = n_objs * [MaternModelBO]  # Matern is the default
 
@@ -58,9 +61,7 @@ optimiser = BayesOptimiser(
     normalise=True
 )
 
-
-# # TODO: Find out why(/if) it's the same point all four times
-for i in range(5):
+for i in range(n_init_points//n_evals_per_step + 1):
     optimiser.run_opt_step()
 
 # optimiser.plot_prediction(0, 1)

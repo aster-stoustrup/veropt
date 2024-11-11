@@ -10,7 +10,8 @@ from typing import List, Tuple, Type, TypedDict, Unpack, NotRequired
 from dataclasses import dataclass
 
 import warnings
-from yaml import warnings
+
+from typing_extensions import runtime
 
 
 class ExactGPModel(gpytorch.models.ExactGP):
@@ -201,6 +202,18 @@ class DefaultTrainingParameters:
     init_max_iter: int = 10000
 
 
+def check_for_shallow_copies(list_in):
+    ids = [id(item) for item in list_in]
+    counts = np.unique(ids, return_counts=True)[1]
+    max_count = np.max(counts)
+    if max_count == 1:
+        return False
+    elif max_count > 1:
+        return True
+    else:
+        raise RuntimeError("Something went wrong while checking for shallow copies.")
+
+
 class BayesOptModel:
     def __init__(
             self,
@@ -252,6 +265,7 @@ class BayesOptModel:
         self.loss_list = []
 
         self.init_opt_params_list(opt_params_list)
+        self.constraint_dict_list = None
         self.init_constraint_dict_list(constraint_dict_list)
 
         self.using_priors = using_priors
@@ -302,18 +316,16 @@ class BayesOptModel:
     def init_constraint_dict_list(self, constraint_dict_list):
 
         if constraint_dict_list is None:
-            self.constraint_dict_list = []
+            self.constraint_dict_list = [None] * self.n_objs
             for model_no in range(self.n_objs):
                 if "Matern" in self.model_class_list[model_no].__name__ or "RBF" in self.model_class_list[model_no].__name__:
-                    self.constraint_dict_list.append({
+                    self.constraint_dict_list[model_no] = {
                         "covar_module": {
                             "raw_lengthscale": [0.1, 2.0]}
-                    })
-                else:
-                    self.constraint_dict_list.append(None)
+                    }
 
         elif not isinstance(constraint_dict_list, list):
-            self.constraint_dict_list = [constraint_dict_list] * self.n_objs
+            self.constraint_dict_list = [deepcopy(constraint_dict_list) for i in range(self.n_objs)]
 
         elif isinstance(constraint_dict_list, list) and len(constraint_dict_list) < self.n_objs:
             self.constraint_dict_list = constraint_dict_list
@@ -329,6 +341,15 @@ class BayesOptModel:
 
         else:
             self.constraint_dict_list = constraint_dict_list
+
+        # Can consider this check. But the intended design is to have unique constraints for all objectives.
+        #   - Could also make it an assert instead.
+        found_shallow_copies = check_for_shallow_copies(self.constraint_dict_list)
+        if found_shallow_copies:
+            warnings.warn(
+                "Some indices of the constraint_dict_list points to the same object. Constraints cannot "
+                "be set individually."
+            )
 
     def eval(self, x: torch.Tensor):
         self.set_eval()
