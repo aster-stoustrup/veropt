@@ -309,9 +309,9 @@ class OptimiseWithDistPunish:
 
     def add_dist_punishment(self, x, acq_func_val, other_points):
 
-        # TODO: Need to consider this math more
-        #   - Suspect scale of obj func coords is not accounted for?
-        #       - So if we don't normalise, an alpha value of 1 suddenly has different behaviour for different scales
+        # TODO: Get the math completely solid
+        #   - We are scaling the y axis but assuming range from zero and up. Not necessarily the case
+        #   - We should scale with the x axis in case we don't normalise
 
         # TODO: Make awesome lovely unit tests that confirm that this scales with coordinates + acq func value
 

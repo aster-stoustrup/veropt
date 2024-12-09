@@ -222,10 +222,6 @@ class BayesOptWindow(QMainWindow):
             #     for var_no in var_no_list:
             #         self.optimiser.plot_prediction_2d_real_units(int(obj_no), int(var_no))
 
-    def plot_prediction_real_units(self):
-        for var_ind in range(self.optimiser.n_params):
-            self.optimiser.plot_prediction_real_units(var_ind)
-
     def plot_pareto(self):
         if self.optimiser.n_objs == 2:
             self.optimiser.plot_pareto_front(0, 1)
@@ -299,7 +295,7 @@ class BayesOptWindow(QMainWindow):
                     # self.ui.label_length_scale.repaint()
 
     def update_local_best_val(self):
-        if self.optimiser.points_evaluated > 0:
+        if self.optimiser.n_points_evaluated > 0:
             for obj_no in range(self.optimiser.n_objs):
                 self.ls_tab_widgets[obj_no]["label_obj_best_val"].setText(
                     f"Best value: {self.optimiser.best_val(max_for_single_obj_ind=obj_no):.2f}")
@@ -350,9 +346,9 @@ class BayesOptWindow(QMainWindow):
 
     def update_status_labels(self):
         self.ui.label_current_point.setText(f"Step {self.optimiser.current_step} of {self.optimiser.n_steps} "
-                                            f"({self.optimiser.points_evaluated} of {self.optimiser.n_points} "
+                                            f"({self.optimiser.n_points_evaluated} of {self.optimiser.n_points} "
                                             f"points evaluated)")
-        if self.optimiser.points_evaluated > 0:
+        if self.optimiser.n_points_evaluated > 0:
             if self.optimiser.multi_obj:
                 self.ui.label_best_val.setText(f"Best summed value: {self.optimiser.best_val(weighted_best=True)[0]:.2f}")
             else:

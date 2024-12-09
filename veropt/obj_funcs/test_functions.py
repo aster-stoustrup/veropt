@@ -205,6 +205,7 @@ class PredefinedTestFunction(ObjFunction):
             bounds = torch.tensor([[1.0]*5, [3.0]*5])
             obj_names = [f"VeSa {obj_no+1}" for obj_no in range(n_objs)]
 
+        # Could maybe do an DTLZN to avoid making a bunch of these
         elif function_name == "DTLZ1":
             if n_params is None:
                 n_params = 10
@@ -216,8 +217,22 @@ class PredefinedTestFunction(ObjFunction):
                 num_objectives=n_objs,
                 negate=True
             )
-            bounds = torch.tensor([[1.0]*n_params, [3.0]*n_params])
+            bounds = torch.tensor([[0.0]*n_params, [1.0]*n_params])
             obj_names = [f"DTLZ1 {obj_no+1}" for obj_no in range(n_objs)]
+
+        elif function_name == "DTLZ2":
+            if n_params is None:
+                n_params = 10
+            if n_objs is None:
+                n_objs = 5
+
+            function = botorch.test_functions.DTLZ2(
+                dim=n_params,
+                num_objectives=n_objs,
+                negate=True
+            )
+            bounds = torch.tensor([[0.0]*n_params, [1.0]*n_params])
+            obj_names = [f"DTLZ2 {obj_no+1}" for obj_no in range(n_objs)]
 
         else:
             raise ValueError("Function name not recognised.")
