@@ -1,11 +1,3 @@
-# TODO: Fix this on a general level
-#   - Consider if this is a good fix or if we'd like to try to change the np numbers to float32
-import torch
-torch.set_default_dtype(torch.float64)
-
-# import matplotlib
-# matplotlib.use('WebAgg')
-
 from veropt import BayesOptimiser
 from veropt.obj_funcs.test_functions import *
 from veropt.acq_funcs import *

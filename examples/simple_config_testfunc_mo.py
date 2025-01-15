@@ -16,5 +16,4 @@ n_objs = obj_func.n_objs
 
 optimiser = BayesOptimiser(n_init_points, n_bayes_points, obj_func, n_evals_per_step=n_evals_per_step)
 
-
 veropt_gui.run(optimiser)

@@ -1,10 +1,12 @@
 import datetime
 import warnings
 
+import torch
+# TODO: Consider if this is enough or if there are other places where this needs to be?
+torch.set_default_dtype(torch.float64)
 import botorch
 import dill
 import matplotlib.pyplot as plt
-import torch
 from scipy.stats import truncnorm
 
 # from sklearn import preprocessing
@@ -14,6 +16,7 @@ from veropt.kernels import BayesOptModel
 from veropt.utility import (
     NormaliserZeroMeanUnitVariance, opacity_for_multidimensional_points, format_list
 )
+from veropt.containers import SuggestedPoint
 
 
 class MetaDataTensor:
@@ -184,6 +187,7 @@ class BayesOptimiser:
         self.opt_mode = "init"
         self.data_fitted = False
         self.need_new_suggestions = True
+        self.data_normalised = False
 
         self.test_mode = test_mode
         self.verbose = verbose
@@ -600,6 +604,8 @@ class BayesOptimiser:
 
         self.acq_func.change_bounds(self.bounds)
 
+        self.data_normalised = True
+
         if self.verbose:
             if self.n_objs > 1:
                 best_val_string = format_list(self.best_val().detach().tolist())
@@ -618,18 +624,16 @@ class BayesOptimiser:
     def choose_plot_point(self):
 
         if self.suggested_steps is None or self.need_new_suggestions:
+            # TODO: Use some general method instead of hard-coding this here
             max_ind = (self.obj_func_vals * self.obj_weights).sum(2).argmax()
             eval_point = deepcopy(self.obj_func_coords[0, max_ind])
-            # print("Plotting for the point with highest known value.")
             point_description = "at the point with the highest known value"
         else:
             high_ind = self.suggested_steps_acq_val.argmax()
             eval_point = deepcopy(self.suggested_steps[0, high_ind:high_ind + 1]).squeeze(0)
-            # print("Plotting for the suggested next step.")
             point_description = "at the suggested next step with highest acq val"
 
         return eval_point, point_description
-
 
     def calculate_prediction(
             self,
@@ -726,6 +730,53 @@ class BayesOptimiser:
 
         # TODO: Fix this output mess
         return point_description, var_arr, model_mean, model_lower_std, model_upper_std, acq_fun_vals, fun_arr, eval_point, samples
+
+    # TODO: Combine with calculate_prediction into one, unmessy thing
+    def calculate_prediction_suggested_steps(
+            self,
+            in_real_units=False
+    ):
+        n_suggested_steps = self.suggested_steps.shape[1]
+        prediction_list = [0.0] * n_suggested_steps
+
+        for point_no in range(n_suggested_steps):
+
+            expec_val_list = self.model.eval(self.suggested_steps[:, point_no])
+            lower = [0.0] * self.n_objs
+            upper = [0.0] * self.n_objs
+            for obj_no in range(self.n_objs):
+                lower[obj_no], upper[obj_no] = expec_val_list[obj_no].confidence_region()
+
+            if self.multi_obj:
+                lower = torch.cat(lower, dim=1).detach().numpy()
+                upper = torch.cat(upper, dim=1).detach().numpy()
+                expec_val = torch.cat([val.loc for val in expec_val_list], dim=1).detach().numpy()
+
+            else:
+                lower = lower[0].unsqueeze(0).detach().numpy()
+                upper = upper[0].unsqueeze(0).detach().numpy()
+                expec_val = expec_val_list[0].loc.unsqueeze(0).detach().numpy()
+
+            if not in_real_units:
+                suggested_steps = self.suggested_steps
+            else:
+                suggested_steps = torch.tensor(self.normaliser_x.inverse_transform(self.suggested_steps))
+
+            if in_real_units:
+                # TODO: Have to .loc.detach() before we transform (so add an else and move it up)
+                #  Aaaand we need to wait with picking [obj_no]
+                expec_val = self.normaliser_y.inverse_transform(expec_val)
+                lower = self.normaliser_y.inverse_transform(lower)
+                upper = self.normaliser_y.inverse_transform(upper)
+
+            prediction_list[point_no] = SuggestedPoint(
+                coordinates=suggested_steps[:, point_no].squeeze(0),
+                predicted_values=torch.tensor(expec_val).squeeze(0),
+                predicted_values_lower=torch.tensor(expec_val - lower).squeeze(0),
+                predicted_values_upper=torch.tensor(upper - expec_val).squeeze(0)
+            )
+
+        return prediction_list
 
     def plot_prediction(
             self,
@@ -1290,6 +1341,7 @@ class BayesOptimiser:
     #         return best_coords
 
     # TODO: Replace usages with external method?
+    #  - Alternatively keep method but call the external method so it's just a link
     def best_val(self, in_real_units=False, weighted_best=False, max_for_single_obj_ind=None):
 
         # Planning to replace with external method
@@ -1340,30 +1392,9 @@ class BayesOptimiser:
         return self.obj_func_coords[:, pareto_optimal_ind], self.obj_func_vals[:, pareto_optimal_ind], \
                pareto_optimal_ind
 
-    # def obj_func_coords_real_units(self):
-    #     if self.normalise and self.data_fitted:
-    #         coords_not_normalised = self.normaliser_x.inverse_transform(self.obj_func_coords)
-    #         coords_not_normalised = torch.tensor(coords_not_normalised)
-    #     else:
-    #         coords_not_normalised = deepcopy(self.obj_func_coords)
-    #     return coords_not_normalised
-
-    # def obj_func_vals_real_units(self):
-    #     if self.normalise and self.data_fitted:
-    #         vals_not_normalised = self.normaliser_y.inverse_transform(self.obj_func_vals)
-    #         vals_not_normalised = torch.tensor(vals_not_normalised)
-    #     else:
-    #         vals_not_normalised = deepcopy(self.obj_func_vals)
-    #     return vals_not_normalised
-
-    # def bounds_real_units(self):
-    #     bounds_not_normalised = self.normaliser_x.inverse_transform(self.bounds)
-    #     bounds_not_normalised = torch.tensor(bounds_not_normalised)
-    #     return bounds_not_normalised
-
     @property
     def return_normalised_data(self) -> bool:
-        if self.normalise and self.data_fitted:
+        if self.normalise and self.data_normalised:
             return True
         else:
             return False
@@ -1480,7 +1511,3 @@ def load_optimiser(file_name):
     with open(file_name, 'rb') as file:
         optimiser = dill.load(file)
     return optimiser
-
-
-
-

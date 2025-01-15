@@ -7,6 +7,7 @@ import warnings
 from typing import List
 
 
+# TODO: Update or delete
 # class UpperConfidenceBoundRandom(botorch.acquisition.AnalyticAcquisitionFunction):
 #     from typing import Optional, Union
 #     from torch import Tensor
@@ -156,6 +157,7 @@ from typing import List
 #         return rand_search_pars[rand_search_vals.argmax()].unsqueeze(0)
 
 
+# TODO: NB: This code might be easily breakable when updating botorch. Can we do this more high-level?
 class qUpperConfidenceBoundRandomVar(botorch.acquisition.monte_carlo.MCAcquisitionFunction):
     r"""MC-based batch Upper Confidence Bound.
     NB: With noise! :D
@@ -230,6 +232,7 @@ class qUpperConfidenceBoundRandomVar(botorch.acquisition.monte_carlo.MCAcquisiti
         return ucb_samples.max(dim=-1)[0].mean(dim=0)
 
 
+# TODO: Review if neccesary, maybe delete?
 # class UpperConfidenceBoundRandomVarDist(botorch.acquisition.AnalyticAcquisitionFunction):
 #     from typing import Optional, Union
 #     from torch import Tensor
@@ -544,7 +547,7 @@ class PredefinedAcqFunction(AcqFunction):
             if n_objs > 1:
                 acqfunc_name = "EHVI"
             else:
-                acqfunc_name = "UCB_Var"
+                acqfunc_name = "UCB"
 
         params = {}
 
@@ -587,12 +590,15 @@ class PredefinedAcqFunction(AcqFunction):
 
             if n_evals_per_step == 1 or seq_dist_punish:
 
-                acq_func_class = UpperConfidenceBoundRandomVar
+                raise NotImplementedError("This acquistion function is not available in the current version of veropt.")
+
+                # acq_func_class = UpperConfidenceBoundRandomVar
 
             else:
                 acq_func_class = qUpperConfidenceBoundRandomVar
 
         # TODO: Check whether there's too many objectives for EHVI? (And maybe for the q ver too)
+        #  - can then recommend 'qLogEHVI' if this is the case
         elif acqfunc_name == "EHVI":
             acq_func_class = botorch.acquisition.multi_objective.ExpectedHypervolumeImprovement
 
@@ -643,8 +649,3 @@ class PredefinedAcqFunction(AcqFunction):
             acqfunc_name=acqfunc_name,
             params=params
         )
-
-
-
-
-
