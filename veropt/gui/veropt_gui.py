@@ -135,6 +135,15 @@ class BayesOptWindow(QMainWindow):
                 else f"Var {var_no+1}"
             self.ui.comboBox_plotp_var.addItem(var_name)
 
+        n_total_plots = self.optimiser.n_objs * self.optimiser.n_params
+
+        if self.optimiser.n_objs > 1 and n_total_plots > 4:
+            # 'all' is 0 so we're setting it to 1 to avoid opening too many windows
+            self.ui.comboBox_plotp_obj.setCurrentIndex(1)
+
+        if self.optimiser.n_params > 1 and n_total_plots > 4:
+            self.ui.comboBox_plotp_var.setCurrentIndex(1)
+
     def set_up_ls_tabs(self):
 
         for obj_no in range(self.optimiser.n_objs):
