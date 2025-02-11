@@ -4,7 +4,8 @@ from veropt.acq_funcs import *
 from veropt.kernels import *
 from veropt.gui import veropt_gui
 
-n_init_points = 16*4
+# n_init_points = 16
+n_init_points = 16 * 4
 n_bayes_points = 64
 
 # TODO: Look into bug at = 1
@@ -12,10 +13,10 @@ n_evals_per_step = 4
 
 
 # obj_func = PredefinedTestFunction("BraninCurrin")
-# obj_func = PredefinedTestFunction("VehicleSafety")
+obj_func = PredefinedTestFunction("VehicleSafety")
 # obj_func = PredefinedTestFunction("DTLZ1")
-obj_func = PredefinedTestFunction("DTLZ2")
-# obj_func = PredefinedTestFunction("DTLZ1", n_params=12, n_objs=10)
+# obj_func = PredefinedTestFunction("DTLZ2")
+# obj_func = PredefinedTestFunction("DTLZ1", n_params=8, n_objs=3)
 
 n_objs = obj_func.n_objs
 
@@ -54,12 +55,13 @@ optimiser = BayesOptimiser(
     normalise=True
 )
 
-# TODO: Bug fix save optimiser
+# TODO: Bug fix 'save optimiser'
 #   - Seems possibly tricky, might be more worthwhile to wait until we can re-do the saving to something more stable
 
 # TODO: Potentially look into:
 #   - Suggested steps for some pars being exactly the same val
 #       - Not necessarily wrong but maybe understand why (didn't do this in previous step)
+#       - Was probably because of the wrong acq func, should be better now?
 
 # for i in range(n_init_points//n_evals_per_step + 1):
 #     optimiser.run_opt_step()
@@ -68,10 +70,10 @@ optimiser = BayesOptimiser(
 
 # veropt_gui.run(optimiser)
 
-# TODO: Consider changing model training to n iterations with change smaller than threshold
-
-for i in range(4):
+for i in range(16):
     optimiser.run_opt_step()
+
+optimiser.suggest_opt_steps()
 
 from veropt.visualisation import *
 

@@ -14,10 +14,11 @@ from veropt.acq_funcs import *
 from veropt.kernels import *
 from veropt.kernels import BayesOptModel
 from veropt.utility import (
-    NormaliserZeroMeanUnitVariance, opacity_for_multidimensional_points, format_list
+    NormaliserZeroMeanUnitVariance, opacity_for_multidimensional_points, format_list, get_best_points
 )
 from veropt.containers import SuggestedPoint
 
+from botorch.utils.multi_objective.box_decompositions.non_dominated import FastNondominatedPartitioning
 
 class MetaDataTensor:
     def __init__(self, data: torch.Tensor, normalised: bool):
@@ -334,12 +335,16 @@ class BayesOptimiser:
         acq_func_args = {}
 
         if self.acq_func.acqfunc_name in ['EI']:
-            warnings.warn("Look into the correct shape of best_f")
-            # TODO: Figure out if this is supposed to be a scalar or a vector?
-            #   - I.e. shouldn't it give the best value for *each* obj func?
-            acq_func_args['best_f'] = self.obj_func_vals.max()
 
-        elif self.acq_func.acqfunc_name in ['EHVI', 'qEHVI']:
+            # TODO: Need to fix the best_f here, probably? Maybe we have to manually choose an objective so we can find
+            #  best_f with it?
+
+            raise NotImplementedError("Currently out of service, sorry.")
+
+            # Might not be correct? See best_f under 'qLogEHVI'
+            # acq_func_args['best_f'] = self.obj_func_vals.max()
+
+        elif self.acq_func.acqfunc_name in ['EHVI', 'qEHVI', 'qLogEHVI']:
 
             po_coords, po_vals, _ = self.pareto_optimal_points()
 
@@ -349,26 +354,10 @@ class BayesOptimiser:
 
             acq_func_args['ref_point'] = nadir_point
 
-            # Sad thing that is needed because botorch changed their file structure between versions :(
-            try:
-                acq_func_args['partitioning'] = botorch.utils.multi_objective.box_decompositions.non_dominated.\
-                    NondominatedPartitioning(
-                    ref_point=nadir_point, Y=self.obj_func_vals.squeeze(0)
-                )
-            except AttributeError:
-                acq_func_args[
-                    'partitioning'] = botorch.utils.multi_objective.box_decomposition.NondominatedPartitioning(
-                    self.n_objs, self.obj_func_vals
-                )
-
-        elif self.acq_func.acqfunc_name in ['qLogEHVI']:
-            warnings.warn("Look into the correct shape of best_f")
-            # TODO: Figure out if this is supposed to be a scalar or a vector?
-            #   - I.e. shouldn't it give the best value for *each* obj func?
-            acq_func_args['best_f'] = self.obj_func_vals.max()
-
-            acq_func_args['objective'] = botorch.acquisition.objective.LinearMCObjective(self.obj_weights)
-
+            acq_func_args['partitioning'] = FastNondominatedPartitioning(
+                ref_point=nadir_point,
+                Y=self.obj_func_vals.squeeze(0)
+            )
 
         self.acq_func.refresh(self.model.model, **acq_func_args)
 
@@ -586,7 +575,7 @@ class BayesOptimiser:
 
         self.bounds_normalised = self.normaliser_x.transform(self.bounds_real_units)
         # Squeezing the dimensions here because the normaliser does (1, dim, dim) to support botorch
-        self.bounds_normalised = torch.tensor(self.bounds_normalised).squeeze(0)
+        self.bounds_normalised = self.bounds_normalised.squeeze(0)
 
         if self.using_priors:
             warnings.warn("This functionality has been collecting dust in the corner. Use at own risk.")
@@ -627,11 +616,11 @@ class BayesOptimiser:
             # TODO: Use some general method instead of hard-coding this here
             max_ind = (self.obj_func_vals * self.obj_weights).sum(2).argmax()
             eval_point = deepcopy(self.obj_func_coords[0, max_ind])
-            point_description = "at the point with the highest known value"
+            point_description = f"at the point with the highest known value (point no. {max_ind})"
         else:
             high_ind = self.suggested_steps_acq_val.argmax()
             eval_point = deepcopy(self.suggested_steps[0, high_ind:high_ind + 1]).squeeze(0)
-            point_description = "at the suggested next step with highest acq val"
+            point_description = f"at the suggested next step with highest acq val (suggested point no. {high_ind})"
 
         return eval_point, point_description
 
@@ -1098,7 +1087,7 @@ class BayesOptimiser:
         plt.figure()
 
         if in_real_units:
-            obj_func_vals = self.obj_func_vals_real_units()
+            obj_func_vals = self.obj_func_vals_real_units
         else:
             obj_func_vals = self.obj_func_vals
 

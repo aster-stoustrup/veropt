@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal, TYPE_CHECKING
+import warnings
+from typing import Literal, Optional, TYPE_CHECKING
 
 import numpy as np
+import plotly.graph_objs
 import plotly.graph_objs as go
 import torch
 from dash import Dash, Input, Output, State, callback, dcc, html
@@ -52,6 +54,7 @@ def plot_point_overview_from_optimiser(
             expected_value_list = optimiser.model.eval(optimiser.suggested_steps[:, point_no])
             expected_values[point_no] = torch.cat([val.loc for val in expected_value_list], dim=1).squeeze(0).detach().numpy()
 
+        # TODO: Is this necessary??
         obj_func_vals = torch.tensor(np.array(expected_values))
 
     elif points == 'best':
@@ -103,10 +106,10 @@ def plot_point_overview_from_optimiser(
 # TODO: Find better name, could also be used for evaluated points
 #   - When we do this, also need to rename input names
 def plot_point_overview(
-        obj_func_coords,
-        obj_func_vals,
-        obj_names,
-        var_names,
+        obj_func_coords: torch.Tensor,
+        obj_func_vals: torch.Tensor,
+        obj_names: list[str],
+        var_names: list[str],
         shown_inds = None
 ):
     # TODO: Maybe want a longer colour scale to avoid duplicate colours...?
@@ -179,12 +182,138 @@ def plot_point_overview(
     fig.show()
 
 
+def plot_pareto_front(
+        obj_func_vals: torch.Tensor,
+        dominating_point_vals: torch.Tensor,
+        plotted_objs_inds: list[int],
+        suggested_points: Optional[list[SuggestedPoint]] = None
+):
+
+    if len(plotted_objs_inds) == 2:
+
+        obj_ind_x = plotted_objs_inds[0]
+        obj_ind_y = plotted_objs_inds[1]
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(
+            x=obj_func_vals[:, obj_ind_x],
+            y=obj_func_vals[:, obj_ind_y],
+            mode='markers',
+            name='Evaluated points'
+        ))
+
+        fig.add_trace(go.Scatter(
+            x=dominating_point_vals[:, obj_ind_x],
+            y=dominating_point_vals[:, obj_ind_y],
+            mode='markers',
+            marker={'color': 'black'},
+            name='Dominating evaluated points',
+        ))
+
+        if suggested_points:
+
+            suggested_point_color = 'rgb(139, 0, 0)'
+
+            for suggested_point_no, point in enumerate(suggested_points):
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=point.predicted_values[obj_ind_x].detach().numpy(),
+                        y=point.predicted_values[obj_ind_y].detach().numpy(),
+                        error_x={
+                            'type': 'data',
+                            'symmetric': False,
+                            'array': point.predicted_values_upper[obj_ind_x].detach().numpy(),
+                            'arrayminus': point.predicted_values_lower[obj_ind_x].detach().numpy(),
+                            'color': suggested_point_color
+                        },
+                        error_y={
+                            'type': 'data',
+                            'symmetric': False,
+                            'array': point.predicted_values_upper[obj_ind_y].detach().numpy(),
+                            'arrayminus': point.predicted_values_lower[obj_ind_y].detach().numpy(),
+                            'color': suggested_point_color
+                        },
+                        mode='markers',
+                        marker={'color': suggested_point_color},
+                        name='Suggested point',
+                    )
+                )
+
+    elif len(plotted_objs_inds) == 3:
+
+        # TODO: Add suggested points
+        # TODO: Add dominating points
+
+        plotted_obj_vals = obj_func_vals[:, plotted_objs_inds]
+
+        fig = go.Figure(data=[go.Scatter3d(
+            x=plotted_obj_vals[:, plotted_objs_inds[0]],
+            y=plotted_obj_vals[:, plotted_objs_inds[1]],
+            z=plotted_obj_vals[:, plotted_objs_inds[2]],
+            mode='markers'
+        )])
+
+    else:
+        raise ValueError(f"Can plot pareto front of either 2 or 3 objectives, got {len(plotted_objs_inds)}")
+
+    fig.show()
+
+
+def plot_pareto_front_from_optimiser(
+        optimiser: BayesOptimiser,
+        plotted_objs_inds: list[int]
+):
+    obj_func_vals = optimiser.obj_func_vals.squeeze(0)
+    _, pareto_optimal_vals, _ = optimiser.pareto_optimal_points()
+    pareto_optimal_vals = pareto_optimal_vals.squeeze(0)
+
+    if optimiser.need_new_suggestions is False:
+        suggested_point_predictions = optimiser.calculate_prediction_suggested_steps()
+    else:
+        suggested_point_predictions = None
+
+    plot_pareto_front(
+        obj_func_vals=obj_func_vals,
+        dominating_point_vals=pareto_optimal_vals,
+        plotted_objs_inds=plotted_objs_inds,
+        suggested_points=suggested_point_predictions
+    )
+
+
+# TODO: Move somewhere nice
+def _calculate_seq_dist_punish_acq_func_vals(
+        optimiser: BayesOptimiser,
+        evaluated_point: torch.Tensor,
+        var_ind: int,
+        var_arr: np.ndarray,
+        acq_func_vals: np.ndarray,
+        suggested_points_to_punish_around: torch.Tensor
+):
+    n_suggested_points = suggested_points_to_punish_around.shape[1]
+
+    new_acq_func_vals = [None] * (n_suggested_points - 1)
+
+    full_var_arr = evaluated_point.repeat(len(var_arr), 1)
+    full_var_arr[:, var_ind] = torch.tensor(var_arr)
+
+    for last_included_point in range(n_suggested_points - 1):
+        new_acq_func_vals[last_included_point] = optimiser.acq_func.optimiser.seq_optimiser.add_dist_punishment(
+            x=full_var_arr,
+            acq_func_val=torch.tensor(acq_func_vals),
+            other_points=suggested_points_to_punish_around[0, 0:last_included_point+1]
+        )
+
+    return new_acq_func_vals
+
+
 # TODO: Decide on location
 def plot_prediction_grid_from_optimiser(
         optimiser: BayesOptimiser,
         return_fig: bool = False,
         model_prediction_container: ModelPredictionContainer = None,
-        evaluated_point: torch.tensor = None
+        evaluated_point: torch.Tensor = None
 ):
     obj_func_coords = optimiser.obj_func_coords.squeeze(0)
     obj_func_vals = optimiser.obj_func_vals.squeeze(0)
@@ -224,6 +353,26 @@ def plot_prediction_grid_from_optimiser(
                 calc_pred_output=calc_pred_out_tuple,
                 var_ind=var_ind
             )
+
+            if optimiser.need_new_suggestions is False:
+
+                # Note: This could technically fail (if user is using another acq func class that doesnt have this
+                # property). Should maybe check that this property exists first.
+                if optimiser.acq_func.optimiser.seq_dist_punish:
+
+                    sdp_acq_func_vals = _calculate_seq_dist_punish_acq_func_vals(
+                        optimiser=optimiser,
+                        evaluated_point=calculated_prediction.point,
+                        var_ind=var_ind,
+                        var_arr=calculated_prediction.var_arr,
+                        acq_func_vals=calculated_prediction.acq_fun_vals,
+                        suggested_points_to_punish_around=optimiser.suggested_steps
+                    )
+
+                    calculated_prediction.add_sdp_acq_func_vals(
+                        sdp_acq_func_vals=sdp_acq_func_vals
+                    )
+
             model_prediction_container.add_data(
                 model_prediction=calculated_prediction
             )
@@ -253,6 +402,56 @@ def plot_prediction_grid_from_optimiser(
     else:
 
         fig.show()
+
+
+def _add_model_traces(
+        fig: plotly.graph_objs.Figure,
+        model_pred_data: ModelPrediction,
+        row_no: int,
+        col_no: int,
+        obj_ind: int,
+        legend_group: str
+):
+    model_mean = model_pred_data.model_mean_list[obj_ind]
+    model_lower_std = model_pred_data.model_lower_std_list[obj_ind]
+    model_upper_std = model_pred_data.model_upper_std_list[obj_ind]
+
+    fig.add_trace(
+        go.Scatter(
+            x=model_pred_data.var_arr,
+            y=model_upper_std,
+            line={'width': 0.0, 'color': 'rgba(156, 156, 156, 0.4)'},
+            name='Upper bound prediction',
+            legendgroup=legend_group,
+            showlegend=False
+        ),
+        row=row_no, col=col_no
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=model_pred_data.var_arr,
+            y=model_lower_std,
+            fill='tonexty',  # This fills between this and the line above
+            line={'width': 0.0, 'color': 'rgba(156, 156, 156, 0.4)'},
+            name='Lower bound prediction',
+            legendgroup=legend_group,
+            showlegend=False,
+        ),
+        row=row_no, col=col_no
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=model_pred_data.var_arr,
+            y=model_mean,
+            line={'color': 'black'},
+            name='Mean prediction',
+            legendgroup=legend_group,
+            showlegend=True if (row_no == 1 and col_no == 1) else False
+        ),
+        row=row_no, col=col_no
+    )
 
 
 def plot_prediction_grid(
@@ -317,6 +516,20 @@ def plot_prediction_grid(
         distance_list = joint_distance_list[:n_evaluated_points]
         suggested_point_distance_list = joint_distance_list[n_evaluated_points:]
 
+        marker_type_list = ['circle'] * n_evaluated_points
+        marker_size_list = [8] * n_evaluated_points
+
+        evaluated_point_ind = np.where(joint_distance_list == 0.0)[0][0]
+
+        if evaluated_point_ind < n_evaluated_points:
+            marker_type_list[evaluated_point_ind] = 'x'
+            marker_size_list[evaluated_point_ind] = 20
+
+        if evaluated_point_ind >= n_evaluated_points:
+            evaluated_suggested_point_ind = evaluated_point_ind - n_evaluated_points
+        else:
+            evaluated_suggested_point_ind = None
+
         color_list_w_opacity = [
             "rgba(" + color_list[point_no][4:-1] + f", {joint_opacity_list[point_no]})"
             for point_no in range(n_evaluated_points)
@@ -329,53 +542,60 @@ def plot_prediction_grid(
             ]
 
         for obj_ind in range(n_objs):
-            model_mean = model_pred_data.model_mean_list[obj_ind]
-            model_lower_std = model_pred_data.model_lower_std_list[obj_ind]
-            model_upper_std = model_pred_data.model_upper_std_list[obj_ind]
 
             row_no = n_objs - obj_ind  # Placing these backwards to make the "y axes" of subplots go positive upwards
             col_no = var_ind + 1
 
-            fig.add_trace(
-            go.Scatter(
-                x=model_pred_data.var_arr,
-                y=model_upper_std,
-                line={'width': 0.0, 'color': 'rgba(156, 156, 156, 0.4)'},
-                name='Upper bound prediction',
-                showlegend=False
-            ),
-            row=row_no, col=col_no
+            # Quick scaling as long as we're just jamming it into this plot
+            acq_func_scaling = np.abs(model_pred_data.acq_fun_vals).max() * 0.5
+
+            _add_model_traces(
+                fig=fig,
+                model_pred_data=model_pred_data,
+                row_no=row_no,
+                col_no=col_no,
+                obj_ind=obj_ind,
+                legend_group='model'
             )
 
             fig.add_trace(
-            go.Scatter(
-                x=model_pred_data.var_arr,
-                y=model_lower_std,
-                fill='tonexty',  # This fills between this and the line above
-                line={'width': 0.0, 'color': 'rgba(156, 156, 156, 0.4)'},
-                name='Lower bound prediction',
-                showlegend=False,
-            ),
-            row=row_no, col=col_no
+                go.Scatter(
+                    x=model_pred_data.var_arr,
+                    y=model_pred_data.acq_fun_vals / acq_func_scaling,
+                    line={'color': 'black'},
+                    name='Acquisition function',
+                    legendgroup='acq func',
+                    showlegend=True if (row_no == 1 and col_no == 1) else False
+                ),
+                row=row_no, col=col_no
             )
 
-            fig.add_trace(
-            go.Scatter(
-                x=model_pred_data.var_arr,
-                y=model_mean,
-                line={'color': 'black'},
-                name='Mean prediction',
-                showlegend=False
-            ),
-            row=row_no, col=col_no
-            )
+            if model_pred_data.sdp_acq_func_vals is not None:
+
+                for punish_ind, acq_fun_vals in enumerate(model_pred_data.sdp_acq_func_vals):
+
+                    fig.add_trace(
+                        go.Scatter(
+                            x=model_pred_data.var_arr,
+                            y=acq_fun_vals.detach() / acq_func_scaling,
+                            line={'color': 'black'},
+                            name=f'Acq. func., as seen by suggested point {punish_ind + 1}',
+                            legendgroup=f'acq func {punish_ind}',
+                            showlegend=True if (row_no == 1 and col_no == 1) else False
+                        ),
+                        row=row_no, col=col_no
+                    )
 
             fig.add_trace(
             go.Scatter(
                 x=obj_func_coords[:, var_ind],
                 y=obj_func_vals[:, obj_ind],
                 mode='markers',
-                marker={'color': color_list_w_opacity},
+                marker={
+                    'color': color_list_w_opacity,
+                    'size': marker_size_list
+                },
+                marker_symbol=marker_type_list,
                 name='Evaluated point',
                 showlegend=False,
                 customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
@@ -389,6 +609,14 @@ def plot_prediction_grid(
 
             if suggested_points:
                 for suggested_point_no, point in enumerate(suggested_points):
+
+                    if suggested_point_no == evaluated_suggested_point_ind:
+                        marker_style = 'x'
+                        marker_size = 20 # TODO: Write these somewhere general
+                    else:
+                        marker_style = 'circle'
+                        marker_size = 8
+
                     fig.add_trace(
                         go.Scatter(
                             x=point.coordinates[var_ind].detach().numpy(),
@@ -401,7 +629,11 @@ def plot_prediction_grid(
                                 'color': suggested_point_color_list_wo[suggested_point_no]
                             },
                             mode='markers',
-                            marker={'color': suggested_point_color_list_wo[suggested_point_no]},
+                            marker={
+                                'color': suggested_point_color_list_wo[suggested_point_no],
+                                'size': marker_size
+                            },
+                            marker_symbol=marker_style,
                             name='Suggested point',
                             showlegend=False,
                             customdata=np.dstack([
@@ -411,11 +643,10 @@ def plot_prediction_grid(
                                 [point.predicted_values_lower[obj_ind]]
                             ])[0],
                             # TODO: Super sweet feature would be to check if upper and lower are equal and then do pm
-                            hovertemplate="Param. value: %{x:.3f}"
+                            hovertemplate="Param. value: %{x:.3f} <br>"
+                                          "Obj. func. value: %{y:.3f}"
                                           " + %{customdata[2]:.3f} /"
-                                          " - %{customdata[3]:.3f}"
-                                          "<br>"
-                                          "Obj. func. value: %{y:.3f} <br>"
+                                          " - %{customdata[3]:.3f} <br>"
                                           "Suggested point number: %{customdata[0]:.0f} <br>"
                                           "Distance to current point: %{customdata[1]:.3f}"
                         ),
@@ -524,3 +755,5 @@ def prediction_grid_app(
 
     app.run()
 
+
+# TODO: Implement pareto front grid...?

@@ -13,12 +13,12 @@ with open("README.md", "r") as fh:
 
 setup(
     name='veropt',
-    version='0.5.2',
+    version='0.6.0',
     packages=find_packages(),
-    url='https://github.com/idax4325/veropt',
+    url='https://github.com/aster-stoustrup/veropt',
     license='OSI Approved :: MIT License',
-    author='Ida Stoustrup',
-    author_email='Ida.Stoustrup@gmail.com',
+    author='Aster Stoustrup',
+    author_email='aster.stoustrup@gmail.com',
     description='Bayesian Optimisation for the Versatile Ocean Simulator (VEROS)',
     long_description=long_description,
     long_description_content_type="text/markdown",

@@ -60,7 +60,7 @@ def opacity_for_multidimensional_points(
 
     alpha_values = (alpha_max - alpha_min) * norm_proximity + alpha_min
 
-    alpha_values[alpha_values == alpha_max] = 1.0
+    alpha_values[alpha_values.argmax()] = 1.0
 
     return alpha_values, norm_distances
 

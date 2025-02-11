@@ -20,8 +20,15 @@ n_objs = obj_func.n_objs
 beta = 3.0
 gamma = 0.01
 
-acq_func = PredefinedAcqFunction(obj_func.bounds, n_objs, n_evals_per_step, acqfunc_name="UCB_Var", beta=beta,
-                                 gamma=gamma, seq_dist_punish=True)
+acq_func = PredefinedAcqFunction(
+    bounds=obj_func.bounds,
+    n_objs=n_objs,
+    n_evals_per_step=n_evals_per_step,
+    acqfunc_name="UCB",
+    beta=beta,
+    gamma=gamma,
+    seq_dist_punish=True
+)
 
 kernel = BayesOptModel(
     obj_func.n_params,
@@ -32,8 +39,14 @@ kernel = BayesOptModel(
 )
 
 
-optimiser = BayesOptimiser(n_init_points, n_bayes_points, obj_func, acq_func, model=kernel,
-                           n_evals_per_step=n_evals_per_step)
+optimiser = BayesOptimiser(
+    n_init_points=n_init_points,
+    n_bayes_points=n_bayes_points,
+    obj_func=obj_func,
+    acq_func=acq_func,
+    model=kernel,
+    n_evals_per_step=n_evals_per_step
+)
 
 
 # optimiser.run_all_opt_steps()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import torch
@@ -31,6 +32,14 @@ class ModelPrediction:
         self.samples: torch.tensor = calc_pred_output[8]
 
         self.point: torch.tensor = calc_pred_output[7]
+
+        self.sdp_acq_func_vals: Optional[tuple[torch.Tensor]] = None
+
+    def add_sdp_acq_func_vals(
+            self,
+            sdp_acq_func_vals: tuple[torch.Tensor]
+    ):
+        self.sdp_acq_func_vals = sdp_acq_func_vals
 
 
 class ModelPredictionContainer:

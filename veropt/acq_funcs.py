@@ -4,7 +4,12 @@ import numpy as np
 from copy import deepcopy
 from scipy import optimize
 import warnings
-from typing import List
+from typing import List, Optional
+
+
+class AcqFuncScaling:
+    def __init__(self):
+        self.scaling = None
 
 
 # TODO: Update or delete
@@ -306,11 +311,22 @@ class qUpperConfidenceBoundRandomVar(botorch.acquisition.monte_carlo.MCAcquisiti
 
 
 class OptimiseWithDistPunish:
-    def __init__(self, alpha, omega):
+    def __init__(
+            self,
+            alpha: float,
+            omega: float,
+            scaling_class: AcqFuncScaling
+    ):
         self.alpha = alpha
         self.omega = omega
+        self.scaling_class = scaling_class
 
-    def add_dist_punishment(self, x, acq_func_val, other_points):
+    def add_dist_punishment(
+            self,
+            x: torch.tensor,
+            acq_func_val: torch.tensor,
+            other_points
+    ):
 
         # TODO: Get the math completely solid
         #   - We are scaling the y axis but assuming range from zero and up. Not necessarily the case
@@ -318,13 +334,15 @@ class OptimiseWithDistPunish:
 
         # TODO: Make awesome lovely unit tests that confirm that this scales with coordinates + acq func value
 
-        proximity_punish = 0.0
-        scaling = torch.abs(acq_func_val * self.omega)
-        for point in other_points:
-            proximity_punish += scaling * np.exp(-(torch.sum((x - point)**2) / (self.alpha**2)))
-        proximity_punish = float(proximity_punish)
+        # TODO: Write some good tests for this one, it has previously behaved strangely
 
-        return acq_func_val - proximity_punish
+        proximity_punish = torch.zeros(len(acq_func_val))
+        # scaling = torch.abs(acq_func_val.detach() * self.omega)
+        scaling = self.omega * self.scaling_class.scaling
+        for point in other_points:
+            proximity_punish += scaling * np.exp(-(torch.sum((x - point)**2, dim=1) / (self.alpha**2)))
+
+        return acq_func_val.detach() - proximity_punish
 
 
 class AcqOptimiser:
@@ -353,8 +371,15 @@ class AcqOptimiser:
 
 
 class PredefinedAcqOptimiser(AcqOptimiser):
-    def __init__(self, bounds, n_objs, n_evals_per_step=1, optimiser_name=None, seq_dist_punish=True,
-                 params_seq_opt=None):
+    def __init__(
+            self,
+            bounds,
+            n_objs,
+            n_evals_per_step=1,
+            optimiser_name=None,
+            seq_dist_punish=True,
+            params_seq_opt=None
+    ):
 
         if optimiser_name is None:
             if n_evals_per_step > 1:
@@ -369,10 +394,7 @@ class PredefinedAcqOptimiser(AcqOptimiser):
             self.optimiser_name = optimiser_name
 
         if params_seq_opt is None and seq_dist_punish is True:
-            params_seq_opt = {
-                'alpha': 1.0,
-                'omega': 1.0
-            }
+            raise RuntimeError("Parameters for seq opt must be set up in acq func")
 
         if self.optimiser_name == 'dual_annealing':
             function = self.dual_annealing
@@ -389,7 +411,11 @@ class PredefinedAcqOptimiser(AcqOptimiser):
             self.seq_dist_punish = seq_dist_punish
 
         if self.seq_dist_punish is True:
-            self.seq_optimiser = OptimiseWithDistPunish(params_seq_opt['alpha'], params_seq_opt['omega'])
+            self.seq_optimiser = OptimiseWithDistPunish(
+                alpha=params_seq_opt['alpha'],
+                omega=params_seq_opt['omega'],
+                scaling_class=params_seq_opt['scaling']
+            )
 
         super(PredefinedAcqOptimiser, self).__init__(
             bounds,
@@ -483,8 +509,7 @@ class AcqFunction:
             function_class,
             bounds,
             n_objs,
-            optimiser:
-            AcqOptimiser = None,
+            optimiser: AcqOptimiser = None,
             params=None,
             n_evals_per_step=1,
             acqfunc_name=None
@@ -516,6 +541,7 @@ class AcqFunction:
 
     def refresh(self, model, **kwargs):
         if self.params is None:
+            # TODO: Check that it's safe to get rid of this option, then delete it
             self.function = self.function_class(model=model, **kwargs)
         else:
             self.function = self.function_class(model=model, **self.params, **kwargs)
@@ -531,7 +557,60 @@ class AcqFunction:
         self.params[par_name] = value
 
 
-class PredefinedAcqFunction(AcqFunction):
+class DistPunishAcqFunction(AcqFunction):
+
+    def __init__(
+            self,
+            function_class,
+            bounds,
+            n_objs: int,
+            seq_dist_punish: bool,
+            scaling_class: Optional[AcqFuncScaling],
+            optimiser: AcqOptimiser = None,
+            params=None,
+            n_evals_per_step: int = 1,
+            acqfunc_name: Optional[str] = None
+    ):
+
+        self.seq_dist_punish = seq_dist_punish
+        self.scaling_class = scaling_class
+
+        if seq_dist_punish is True:
+            assert scaling_class is not None
+
+        super().__init__(
+            function_class=function_class,
+            bounds=bounds,
+            n_objs=n_objs,
+            optimiser=optimiser,
+            params=params,
+            n_evals_per_step=n_evals_per_step,
+            acqfunc_name=acqfunc_name,
+        )
+
+    def refresh(self, model, **kwargs):
+        super().refresh(model, **kwargs)
+
+        if self.seq_dist_punish:
+            n_acq_func_samples = 1000
+            n_params = self.bounds.shape[1]
+
+            random_coordinates = (
+                    (self.bounds[1] - self.bounds[0]) * torch.rand(n_acq_func_samples, n_params)
+                    + self.bounds[0]
+            )
+
+            random_coordinates = random_coordinates.reshape(n_acq_func_samples, 1, n_params)
+
+            acq_func_samples = self.function(random_coordinates)
+
+            sampled_max = acq_func_samples.max()
+            sampled_min = acq_func_samples.min()
+
+            self.scaling_class.scaling = sampled_max - sampled_min
+
+
+class PredefinedAcqFunction(DistPunishAcqFunction):
     def __init__(
             self,
             bounds,
@@ -543,6 +622,8 @@ class PredefinedAcqFunction(AcqFunction):
             **kwargs
     ):
 
+        # TODO: Are we potentially missing some asserts for amount of objectives at some of these?
+
         if acqfunc_name is None:
             if n_objs > 1:
                 acqfunc_name = "EHVI"
@@ -553,7 +634,7 @@ class PredefinedAcqFunction(AcqFunction):
 
         if acqfunc_name == "EI":
             if n_evals_per_step == 1 or seq_dist_punish:
-                acq_func_class = botorch.acquisition.analytic.ExpectedImprovement
+                acq_func_class = botorch.acquisition.analytic.LogExpectedImprovement
             else:
                 acq_func_class = botorch.acquisition.monte_carlo.qExpectedImprovement
 
@@ -595,18 +676,26 @@ class PredefinedAcqFunction(AcqFunction):
                 # acq_func_class = UpperConfidenceBoundRandomVar
 
             else:
-                acq_func_class = qUpperConfidenceBoundRandomVar
+
+                # TODO: Either delete this functionality or review error message (Must specify an objective or a
+                #  posterior transform when using a multi-output model.)
+
+                raise NotImplementedError(
+                    "This acquistion function is not functional in the current version of veropt."
+                )
+
+                # acq_func_class = qUpperConfidenceBoundRandomVar
 
         # TODO: Check whether there's too many objectives for EHVI? (And maybe for the q ver too)
         #  - can then recommend 'qLogEHVI' if this is the case
         elif acqfunc_name == "EHVI":
-            acq_func_class = botorch.acquisition.multi_objective.ExpectedHypervolumeImprovement
+            acq_func_class = botorch.acquisition.multi_objective.analytic.ExpectedHypervolumeImprovement
 
         elif acqfunc_name == 'qEHVI':
-            acq_func_class = botorch.acquisition.multi_objective.qExpectedHypervolumeImprovement
+            acq_func_class = botorch.acquisition.multi_objective.monte_carlo.qExpectedHypervolumeImprovement
 
         elif acqfunc_name == 'qLogEHVI':
-            acq_func_class = botorch.acquisition.logei.qLogExpectedImprovement
+            acq_func_class = botorch.acquisition.multi_objective.logei.qLogExpectedHypervolumeImprovement
 
         else:
             raise ValueError(f"Acquisition function name '{acqfunc_name}' is not recognised.")
@@ -614,6 +703,9 @@ class PredefinedAcqFunction(AcqFunction):
         self.seq_dist_punish = seq_dist_punish
 
         if seq_dist_punish is True:
+
+            scaling_class = AcqFuncScaling()
+
             if "alpha" in kwargs:
                 alpha = kwargs["alpha"]
             else:
@@ -626,9 +718,11 @@ class PredefinedAcqFunction(AcqFunction):
 
             params_seq_opt = {
                 "alpha": alpha,
-                "omega": omega
+                "omega": omega,
+                "scaling": scaling_class
             }
         else:
+            scaling_class = None
             params_seq_opt = None
 
         optimiser = PredefinedAcqOptimiser(
@@ -644,6 +738,8 @@ class PredefinedAcqFunction(AcqFunction):
             function_class=acq_func_class,
             bounds=bounds,
             n_objs=n_objs,
+            seq_dist_punish=seq_dist_punish,
+            scaling_class=scaling_class,
             optimiser=optimiser,
             n_evals_per_step=n_evals_per_step,
             acqfunc_name=acqfunc_name,
