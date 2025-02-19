@@ -6,8 +6,8 @@ from veropt.utility import NormaliserZeroMeanUnitVariance
 
 def test_standard_normaliser_transform():
 
-    # Testing a three dimensional tensor here because that's what happens in the optimiser for some reason
-    #   - Might be botorch who wanted/wants this
+    # Testing a three dimensional tensor for now because this is what's in the code
+    #   - In the revamped version, we should be getting rid of that
 
     column_1 = [5.2, 3.6, 3.5, 4.3, 1.2]
     column_2 = [8.4, 1.1, 3.2, 5.3, 2.1]
@@ -37,8 +37,8 @@ def test_standard_normaliser_transform():
 
 def test_standard_normaliser_inverse_transform():
 
-    # Testing a three dimensional tensor here because that's what happens in the optimiser for some reason
-    #   - Might be botorch who wanted/wants this
+    # Testing a three dimensional tensor for now because this is what's in the code
+    #   - In the revamped version, we should be getting rid of that
 
     column_1 = [5.2, 3.6, 3.5, 4.3, 1.2]
     column_2 = [8.4, 1.1, 3.2, 5.3, 2.1]
@@ -70,10 +70,8 @@ def test_standard_normaliser_inverse_transform():
 
 def test_standard_normaliser_transform_input_output_shapes():
 
-    # Testing a three dimensional tensor here because that's what happens in the optimiser for some reason
-    #   - Might be botorch who wanted/wants this
-    #   - Actually probably because the first dimension is the batch size for botorch or something like that
-    #   - Could consider if this should be changed in veropt (and handled with a wrapper or something)
+    # Testing a three dimensional tensor for now because this is what's in the code
+    #   - In the revamped version, we should be getting rid of that
 
     column_1 = [5.2, 3.6, 3.5, 4.3, 1.2]
     column_2 = [8.4, 1.1, 3.2, 5.3, 2.1]

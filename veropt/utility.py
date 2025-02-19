@@ -1,4 +1,5 @@
 import abc
+import time
 from typing import Optional, TYPE_CHECKING
 
 import numpy as np
@@ -6,8 +7,10 @@ import torch
 
 if TYPE_CHECKING:
     from veropt import BayesOptimiser
+    from veropt import AcqFunction
 
 
+# TODO: Move
 class NormaliserType:
     __metaclass__ = abc.ABCMeta
 
@@ -24,15 +27,38 @@ class NormaliserType:
         pass
 
 
+def np_input_support(func):
+    def wrapper(self, data_in):
+
+        if type(data_in) == np.ndarray:
+            new_data_in = torch.tensor(data_in)
+            need_to_convert_back = True
+        else:
+            new_data_in = data_in
+            need_to_convert_back = False
+
+        data_out = func(self, new_data_in)
+
+        if need_to_convert_back:
+            return data_out.detach().numpy()
+        else:
+            return data_out
+
+    return wrapper
+
+
+# TODO: Move
 class NormaliserZeroMeanUnitVariance(NormaliserType):
     def __init__(self, matrix: torch.Tensor, norm_dim=1):
         self.means = matrix.mean(dim=norm_dim)
         self.variances = matrix.var(dim=norm_dim)
 
+    @np_input_support
     def transform(self, matrix: torch.Tensor):
         return (matrix - self.means[:, None]) / torch.sqrt(self.variances[:, None])
 
-    def inverse_transform(self, matrix):
+    @np_input_support
+    def inverse_transform(self, matrix: torch.Tensor):
         return matrix * torch.sqrt(self.variances[:, None]) + self.means[:, None]
 
 
@@ -49,7 +75,8 @@ def opacity_for_multidimensional_points(
     index_wo_var_ind = torch.arange(n_params) != var_ind
     for point_no in range(coordinates.shape[1]):
         distances.append(np.linalg.norm(
-            evaluated_point[index_wo_var_ind] - coordinates[0, point_no, index_wo_var_ind]))
+            evaluated_point[index_wo_var_ind] - coordinates[0, point_no, index_wo_var_ind])
+        )
 
     distances = torch.tensor(distances)
 
@@ -133,3 +160,65 @@ def format_list(unformatted_list):
                 formatted_list += f"{list_item:.2f}]"
 
     return formatted_list
+
+
+# TODO: move or delete?
+def speed_test_acq_func(
+        acq_func: 'AcqFunction'
+):
+
+    time_start = time.time()
+
+    n_acq_func_samples = 10
+    n_params = acq_func.bounds.shape[1]
+
+    random_coordinates = (
+            (acq_func.bounds[1] - acq_func.bounds[0]) * torch.rand(n_acq_func_samples, n_params)
+            + acq_func.bounds[0]
+    )
+
+    random_coordinates = random_coordinates.reshape(n_acq_func_samples, 1, n_params)
+
+    samples = acq_func.function(random_coordinates)
+
+    time_stop = time.time()
+    time_taken_batched_a = time_stop - time_start
+
+
+    time_start = time.time()
+
+    random_coordinates = (
+            (acq_func.bounds[1] - acq_func.bounds[0]) * torch.rand(n_acq_func_samples, n_params)
+            + acq_func.bounds[0]
+    )
+
+    random_coordinates = random_coordinates.reshape(n_acq_func_samples, 1, n_params)
+
+    for coordinate_ind in range(n_acq_func_samples):
+        samples = acq_func.function(random_coordinates[coordinate_ind:coordinate_ind+1, :, :])
+
+    time_stop = time.time()
+    time_taken_sequential = time_stop - time_start
+
+
+    time_start = time.time()
+
+    random_coordinates = (
+            (acq_func.bounds[1] - acq_func.bounds[0]) * torch.rand(n_acq_func_samples, n_params)
+            + acq_func.bounds[0]
+    )
+
+    random_coordinates = random_coordinates.reshape(n_acq_func_samples, 1, n_params)
+
+    for coordinate_ind in range(n_acq_func_samples):
+        samples = acq_func.function(random_coordinates[coordinate_ind:coordinate_ind+1, :, :])
+        samples.detach().numpy()
+
+    time_stop = time.time()
+    time_taken_sequential_np = time_stop - time_start
+
+
+    print(f"time batched A: {time_taken_batched_a}")
+    print(f"time sequential: {time_taken_sequential}")
+    print(f"time sequential np: {time_taken_sequential_np}")
+

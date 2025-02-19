@@ -1,10 +1,14 @@
 import botorch
+import sklearn.mixture
 import torch
 import numpy as np
 from copy import deepcopy
 from scipy import optimize
 import warnings
-from typing import List, Optional
+from typing import List, Literal, Optional
+
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics import silhouette_score
 
 
 class AcqFuncScaling:
@@ -162,79 +166,79 @@ class AcqFuncScaling:
 #         return rand_search_pars[rand_search_vals.argmax()].unsqueeze(0)
 
 
-# TODO: NB: This code might be easily breakable when updating botorch. Can we do this more high-level?
-class qUpperConfidenceBoundRandomVar(botorch.acquisition.monte_carlo.MCAcquisitionFunction):
-    r"""MC-based batch Upper Confidence Bound.
-    NB: With noise! :D
-
-    Uses a reparameterization to extend UCB to qUCB for q > 1 (See Appendix A
-    of [Wilson2017reparam].)
-
-    `qUCB = E(max(mu + |Y_tilde - mu|))`, where `Y_tilde ~ N(mu, beta pi/2 Sigma)`
-    and `f(X)` has distribution `N(mu, Sigma)`.
-
-    Example:
-        >>> model = SingleTaskGP(train_X, train_Y)
-        >>> sampler = SobolQMCNormalSampler(1000)
-        >>> qUCB = qUpperConfidenceBound(model, 0.1, sampler)
-        >>> qucb = qUCB(test_X)
-    """
-    from typing import Optional, Union
-    from torch import Tensor
-    from botorch.models.model import Model
-    from botorch.acquisition.monte_carlo import MCSampler, MCAcquisitionObjective
-    from botorch.utils.transforms import t_batch_mode_transform, concatenate_pending_points
-
-    def __init__(
-        self,
-        model: Model,
-        beta: float,
-        gamma: float,
-        sampler: Optional[MCSampler] = None,
-        objective: Optional[MCAcquisitionObjective] = None,
-        X_pending: Optional[Tensor] = None,
-    ) -> None:
-        r"""q-Upper Confidence Bound.
-
-        Args:
-            model: A fitted model.
-            beta: Controls tradeoff between mean and standard deviation in UCB.
-            sampler: The sampler used to draw base samples. Defaults to
-                `SobolQMCNormalSampler(num_samples=500, collapse_batch_dims=True)`
-            objective: The MCAcquisitionObjective under which the samples are
-                evaluated. Defaults to `IdentityMCObjective()`.
-            X_pending:  A `m x d`-dim Tensor of `m` design points that have
-                points that have been submitted for function evaluation
-                but have not yet been evaluated.  Concatenated into X upon
-                forward call.  Copied and set to have no gradient.
-        """
-        super().__init__(
-            model=model, sampler=sampler, objective=objective, X_pending=X_pending
-        )
-        import math
-        self.beta_prime = math.sqrt(beta * math.pi / 2)
-        self.gamma = gamma
-
-    @concatenate_pending_points
-    @t_batch_mode_transform()
-    def forward(self, X: Tensor) -> Tensor:
-        r"""Evaluate qUpperConfidenceBound on the candidate set `X`.
-
-        Args:
-            X: A `(b) x q x d`-dim Tensor of `(b)` t-batches with `q` `d`-dim
-                design points each.
-
-        Returns:
-            A `(b)`-dim Tensor of Upper Confidence Bound values at the given
-            design points `X`.
-        """
-        posterior = self.model.posterior(X)
-        samples = self.sampler(posterior)
-        obj = self.objective(samples)
-        mean = obj.mean(dim=0)
-        rand_number = self.beta_prime * (obj - mean).abs() * (torch.randn(1).to(X) * self.gamma).expand_as(mean)
-        ucb_samples = mean + self.beta_prime * (obj - mean).abs() + rand_number
-        return ucb_samples.max(dim=-1)[0].mean(dim=0)
+# TODO: Change or delete
+# class qUpperConfidenceBoundRandomVar(botorch.acquisition.monte_carlo.MCAcquisitionFunction):
+#     r"""MC-based batch Upper Confidence Bound.
+#     NB: With noise! :D
+#
+#     Uses a reparameterization to extend UCB to qUCB for q > 1 (See Appendix A
+#     of [Wilson2017reparam].)
+#
+#     `qUCB = E(max(mu + |Y_tilde - mu|))`, where `Y_tilde ~ N(mu, beta pi/2 Sigma)`
+#     and `f(X)` has distribution `N(mu, Sigma)`.
+#
+#     Example:
+#         >>> model = SingleTaskGP(train_X, train_Y)
+#         >>> sampler = SobolQMCNormalSampler(1000)
+#         >>> qUCB = qUpperConfidenceBound(model, 0.1, sampler)
+#         >>> qucb = qUCB(test_X)
+#     """
+#     from typing import Optional, Union
+#     from torch import Tensor
+#     from botorch.models.model import Model
+#     from botorch.acquisition.monte_carlo import MCSampler, MCAcquisitionObjective
+#     from botorch.utils.transforms import t_batch_mode_transform, concatenate_pending_points
+#
+#     def __init__(
+#         self,
+#         model: Model,
+#         beta: float,
+#         gamma: float,
+#         sampler: Optional[MCSampler] = None,
+#         objective: Optional[MCAcquisitionObjective] = None,
+#         X_pending: Optional[Tensor] = None,
+#     ) -> None:
+#         r"""q-Upper Confidence Bound.
+#
+#         Args:
+#             model: A fitted model.
+#             beta: Controls tradeoff between mean and standard deviation in UCB.
+#             sampler: The sampler used to draw base samples. Defaults to
+#                 `SobolQMCNormalSampler(num_samples=500, collapse_batch_dims=True)`
+#             objective: The MCAcquisitionObjective under which the samples are
+#                 evaluated. Defaults to `IdentityMCObjective()`.
+#             X_pending:  A `m x d`-dim Tensor of `m` design points that have
+#                 points that have been submitted for function evaluation
+#                 but have not yet been evaluated.  Concatenated into X upon
+#                 forward call.  Copied and set to have no gradient.
+#         """
+#         super().__init__(
+#             model=model, sampler=sampler, objective=objective, X_pending=X_pending
+#         )
+#         import math
+#         self.beta_prime = math.sqrt(beta * math.pi / 2)
+#         self.gamma = gamma
+#
+#     @concatenate_pending_points
+#     @t_batch_mode_transform()
+#     def forward(self, X: Tensor) -> Tensor:
+#         r"""Evaluate qUpperConfidenceBound on the candidate set `X`.
+#
+#         Args:
+#             X: A `(b) x q x d`-dim Tensor of `(b)` t-batches with `q` `d`-dim
+#                 design points each.
+#
+#         Returns:
+#             A `(b)`-dim Tensor of Upper Confidence Bound values at the given
+#             design points `X`.
+#         """
+#         posterior = self.model.posterior(X)
+#         samples = self.sampler(posterior)
+#         obj = self.objective(samples)
+#         mean = obj.mean(dim=0)
+#         rand_number = self.beta_prime * (obj - mean).abs() * (torch.randn(1).to(X) * self.gamma).expand_as(mean)
+#         ucb_samples = mean + self.beta_prime * (obj - mean).abs() + rand_number
+#         return ucb_samples.max(dim=-1)[0].mean(dim=0)
 
 
 # TODO: Review if neccesary, maybe delete?
@@ -569,7 +573,8 @@ class DistPunishAcqFunction(AcqFunction):
             optimiser: AcqOptimiser = None,
             params=None,
             n_evals_per_step: int = 1,
-            acqfunc_name: Optional[str] = None
+            acqfunc_name: Optional[str] = None,
+            mode: Literal['simple', 'advanced'] = 'advanced'
     ):
 
         self.seq_dist_punish = seq_dist_punish
@@ -577,6 +582,9 @@ class DistPunishAcqFunction(AcqFunction):
 
         if seq_dist_punish is True:
             assert scaling_class is not None
+
+        assert mode in ['simple', 'advanced']
+        self.mode = mode
 
         super().__init__(
             function_class=function_class,
@@ -592,22 +600,87 @@ class DistPunishAcqFunction(AcqFunction):
         super().refresh(model, **kwargs)
 
         if self.seq_dist_punish:
-            n_acq_func_samples = 1000
-            n_params = self.bounds.shape[1]
 
-            random_coordinates = (
-                    (self.bounds[1] - self.bounds[0]) * torch.rand(n_acq_func_samples, n_params)
-                    + self.bounds[0]
-            )
+            if self.mode == 'simple':
+                self.refresh_scaling_simple()
 
-            random_coordinates = random_coordinates.reshape(n_acq_func_samples, 1, n_params)
+            elif self.mode == 'advanced':
+                self.refresh_scaling_advanced()
 
-            acq_func_samples = self.function(random_coordinates)
+    def sample_acq_func(self):
+        n_acq_func_samples = 1000
+        n_params = self.bounds.shape[1]
 
-            sampled_max = acq_func_samples.max()
-            sampled_min = acq_func_samples.min()
+        random_coordinates = (
+                (self.bounds[1] - self.bounds[0]) * torch.rand(n_acq_func_samples, n_params)
+                + self.bounds[0]
+        )
 
-            self.scaling_class.scaling = sampled_max - sampled_min
+        random_coordinates = random_coordinates.unsqueeze(0)
+
+        samples = np.zeros(n_acq_func_samples)
+
+        for coord_ind in range(n_acq_func_samples):
+            sample = self.function(random_coordinates[:, coord_ind:coord_ind+1, :])
+            samples[coord_ind] = sample.detach().numpy()  # If this is not detached, it causes a memory leak o:)
+
+        return samples
+
+    def refresh_scaling_simple(self):
+
+        acq_func_samples = self.sample_acq_func()
+
+        sampled_std = acq_func_samples.std()
+
+        self.scaling_class.scaling = sampled_std
+
+    def refresh_scaling_advanced(self):
+
+        acq_func_samples = self.sample_acq_func()
+        acq_func_samples = np.expand_dims(acq_func_samples, 1)
+
+        min_clusters = 1
+        min_scored_clusters = 2
+        max_clusters = 7
+
+        gaussian_fitters = {
+            n_clusters: GaussianMixture(n_components=n_clusters)
+            for n_clusters in range(min_clusters, max_clusters + 1)
+        }
+        scores = {
+            n_clusters: 0.0
+            for n_clusters in range(min_scored_clusters, max_clusters + 1)
+        }
+
+        for n_clusters in range(min_clusters, max_clusters + 1):
+
+            gaussian_fitters[n_clusters].fit(acq_func_samples)
+
+            if n_clusters >= min_scored_clusters:
+
+                predictions = gaussian_fitters[n_clusters].predict(acq_func_samples)
+
+                if np.unique(predictions).size > 1:
+                    scores[n_clusters] = silhouette_score(
+                        X=acq_func_samples,
+                        labels=predictions
+                    )
+                else:
+                    # TODO: Verify that this is okay
+                    scores[n_clusters] = 0.0
+
+        # Someone please make a prettier version of this >:)
+        best_score_n_clusters = list(scores.keys())[np.array(list(scores.values())).argmax()]
+        best_fitter = gaussian_fitters[best_score_n_clusters]
+
+        # TODO: Finetune and test criterion for n_c=1
+        if best_fitter.covariances_.max() * 3 > gaussian_fitters[1].covariances_[0]:
+            best_score_n_clusters = 1
+            best_fitter = gaussian_fitters[best_score_n_clusters]
+
+        top_cluster_ind = best_fitter.means_.argmax()
+
+        self.scaling_class.scaling = 2 * float(np.sqrt(best_fitter.covariances_[top_cluster_ind]))
 
 
 class PredefinedAcqFunction(DistPunishAcqFunction):
@@ -681,7 +754,7 @@ class PredefinedAcqFunction(DistPunishAcqFunction):
                 #  posterior transform when using a multi-output model.)
 
                 raise NotImplementedError(
-                    "This acquistion function is not functional in the current version of veropt."
+                    "This acquistion function is not available in the current version of veropt."
                 )
 
                 # acq_func_class = qUpperConfidenceBoundRandomVar

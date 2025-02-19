@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 - New visualisation tools in plotly
 
 ### Changed
-- Dependencies are updated to the newest versions
+- Dependencies are updated to newest versions
 - Normalisation
   - Should work more correctly now
 - Sequence optimiser

@@ -8,15 +8,15 @@ from veropt.gui import veropt_gui
 n_init_points = 16 * 4
 n_bayes_points = 64
 
-# TODO: Look into bug at = 1
 n_evals_per_step = 4
+points_before_fitting = n_init_points - n_evals_per_step * 3
 
 
-# obj_func = PredefinedTestFunction("BraninCurrin")
-obj_func = PredefinedTestFunction("VehicleSafety")
+obj_func = PredefinedTestFunction("BraninCurrin")
+# obj_func = PredefinedTestFunction("VehicleSafety")
 # obj_func = PredefinedTestFunction("DTLZ1")
 # obj_func = PredefinedTestFunction("DTLZ2")
-# obj_func = PredefinedTestFunction("DTLZ1", n_params=8, n_objs=3)
+# obj_func = PredefinedTestFunction("DTLZ2", n_params=7, n_objs=4)
 
 n_objs = obj_func.n_objs
 
@@ -26,7 +26,7 @@ acq_func = PredefinedAcqFunction(
     n_evals_per_step=n_evals_per_step,
     acqfunc_name='qLogEHVI',
     seq_dist_punish=True,
-    alpha=1.0,
+    alpha=1.2,
     omega=1.0
 )
 
@@ -52,33 +52,24 @@ optimiser = BayesOptimiser(
     acq_func=acq_func,
     model=kernel,
     n_evals_per_step=n_evals_per_step,
-    normalise=True
+    normalise=True,
+    points_before_fitting=points_before_fitting
 )
 
-# TODO: Bug fix 'save optimiser'
-#   - Seems possibly tricky, might be more worthwhile to wait until we can re-do the saving to something more stable
-
-# TODO: Potentially look into:
-#   - Suggested steps for some pars being exactly the same val
-#       - Not necessarily wrong but maybe understand why (didn't do this in previous step)
-#       - Was probably because of the wrong acq func, should be better now?
 
 # for i in range(n_init_points//n_evals_per_step + 1):
 #     optimiser.run_opt_step()
 
 # optimiser.plot_prediction(0, 1)
 
-# veropt_gui.run(optimiser)
+veropt_gui.run(optimiser)
 
-for i in range(16):
-    optimiser.run_opt_step()
+# for i in range(n_init_points // n_evals_per_step):
+#     optimiser.run_opt_step()
 
-optimiser.suggest_opt_steps()
+# optimiser.suggest_opt_steps()
 
-from veropt.visualisation import *
+# from veropt.visualisation import *
 
-# prediction_grid_app(optimiser)
-
-# TODO: Figure out why best summed point looks different for plot_progress and prediction_grid
-#   - Oopies, looks like that sum changes based on whether normalisation is on or not
-#       - which makes sense... But also seems like it needs to be thought about
+# run_prediction_grid_app(optimiser)
+# plot_prediction_grid_from_optimiser(optimiser)

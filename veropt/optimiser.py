@@ -1,6 +1,7 @@
 import datetime
 import warnings
 
+import numpy as np
 import torch
 # TODO: Consider if this is enough or if there are other places where this needs to be?
 torch.set_default_dtype(torch.float64)
@@ -137,6 +138,9 @@ class BayesOptimiser:
         if obj_weights is None:
             self.obj_weights = torch.ones(self.n_objs) / self.n_objs
         else:
+            warnings.warn(
+                "Objective weights are not fully implemented in veropt yet and might not influence the optimisation."
+            )
             self.obj_weights = obj_weights
 
         self.obj_weights = self.obj_weights.type(dtype=torch.DoubleTensor)
@@ -437,13 +441,13 @@ class BayesOptimiser:
             self.fit_normaliser()
             self.update_normalised_values()
         self.refit_model()
-        self.refresh_acq_func()
+        self.refresh_acq_func()  # This seems to be happening inside refit_model so shouldnt be here too?
         self.data_fitted = True
 
     def refit_model(self):
         self.model.refit_model(self.obj_func_coords, self.obj_func_vals)
         self.need_new_suggestions = True
-        self.refresh_acq_func()
+        # self.refresh_acq_func()
 
     # TODO: Automatically refit model every n steps?
     # TODO: Look into effect of renormalisation without refitting model.
@@ -513,13 +517,17 @@ class BayesOptimiser:
             if self.n_objs > 1:
                 best_val_string = format_list(self.best_val().detach().tolist())
             else:
-                best_val_string = str(self.best_val())
+                best_val_string = f"{float(self.best_val()):.2f}"
 
             print(f"Optimisation running in {self.opt_mode} mode"
                   f" at step {self.current_step} out of {self.n_steps}"
                   f" | Best value: {best_val_string}")
 
-            print_string = f"Newest obj. func. value: {self.obj_func_vals[0, -1]:.2f}"
+            if self.multi_obj:
+                print_string = "Newest obj. func. value: " + format_list(self.obj_func_vals[0, -1].detach().tolist())
+            else:
+                print_string = f"Newest obj. func. value: {float(self.obj_func_vals[0, -1]):.2f}"
+
             print_string += " | Newest point: " + format_list(self.obj_func_coords[0, -1].detach().tolist())
 
             print(print_string)
@@ -713,9 +721,10 @@ class BayesOptimiser:
             #         samples[obj_no][sample_no] = self.normaliser_y.inverse_transform(samples[obj_no][sample_no])
 
             for sample_no in range(plot_samples):
-                samples[:, sample_no, :] = torch.tensor(
-                    self.normaliser_y.inverse_transform(samples[:, sample_no, :].unsqueeze(0).transpose(1, 2)))\
-                    .transpose(1, 2).squeeze(0)
+                sample = self.normaliser_y.inverse_transform(samples[:, sample_no, :].unsqueeze(0).transpose(1, 2))
+                if type(sample) == np.ndarray:
+                    sample = torch.tensor(sample)
+                samples[:, sample_no, :] = sample.transpose(1, 2).squeeze(0)
 
         # TODO: Fix this output mess
         return point_description, var_arr, model_mean, model_lower_std, model_upper_std, acq_fun_vals, fun_arr, eval_point, samples
@@ -842,8 +851,8 @@ class BayesOptimiser:
                 obj_func_coords = self.obj_func_coords
                 obj_func_vals = self.obj_func_vals
             else:
-                obj_func_coords = self.obj_func_coords_real_units()
-                obj_func_vals = self.obj_func_vals_real_units()
+                obj_func_coords = self.obj_func_coords_real_units
+                obj_func_vals = self.obj_func_vals_real_units
 
             # Only init points
             if self.n_points_evaluated < self.n_init_points:
@@ -1063,8 +1072,8 @@ class BayesOptimiser:
         plt.xlabel(self.obj_func.var_names[var_0_ind])
         plt.ylabel(self.obj_func.var_names[var_1_ind])
         ax.set_zlabel('Objective')
-        ax.scatter(self.obj_func_coords_real_units()[0, :, var_0_ind], self.obj_func_coords_real_units()[0, :, var_1_ind],
-                   self.obj_func_vals_real_units().squeeze(0), c=self.obj_func_vals_real_units().squeeze(0),
+        ax.scatter(self.obj_func_coords_real_units[0, :, var_0_ind], self.obj_func_coords_real_units[0, :, var_1_ind],
+                   self.obj_func_vals_real_units.squeeze(0), c=self.obj_func_vals_real_units.squeeze(0),
                    cmap='seismic', marker='.', s=50, alpha=1)
         ax.plot_surface(var_0_mat, var_1_mat, model_mean.T, alpha=0.5)
         ax.plot_surface(var_0_mat, var_1_mat, model_lower_std.T, alpha=0.1)
@@ -1433,6 +1442,10 @@ class BayesOptimiser:
             self.need_new_suggestions = True
 
     def save_optimiser(self, new_name=None):
+
+        raise NotImplementedError(
+            "Temporarily out of business, sorry! This will be coming back in a future version of veropt."
+        )
 
         if new_name:
             if '.pkl' in new_name:

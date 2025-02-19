@@ -7,7 +7,7 @@ from veropt.kernels import *
 n_init_points = 24
 n_bayes_points = 64
 
-n_evals_per_step = 4
+n_evals_per_step = 1
 
 obj_func = PredefinedTestFunction("Hartmann")
 # obj_func = PredefinedFitTestFunction("sine_sum")
@@ -49,6 +49,6 @@ optimiser = BayesOptimiser(
 )
 
 
-# optimiser.run_all_opt_steps()
+optimiser.run_all_opt_steps()
 
-veropt_gui.run(optimiser)
+# veropt_gui.run(optimiser)

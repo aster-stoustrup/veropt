@@ -1,8 +1,7 @@
 import numpy as np
-# from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error
 import torch
 import botorch
-from yaml import warnings
 
 from veropt import ObjFunction
 
@@ -70,11 +69,6 @@ def generate_init_conds(true_params, noise_lvl, info_types=None):
     return out_dict
 
 
-def mean_squared_error(y_true, y_pred):
-    # TODO: Did a quick replace for scikit-learn mean squared error, have to check if it's right.
-    return np.average((y_true - y_pred) ** 2, axis=0)
-
-
 class LossClass:
     def __init__(self, data, func, x_arr, negate=False):  # , torch=False
         self.data = data
@@ -82,9 +76,6 @@ class LossClass:
         self.x_arr = x_arr
         self.negate = negate
         # self.torch = torch
-
-        import warnings
-        warnings.warn("Did a quick replace for scikit-learn mean squared error, have to check if it's right.")
 
     def mse(self, **param):
         pred = self.func(self.x_arr, **param)
