@@ -49,6 +49,6 @@ optimiser = BayesOptimiser(
 )
 
 
-optimiser.run_all_opt_steps()
+# optimiser.run_all_opt_steps()
 
-# veropt_gui.run(optimiser)
+veropt_gui.run(optimiser)

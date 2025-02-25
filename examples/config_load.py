@@ -1,9 +1,12 @@
 from veropt import load_optimiser
 from veropt.gui import veropt_gui
 
-# optimiser = load_optimiser("Optimiser_PredefinedTestFunction_2021_04_20_14_47_41.pkl")
-optimiser = load_optimiser("Optimiser_PredefinedTestFunction_2021_03_26_17_18_58.pkl")
-# optimiser = load_optimiser("Optimiser_PredefinedTestFunction_2021_04_24_18_20_17.pkl")
+
+# PLEASE NOTE: The saving functionality is unfortunately out of service at the moment but will return in a future
+# release of veropt.
+
+
+optimiser = load_optimiser("your_saved_optimiser.pkl")
 
 veropt_gui.run(optimiser)
 
