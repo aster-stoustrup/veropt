@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## [0.6.0] - 2025-xx-xx
+## [0.6.0] - 28-02-2025
 ### Added
 - Changelog :))
 - New visualisation tools in plotly
