@@ -21,6 +21,7 @@ from veropt.containers import SuggestedPoint
 
 from botorch.utils.multi_objective.box_decompositions.non_dominated import FastNondominatedPartitioning
 
+
 class MetaDataTensor:
     def __init__(self, data: torch.Tensor, normalised: bool):
         self.data = data
@@ -57,24 +58,6 @@ def prior_dists(init_vals, bounds, stds):
         priors.append(truncnorm(a, b, loc=mean, scale=std))
 
     return priors
-
-
-# TODO: Fantasy code for veropt 1.0, move to the clean slate as soon as created
-
-class IntegratedObjective:  # For test problems
-    def __init__(
-            self,
-            function
-    ):
-        print("hi")
-
-class InterfaceObjective:
-    def __init__(
-            self,
-            saver,
-            loader
-    ):
-        print("hi")
 
 
 class ObjFunction:
