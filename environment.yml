@@ -1,11 +1,14 @@
 name: veropt
+channels:
+  - conda-forge
+  - gpytorch
 dependencies:
   - python
   - numpy
   - xarray
-  - pytorch::pytorch
-  - conda-forge::gpytorch
-  - pytorch::botorch
+  - pytorch
+  - gpytorch
+  - botorch
   - dill
   - click
   - scipy

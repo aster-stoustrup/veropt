@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-# install_requires = ["botorch", "dill", "click", "scikit-learn==0.24.1", "scipy", "matplotlib", "numpy", "xarray"]
+# install_requires = ["botorch", "dill", "click", "scikit-learn", "scipy", "matplotlib", "numpy"]
 install_requires = []
 extras_require = {
     "gui": ["PySide6"],
@@ -19,7 +19,7 @@ setup(
     license='OSI Approved :: MIT License',
     author='Aster Stoustrup',
     author_email='aster.stoustrup@gmail.com',
-    description='Bayesian Optimisation for the Versatile Ocean Simulator (VEROS)',
+    description='The Versatile Optimiser (VerOpt)',
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=install_requires,
