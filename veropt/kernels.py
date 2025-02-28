@@ -190,6 +190,7 @@ class DKModelBO(DKModel, botorch.models.gpytorch.GPyTorchModel):
         super().__init__(train_X, train_Y.squeeze(-1), gpytorch.likelihoods.GaussianLikelihood(), feature_extractor,
                          n_params)
 
+
 class TrainingParameters(TypedDict):
     loss_change_to_stop: NotRequired[float]
     max_iter: NotRequired[int]

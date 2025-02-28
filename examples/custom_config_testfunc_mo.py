@@ -4,12 +4,12 @@ from veropt.acq_funcs import *
 from veropt.kernels import *
 from veropt.gui import veropt_gui
 
-# n_init_points = 16
-n_init_points = 16 * 4
+
+n_init_points = 32
 n_bayes_points = 64
 
 n_evals_per_step = 4
-points_before_fitting = n_init_points - n_evals_per_step * 3
+points_before_fitting = n_init_points - n_evals_per_step * 2
 
 
 obj_func = PredefinedTestFunction("BraninCurrin")
@@ -56,20 +56,7 @@ optimiser = BayesOptimiser(
     points_before_fitting=points_before_fitting
 )
 
-
-# for i in range(n_init_points//n_evals_per_step + 1):
-#     optimiser.run_opt_step()
-
-# optimiser.plot_prediction(0, 1)
+# optimiser.run_all_opt_steps()
 
 veropt_gui.run(optimiser)
 
-# for i in range(n_init_points // n_evals_per_step):
-#     optimiser.run_opt_step()
-
-# optimiser.suggest_opt_steps()
-
-# from veropt.visualisation import *
-
-# run_prediction_grid_app(optimiser)
-# plot_prediction_grid_from_optimiser(optimiser)

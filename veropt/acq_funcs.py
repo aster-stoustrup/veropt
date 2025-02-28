@@ -699,7 +699,7 @@ class PredefinedAcqFunction(DistPunishAcqFunction):
 
         if acqfunc_name is None:
             if n_objs > 1:
-                acqfunc_name = "EHVI"
+                acqfunc_name = "qLogEHVI"
             else:
                 acqfunc_name = "UCB"
 

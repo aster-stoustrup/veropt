@@ -59,9 +59,38 @@ def prior_dists(init_vals, bounds, stds):
     return priors
 
 
+# TODO: Fantasy code for veropt 1.0, move to the clean slate as soon as created
+
+class IntegratedObjective:  # For test problems
+    def __init__(
+            self,
+            function
+    ):
+        print("hi")
+
+class InterfaceObjective:
+    def __init__(
+            self,
+            saver,
+            loader
+    ):
+        print("hi")
+
+
 class ObjFunction:
-    def __init__(self, function, bounds, n_params, n_objs, init_vals=None, stds=None, saver=None, loader=None,
-                 var_names=None, obj_names=None):
+    def __init__(
+            self,
+            function,
+            bounds,
+            n_params,
+            n_objs,
+            init_vals=None,
+            stds=None,
+            saver=None,
+            loader=None,
+            var_names=None,
+            obj_names=None
+    ):
         self.function = function  # Can be None
         self.bounds = bounds
         self.n_params = n_params
@@ -207,10 +236,6 @@ class BayesOptimiser:
         self.suggested_steps_filename = None
 
         if normalise:
-
-            # TODO: Need to do a deeper test than the test matrix before we remove this warning
-            #   - There's some row/column stuff that has to be right
-            warnings.warn("Normaliser is still under construction.")
 
             if normaliser is None:
                 normaliser = NormaliserZeroMeanUnitVariance
@@ -363,7 +388,10 @@ class BayesOptimiser:
                 Y=self.obj_func_vals.squeeze(0)
             )
 
-        self.acq_func.refresh(self.model.model, **acq_func_args)
+        self.acq_func.refresh(
+            self.model.model,
+            **acq_func_args
+        )
 
     def reshape_x(self, new_x):
 
@@ -586,7 +614,7 @@ class BayesOptimiser:
         self.bounds_normalised = self.bounds_normalised.squeeze(0)
 
         if self.using_priors:
-            warnings.warn("This functionality has been collecting dust in the corner. Use at own risk.")
+            warnings.warn("This functionality (priors) has been collecting dust in the corner. Use at your own risk.")
             self.init_vals = self.normaliser_x.transform(self.obj_func.init_vals)
             self.init_vals = torch.tensor(self.init_vals)
 
@@ -599,9 +627,9 @@ class BayesOptimiser:
             self.prior_class = PriorClass(self.priors)
             self.model.set_priors(self.prior_class)
 
-        self.acq_func.change_bounds(self.bounds)
+        self.data_normalised = True  # Optimiser will return normalised coords, vals, bounds after this point
 
-        self.data_normalised = True
+        self.acq_func.change_bounds(self.bounds)
 
         if self.verbose:
             if self.n_objs > 1:
