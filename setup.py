@@ -1,7 +1,17 @@
 from setuptools import setup, find_packages
 
-# install_requires = ["botorch", "dill", "click", "scikit-learn", "scipy", "matplotlib", "numpy"]
-install_requires = []
+install_requires = [
+    "numpy",
+    "xarray",
+    "pytorch",
+    "gpytorch",
+    "botorch",
+    "dill",
+    "click",
+    "scipy",
+    "scikit-learn"
+]
+
 extras_require = {
     "gui": ["PySide6"],
     "multi_processing_smp": ["pathos"],
