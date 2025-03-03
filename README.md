@@ -1,9 +1,9 @@
 
-# veropt
+# VerOpt
 
-## Bayesian Optimisation for the Versatile Ocean Simulator
+## *the versatile optimiser*
 
-veropt is a Python package that aims to make Bayesian Optimisation easy to approach, inspect and adjust. It was developed for the Versatile Ocean Simulator ([VEROS](https://veros.readthedocs.io/en/latest/)) with the aim of providing a user-friendly optimisation tool to tune ocean simulations to real world data. 
+VerOpt is a Python package that aims to make Bayesian Optimisation easy to approach, inspect and adjust. It was developed for the Versatile Ocean Simulator ([VEROS](https://veros.readthedocs.io/en/latest/)) with the aim of providing a user-friendly optimisation tool to tune ocean simulations to real world data. 
 
 veropt can be used with any optimisation problem but has been developed for expensive optimisation problems with a small amount of evaluations (~100) and the default set-up will probably be most relevant in such a context.
 
