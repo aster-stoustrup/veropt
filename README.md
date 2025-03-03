@@ -104,4 +104,4 @@ It shows a slice of the function domain, along the axis of a chosen optimisation
 
 ## License
 
-This project uses the [MIT](https://choosealicense.com/licenses/mit/) license.
+This project uses the [GPLv3](https://choosealicense.com/licenses/gpl-3.0/) license.
