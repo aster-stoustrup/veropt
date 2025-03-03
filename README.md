@@ -11,7 +11,7 @@ For more information about the package and the methods implemented in it, take a
 
 ## Installation
 
-To install veropt with the default dependencies *and* the package utilised by the GUI (PySide2), do the following:
+To install veropt with the default dependencies and the package utilised by the GUI (PySide2), do the following:
 
 ```bash
 pip install veropt[gui]
@@ -53,7 +53,7 @@ If you're using veropt with a veros simulation, take a look at veropt/obj_funcs/
 
 ## The GUI and the Visualisation Tools
 
-<img width="850" alt="GUI" src="https://user-images.githubusercontent.com/33256573/134529054-cfd9a3bb-8641-4cd2-8a11-fc6d7f794e1c.png">
+<img width="1017" alt="Screenshot 2025-03-03 at 17 13 53" src="https://github.com/user-attachments/assets/f5fe7619-7e47-4746-a01e-2babbf3c7f89" />
 
 After running the command,
 
@@ -68,7 +68,7 @@ You should see a window like the one above. From here, you can show the progress
 
 If you press "Plot predictions" in the GUI, you will encounter a plot like the one below. 
 
-<img width="700" alt="pred1" src="https://github.com/aster-stoustrup/veropt/files/7218616/BranninCurrinPrediction_wsust.pdf">
+<img width="936" alt="image" src="https://github.com/user-attachments/assets/2bceea4f-5d26-4707-8ed3-93d135c8642d" />
 
 It shows a slice of the function domain, along the axis of a chosen optimisation parameter. You will be able to inspect the model, the acquisition function, as well as the suggested points for the next round of objective function evaluations. If any of this isn't as desired, you simply close the figure and go back to the GUI to modify the optimisation by changing the relevant parameters.
 
