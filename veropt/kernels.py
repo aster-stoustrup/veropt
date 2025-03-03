@@ -6,7 +6,12 @@ from copy import deepcopy
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Type, TypedDict, Unpack, NotRequired
+from dataclasses import dataclass
+
+import warnings
+
+from typing_extensions import runtime
 
 
 class ExactGPModel(gpytorch.models.ExactGP):
@@ -186,9 +191,42 @@ class DKModelBO(DKModel, botorch.models.gpytorch.GPyTorchModel):
                          n_params)
 
 
+class TrainingParameters(TypedDict):
+    loss_change_to_stop: NotRequired[float]
+    max_iter: NotRequired[int]
+    init_max_iter: NotRequired[int]
+
+@dataclass
+class DefaultTrainingParameters:
+    loss_change_to_stop: float = 1e-6  # TODO: Find optimal value for this?
+    max_iter: int = 1000
+    init_max_iter: int = 10000
+
+
+def check_for_shallow_copies(list_in):
+    ids = [id(item) for item in list_in]
+    counts = np.unique(ids, return_counts=True)[1]
+    max_count = np.max(counts)
+    if max_count == 1:
+        return False
+    elif max_count > 1:
+        return True
+    else:
+        raise RuntimeError("Something went wrong while checking for shallow copies.")
+
+
 class BayesOptModel:
-    def __init__(self, n_params, n_objs, model_class_list: List[MaternModelBO] = None, init_train_its=1000,
-                 train_its=200, lr=0.1, opt_params_list=None, using_priors=False, constraint_dict_list=None):
+    def __init__(
+            self,
+            n_params,
+            n_objs,
+            model_class_list: List[Type[MaternModelBO]] = None,
+            lr=0.1,
+            opt_params_list=None,
+            using_priors=False,
+            constraint_dict_list=None,
+            **kwargs: Unpack[TrainingParameters]
+    ):
 
         self.n_params = n_params
         self.n_objs = n_objs
@@ -197,8 +235,23 @@ class BayesOptModel:
         else:
             self.multi_obj = False
 
-        self.init_train_its = init_train_its
-        self.train_its = train_its
+        # TODO: Remember the sweet way to do this
+        #   - Also might technically need to copy with the way it's done now >:(
+        if 'loss_change_to_stop' in kwargs:
+            self.loss_change_to_stop = kwargs['loss_change_to_stop']
+        else:
+            self.loss_change_to_stop = DefaultTrainingParameters.loss_change_to_stop
+
+        if 'init_max_iter' in kwargs:
+            self.init_max_iter = kwargs['init_max_iter']
+        else:
+            self.init_max_iter = DefaultTrainingParameters.init_max_iter
+
+        if 'max_iter' in kwargs:
+            self.max_iter = kwargs['max_iter']
+        else:
+            self.max_iter = DefaultTrainingParameters.max_iter
+
         self.lr = lr
 
         self.model_list = None
@@ -213,6 +266,7 @@ class BayesOptModel:
         self.loss_list = []
 
         self.init_opt_params_list(opt_params_list)
+        self.constraint_dict_list = None
         self.init_constraint_dict_list(constraint_dict_list)
 
         self.using_priors = using_priors
@@ -263,18 +317,16 @@ class BayesOptModel:
     def init_constraint_dict_list(self, constraint_dict_list):
 
         if constraint_dict_list is None:
-            self.constraint_dict_list = []
+            self.constraint_dict_list = [None] * self.n_objs
             for model_no in range(self.n_objs):
                 if "Matern" in self.model_class_list[model_no].__name__ or "RBF" in self.model_class_list[model_no].__name__:
-                    self.constraint_dict_list.append({
+                    self.constraint_dict_list[model_no] = {
                         "covar_module": {
                             "raw_lengthscale": [0.1, 2.0]}
-                    })
-                else:
-                    self.constraint_dict_list.append(None)
+                    }
 
         elif not isinstance(constraint_dict_list, list):
-            self.constraint_dict_list = [constraint_dict_list] * self.n_objs
+            self.constraint_dict_list = [deepcopy(constraint_dict_list) for i in range(self.n_objs)]
 
         elif isinstance(constraint_dict_list, list) and len(constraint_dict_list) < self.n_objs:
             self.constraint_dict_list = constraint_dict_list
@@ -290,6 +342,15 @@ class BayesOptModel:
 
         else:
             self.constraint_dict_list = constraint_dict_list
+
+        # Can consider this check. But the intended design is to have unique constraints for all objectives.
+        #   - Could also make it an assert instead.
+        found_shallow_copies = check_for_shallow_copies(self.constraint_dict_list)
+        if found_shallow_copies:
+            warnings.warn(
+                "Some indices of the constraint_dict_list points to the same object. Constraints cannot "
+                "be set individually."
+            )
 
     def eval(self, x: torch.Tensor):
         self.set_eval()
@@ -399,7 +460,7 @@ class BayesOptModel:
 
         self.update_constraints()
 
-        self.train_backwards(self.init_train_its)
+        self.train_backwards(max_iter=self.init_max_iter)
 
     def update_model(self, x: torch.Tensor, y: torch.Tensor):
 
@@ -455,25 +516,40 @@ class BayesOptModel:
 
         self.optimiser = torch.optim.Adam(opt_list, lr=self.lr)
 
-    def train_backwards(self, its: int = None):
+    def train_backwards(self, max_iter=None):
 
         running_on_slurm = "SLURM_JOB_ID" in os.environ
         verbose = not running_on_slurm
 
-        if its is None:
-            its = self.train_its
+        if max_iter is None:
+            max_iter = self.max_iter
 
-        for train_it in range(its):
+        loss_difference = 1e5  # initial values
+        loss = 1e20  # TODO: Find a way to make sure this number is always big enough
+        assert self.loss_change_to_stop < loss_difference
+        iteration = 1
+
+        while bool(loss_difference > self.loss_change_to_stop):
+
             self.optimiser.zero_grad()  # Zero gradients from previous iteration
-            # output = self.model(x)
             output = self.model(*self.model.train_inputs)
-            # loss = -self.mll(output, y)  # Calc loss and backprop gradients
-            loss = -self.mll(output, self.model.train_targets)
+            previous_loss = loss
+            loss = -self.mll(output, self.model.train_targets)  # Calc loss and backprop gradients
             loss.backward()
             if verbose:
-                print("Training model... Iteration %d/%d - Loss: %.3f" % (train_it + 1, its, loss.item()), end="\r")
+                print(
+                    f"Training model... Iteration {iteration} (of a maximum {max_iter}) - Loss: {loss.item():.3f}",
+                    end="\r"
+                )
             self.loss_list.append(loss.item())
             self.optimiser.step()
+
+            loss_difference = torch.abs(previous_loss - loss)
+
+            iteration += 1
+            if iteration > max_iter:
+                warnings.warn("Stopped training due to maximum iterations reached.")
+                break
 
         if verbose:
             print("\n")

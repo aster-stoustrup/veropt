@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 
-install_requires = ["botorch", "dill", "click", "scikit-learn==0.24.1", "scipy", "matplotlib", "numpy", "xarray"]
+# install_requires = ["botorch", "dill", "click", "scikit-learn", "scipy", "matplotlib", "numpy"]
+install_requires = []
 extras_require = {
     "gui": ["PySide6"],
     "multi_processing_smp": ["pathos"],
@@ -12,13 +13,13 @@ with open("README.md", "r") as fh:
 
 setup(
     name='veropt',
-    version='0.5.3',
+    version='0.6.0',
     packages=find_packages(),
-    url='https://github.com/idax4325/veropt',
-    license='OSI Approved :: MIT License',
+    url='https://github.com/aster-stoustrup/veropt',
+    license='OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
     author='Aster Stoustrup',
-    author_email='Aster.Stoustrup@gmail.com',
-    description='Bayesian Optimisation for the Versatile Ocean Simulator (VEROS)',
+    author_email='aster.stoustrup@gmail.com',
+    description='The Versatile Optimiser (VerOpt)',
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=install_requires,

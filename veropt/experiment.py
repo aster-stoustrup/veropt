@@ -14,7 +14,7 @@ import os
 import time
 import subprocess
 import sys
-from sklearn import preprocessing
+# from sklearn import preprocessing
 
 
 class BayesExperiment:
@@ -110,7 +110,7 @@ class BayesExperiment:
             bayes_optimiser = deepcopy(bayes_opt_config)
             bayes_optimiser.run_all_opt_steps()
             self.bayes_opts[self.current_config_no][self.current_rep] = bayes_optimiser
-            self.vals[self.current_config_no][self.current_rep] = bayes_optimiser.obj_func_vals_real_units()
+            self.vals[self.current_config_no][self.current_rep] = bayes_optimiser.obj_func_vals_real_units
             self.best_vals[self.current_config_no, self.current_rep] = bayes_optimiser.best_val(in_real_units=True)
             self.print_status()
 
@@ -142,7 +142,7 @@ class BayesExperiment:
         np.random.seed(seed)
         bayes_optimiser.run_all_opt_steps()
         # message = (config_ind, rep_ind, bayes_optimiser.best_val(in_real_units=True))
-        vals = bayes_optimiser.obj_func_vals_real_units()
+        vals = bayes_optimiser.obj_func_vals_real_units
         best_vals = bayes_optimiser.best_val(in_real_units=True)
         message = (config_ind, rep_ind, vals, best_vals)
         # message = (config_ind, rep_ind, best_vals)
@@ -287,7 +287,7 @@ class BayesExperiment:
 
         self.normed_vals = torch.tensor(self.normed_vals)
 
-        self.obj_weights = self.obj_weights.type(dtype=torch.float64)
+        # self.obj_weights = self.obj_weights.type(dtype=torch.float64)
 
         weighted_sums = self.normed_vals @ self.obj_weights
 

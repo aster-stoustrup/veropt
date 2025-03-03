@@ -17,18 +17,33 @@ obj_func = PredefinedTestFunction("Hartmann")
 
 n_objs = obj_func.n_objs
 
-beta = 3.0
-gamma = 0.01
+acq_func = PredefinedAcqFunction(
+    bounds=obj_func.bounds,
+    n_objs=n_objs,
+    n_evals_per_step=n_evals_per_step,
+    acqfunc_name="UCB",
+    beta=3.0,
+    seq_dist_punish=True,
+    alpha=0.7
+)
 
-acq_func = PredefinedAcqFunction(obj_func.bounds, n_objs, n_evals_per_step, acqfunc_name="UCB_Var", beta=beta,
-                                 gamma=gamma, seq_dist_punish=True)
+kernel = BayesOptModel(
+    n_params=obj_func.n_params,
+    n_objs=n_objs,
+    model_class_list=[MaternModelBO],
+    init_max_iter=10000,
+    using_priors=False
+)
 
-kernel = BayesOptModel(obj_func.n_params, n_objs, model_class_list=[MaternModelBO], init_train_its=1000,
-                       using_priors=False)
 
-
-optimiser = BayesOptimiser(n_init_points, n_bayes_points, obj_func, acq_func, model=kernel,
-                           n_evals_per_step=n_evals_per_step)
+optimiser = BayesOptimiser(
+    n_init_points=n_init_points,
+    n_bayes_points=n_bayes_points,
+    obj_func=obj_func,
+    acq_func=acq_func,
+    model=kernel,
+    n_evals_per_step=n_evals_per_step
+)
 
 
 # optimiser.run_all_opt_steps()

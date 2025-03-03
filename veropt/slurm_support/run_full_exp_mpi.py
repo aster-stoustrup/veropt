@@ -100,7 +100,7 @@ def run(**kwargs):
                     config_ind = config_inds[run_no]
                     rep_ind = rep_inds[run_no]
                     experiment.bayes_opts[config_ind][rep_ind] = deepcopy(bayes_opt)
-                    experiment.vals[config_ind][rep_ind] = bayes_opt.obj_func_vals_real_units()
+                    experiment.vals[config_ind][rep_ind] = bayes_opt.obj_func_vals_real_units
                     experiment.best_vals[config_ind][rep_ind] = bayes_opt.best_val(in_real_units=True)
 
         if master:

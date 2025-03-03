@@ -1,7 +1,7 @@
 from veropt.gui.gui_setup import Ui_MainWindow
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QWidget
 from PySide6.QtGui import QTextCursor
-from PySide6.QtCore import QThread, QObject, Signal
+from PySide6.QtCore import QThread, QObject, Signal, Slot
 from veropt import BayesOptimiser
 import sys
 from queue import Queue
@@ -10,6 +10,9 @@ import os
 
 
 class BayesOptWindow(QMainWindow):
+
+    refit_model_signal = Signal()
+
     def __init__(self, optimiser: BayesOptimiser, opt_worker):
         super(BayesOptWindow, self).__init__()
 
@@ -47,6 +50,7 @@ class BayesOptWindow(QMainWindow):
         self.ui.checkBox_plotp_2d.setDisabled(True)
 
     def connect_signals_to_slots(self):
+        self.refit_model_signal.connect(self.opt_worker.refit_model)
         self.ui.pushButton_refit_kernel.clicked.connect(self.opt_worker.refit_model)
         self.ui.pushButton_renormalise.clicked.connect(self.opt_worker.renormalise_model)
 
@@ -131,6 +135,15 @@ class BayesOptWindow(QMainWindow):
                 else f"Var {var_no+1}"
             self.ui.comboBox_plotp_var.addItem(var_name)
 
+        n_total_plots = self.optimiser.n_objs * self.optimiser.n_params
+
+        if self.optimiser.n_objs > 1 and n_total_plots > 4:
+            # 'all' is 0 so we're setting it to 1 to avoid opening too many windows
+            self.ui.comboBox_plotp_obj.setCurrentIndex(1)
+
+        if self.optimiser.n_params > 1 and n_total_plots > 4:
+            self.ui.comboBox_plotp_var.setCurrentIndex(1)
+
     def set_up_ls_tabs(self):
 
         for obj_no in range(self.optimiser.n_objs):
@@ -200,8 +213,8 @@ class BayesOptWindow(QMainWindow):
         if var_no_list[0] == -1:
             var_no_list = torch.arange(self.optimiser.n_params)
 
-        normalised = bool(self.ui.checkBox_plotp_norm.checkState())
-        two_dims = bool(self.ui.checkBox_plotp_2d.checkState())
+        normalised = bool(self.ui.checkBox_plotp_norm.isChecked())
+        two_dims = bool(self.ui.checkBox_plotp_2d.isChecked())
 
         if not two_dims:
             for obj_no in obj_no_list:
@@ -217,10 +230,6 @@ class BayesOptWindow(QMainWindow):
             # for obj_no in obj_no_list:
             #     for var_no in var_no_list:
             #         self.optimiser.plot_prediction_2d_real_units(int(obj_no), int(var_no))
-
-    def plot_prediction_real_units(self):
-        for var_ind in range(self.optimiser.n_params):
-            self.optimiser.plot_prediction_real_units(var_ind)
 
     def plot_pareto(self):
         if self.optimiser.n_objs == 2:
@@ -295,14 +304,16 @@ class BayesOptWindow(QMainWindow):
                     # self.ui.label_length_scale.repaint()
 
     def update_local_best_val(self):
-        if self.optimiser.points_evaluated > 0:
+        if self.optimiser.n_points_evaluated > 0:
             for obj_no in range(self.optimiser.n_objs):
                 self.ls_tab_widgets[obj_no]["label_obj_best_val"].setText(
                     f"Best value: {self.optimiser.best_val(max_for_single_obj_ind=obj_no):.2f}")
 
     def update_constraint_labels(self):
         for obj_no in range(self.optimiser.n_objs):
-            if 'Matern' in self.optimiser.model.model_class_list[obj_no].__name__ or 'RBF' in self.optimiser.model.model_class_list[obj_no].__name__:
+            if ('Matern' in self.optimiser.model.model_class_list[obj_no].__name__ or
+                    'RBF' in self.optimiser.model.model_class_list[obj_no].__name__):
+
                 constraint_vals = self.optimiser.model.constraint_dict_list[obj_no]["covar_module"]["raw_lengthscale"]
                 self.ls_tab_widgets[obj_no]["label_constraints"].setText(
                     f"Constraints: [{constraint_vals[0]}, {constraint_vals[1]}]")
@@ -320,15 +331,22 @@ class BayesOptWindow(QMainWindow):
             self.change_constraints(self.obj_no)
 
     def change_constraints(self, obj_no):
+
         try:
             new_val_0 = float(self.ls_tab_widgets[obj_no]["lineEdit_constraint_0"].text())
             new_val_1 = float(self.ls_tab_widgets[obj_no]["lineEdit_constraint_1"].text())
             self.optimiser.model.constraint_dict_list[obj_no]["covar_module"]["raw_lengthscale"] = [new_val_0, new_val_1]
             self.update_constraint_labels()
-            self.write_to_textfield("Constraints changed! The model will now be refitted.\n")
-            self.opt_worker.refit_model()
+            if self.optimiser.data_fitted:
+                self.write_to_textfield("Constraints changed. The model will now be refitted.\n")
+                self.refit_model_signal.emit()
+                # self.opt_worker.refit_model()
+            else:
+                self.write_to_textfield("Constraints changed. \n")
+
         except ValueError:
             self.write_to_textfield("Invalid value encountered. Write a float in both constraint fields.")
+
         self.ls_tab_widgets[obj_no]["lineEdit_constraint_0"].setText('')
         self.ls_tab_widgets[obj_no]["lineEdit_constraint_1"].setText('')
 
@@ -337,9 +355,9 @@ class BayesOptWindow(QMainWindow):
 
     def update_status_labels(self):
         self.ui.label_current_point.setText(f"Step {self.optimiser.current_step} of {self.optimiser.n_steps} "
-                                            f"({self.optimiser.points_evaluated} of {self.optimiser.n_points} "
+                                            f"({self.optimiser.n_points_evaluated} of {self.optimiser.n_points} "
                                             f"points evaluated)")
-        if self.optimiser.points_evaluated > 0:
+        if self.optimiser.n_points_evaluated > 0:
             if self.optimiser.multi_obj:
                 self.ui.label_best_val.setText(f"Best summed value: {self.optimiser.best_val(weighted_best=True)[0]:.2f}")
             else:
@@ -438,11 +456,9 @@ class OptWorker(QObject):
 
     def do_opt_steps(self):
 
-        # print(self.optimiser.current_point)
-
         self.run_opt_step()
 
-        while self.window.ui.checkBox_keep_running.checkState() \
+        while self.window.ui.checkBox_keep_running.isChecked() \
                 and self.optimiser.current_step < self.optimiser.n_steps:
 
             self.run_opt_step()
@@ -512,7 +528,6 @@ def run(optimiser):
     sys.stdout = WriteStream(queue)
 
     window = BayesOptWindow(optimiser, opt_worker)
-    window.show()
 
     write_thread = QThread()
     receiver = Receiver(queue)
@@ -522,6 +537,8 @@ def run(optimiser):
     app.aboutToQuit.connect(write_thread.quit)
 
     write_thread.start()
+
+    window.show()
 
     # app.exec_()
 

@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.metrics import mean_squared_error
 import torch
 import botorch
+
 from veropt import ObjFunction
 
 
@@ -119,7 +120,8 @@ class FitTestFunction(ObjFunction):
         init_vals = torch.tensor(list(init_dic.values()))
         stds = torch.tensor(list(stds_dic.values()))
 
-        self.true_vals = torch.tensor(list(param_dic.values()), dtype=torch.float64).unsqueeze(0)
+        # self.true_vals = torch.tensor(list(param_dic.values()), dtype=torch.float64).unsqueeze(0)
+        self.true_vals = torch.tensor(list(param_dic.values())).unsqueeze(0)
 
         self.x_array = np.linspace(0, 5.3 * (1 / param_dic["freq"] * (2 * np.pi)), num=500)
         self.y_array = fit_function(self.x_array, **param_dic)
@@ -134,10 +136,15 @@ class FitTestFunction(ObjFunction):
 
 
 class PredefinedTestFunction(ObjFunction):
-    def __init__(self, function_name):
+    def __init__(self, function_name, n_params=None, n_objs=None):
 
         if function_name == "Hartmann":
-            n_params = 6  # Can be 3, 4 or 6
+            if n_params is None:
+                n_params = 6
+            assert n_params in [3, 4, 6]
+            assert n_objs is None
+
+            n_params = 6
             n_objs = 1
             function = botorch.test_functions.Hartmann(negate=True)
             bounds = torch.tensor([[0.0] * 6, [1.0] * 6])
@@ -145,6 +152,9 @@ class PredefinedTestFunction(ObjFunction):
             obj_names = function_name
 
         elif function_name == "Cosine8":
+            assert n_params is None
+            assert n_objs is None
+
             n_params = 8  # Can't be changed
             n_objs = 1
             function = botorch.test_functions.Cosine8(negate=False)
@@ -153,6 +163,9 @@ class PredefinedTestFunction(ObjFunction):
             obj_names = function_name
 
         elif function_name == "Branin":
+            assert n_params is None
+            assert n_objs is None
+
             n_params = 2  # Can only be 2
             n_objs = 1
             function = botorch.test_functions.Branin(negate=True)
@@ -163,6 +176,9 @@ class PredefinedTestFunction(ObjFunction):
             obj_names = function_name
 
         elif function_name == "BraninCurrin":
+            assert n_params is None
+            assert n_objs is None
+
             n_params = 2
             n_objs = 2
             # TODO: Is the negate right? Check please
@@ -171,11 +187,46 @@ class PredefinedTestFunction(ObjFunction):
             obj_names = ["Branin", "Currin"]
 
         elif function_name == "VehicleSafety":
+            assert n_params is None
+            assert n_objs is None
+
             n_params = 5
             n_objs = 3
             function = botorch.test_functions.VehicleSafety()
             bounds = torch.tensor([[1.0]*5, [3.0]*5])
             obj_names = [f"VeSa {obj_no+1}" for obj_no in range(n_objs)]
+
+        # Could maybe do an DTLZN to avoid making a bunch of these
+        elif function_name == "DTLZ1":
+            if n_params is None:
+                n_params = 10
+            if n_objs is None:
+                n_objs = 5
+
+            function = botorch.test_functions.DTLZ1(
+                dim=n_params,
+                num_objectives=n_objs,
+                negate=True
+            )
+            bounds = torch.tensor([[0.0]*n_params, [1.0]*n_params])
+            obj_names = [f"DTLZ1 {obj_no+1}" for obj_no in range(n_objs)]
+
+        elif function_name == "DTLZ2":
+            if n_params is None:
+                n_params = 10
+            if n_objs is None:
+                n_objs = 5
+
+            function = botorch.test_functions.DTLZ2(
+                dim=n_params,
+                num_objectives=n_objs,
+                negate=True
+            )
+            bounds = torch.tensor([[0.0]*n_params, [1.0]*n_params])
+            obj_names = [f"DTLZ2 {obj_no+1}" for obj_no in range(n_objs)]
+
+        else:
+            raise ValueError("Function name not recognised.")
 
         super().__init__(function, bounds, n_params, n_objs, obj_names=obj_names)
 
@@ -217,6 +268,9 @@ class PredefinedFitTestFunction(FitTestFunction):
         elif function_name == "sine_sum2_linear":
             fit_function = self.sine_sum2_linear
             param_dic = {"freq": 6, "freq2": 1, "linamp": 0.5}
+
+        else:
+            raise ValueError(f"Function name '{function_name}' not recognised.")
 
         n_dims = 1
 

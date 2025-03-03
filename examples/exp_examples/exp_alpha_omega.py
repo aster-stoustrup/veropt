@@ -19,7 +19,7 @@ def run():
 
     # obj_func = PredefinedFitTestFunction("sine_3params")
     obj_func = PredefinedTestFunction("Hartmann")
-    kernel = BayesOptModel(obj_func.n_params, n_objs, model_class_list=[MaternModelBO], init_train_its=1000, using_priors=False)
+    kernel = BayesOptModel(obj_func.n_params, n_objs, model_class_list=[MaternModelBO], init_max_iter=1000, using_priors=False)
 
     # alpha_array = np.linspace(0.1, 10, num=20)
     # omega_array = np.linspace(0.1, 1.0, num=10)
