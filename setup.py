@@ -23,7 +23,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='veropt',
-    version='0.6.0',
+    version='0.6.1',
     packages=find_packages(),
     url='https://github.com/aster-stoustrup/veropt',
     license='OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
