@@ -16,7 +16,7 @@ setup(
     version='0.6.0',
     packages=find_packages(),
     url='https://github.com/aster-stoustrup/veropt',
-    license='OSI Approved :: MIT License',
+    license='OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
     author='Aster Stoustrup',
     author_email='aster.stoustrup@gmail.com',
     description='The Versatile Optimiser (VerOpt)',
