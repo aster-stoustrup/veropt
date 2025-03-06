@@ -28,13 +28,13 @@ class NormaliserType:
 
 
 def np_input_support(func):
-    def wrapper(self, data_in):
+    def wrapper(self, matrix):
 
-        if type(data_in) == np.ndarray:
-            new_data_in = torch.tensor(data_in)
+        if type(matrix) == np.ndarray:
+            new_data_in = torch.tensor(matrix)
             need_to_convert_back = True
         else:
-            new_data_in = data_in
+            new_data_in = matrix
             need_to_convert_back = False
 
         data_out = func(self, new_data_in)
