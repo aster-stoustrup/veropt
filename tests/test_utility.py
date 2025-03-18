@@ -114,7 +114,7 @@ def test_normaliser_integration():
     for i in range(n_init_points//n_evals_per_step):
         optimiser.run_opt_step()
 
-    assert optimiser.data_normalised
+    assert optimiser.data_has_been_normalised
 
     obj_means = optimiser.obj_func_vals.mean(dim=1).squeeze(0)
     obj_stds = optimiser.obj_func_vals.std(dim=1).squeeze(0)

@@ -15,11 +15,6 @@ class InitialPointsGenerationMode(Enum):
     random = 1
 
 
-class ObjectiveType(Enum):
-    integrated = 1
-    interface = 1
-
-
 # TODO: Write a test to make sure the arguments of this and the dict are the same? (except n_init and n_bayes)
 @dataclass
 class OptimiserSettings:
@@ -30,7 +25,7 @@ class OptimiserSettings:
     normalise: bool = True
     n_points_before_fitting: int = None
     verbose: bool = True
-    renormalise_each_step: bool = None
+    renormalise_each_step: bool = None  # TODO: Write a preset for this somewhere
     initial_points_generator: InitialPointsGenerationMode = InitialPointsGenerationMode.random
 
     def __post_init__(self):
@@ -56,7 +51,11 @@ class TensorWithNormalisationFlag:
         self.tensor = tensor
         self.normalised = deepcopy(normalised)
 
-    def __getitem__(self, item):
+    def __getitem__(
+            self,
+            item
+    ) -> 'TensorWithNormalisationFlag':
+
         return TensorWithNormalisationFlag(
             tensor=self.tensor[item],
             normalised=self.normalised
@@ -68,3 +67,5 @@ class SuggestedPoints:
     coordinates: TensorWithNormalisationFlag
     predicted_values: Optional[TensorWithNormalisationFlag]
     generated_at_step: int
+
+
