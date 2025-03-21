@@ -4,7 +4,9 @@ import torch
 
 
 class AcquisitionFunction:
-    def __init__(self):
+    def __init__(
+            self
+    ):
         raise NotImplementedError
 
     abc.abstractmethod

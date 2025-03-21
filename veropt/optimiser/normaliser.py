@@ -2,6 +2,8 @@ import abc
 
 import torch
 
+from veropt.optimiser.optimiser_utility import DataShape
+
 
 class Normaliser:
     __metaclass__ = abc.ABCMeta
@@ -11,7 +13,6 @@ class Normaliser:
             self,
             tensor: torch.Tensor
     ):
-
         pass
 
     @abc.abstractmethod
@@ -35,9 +36,8 @@ class NormaliserZeroMeanUnitVariance(Normaliser):
     def __init__(
             self,
             matrix: torch.Tensor,
-            norm_dim: int = 1
+            norm_dim: int = DataShape.index_points
     ):
-
         self.means = matrix.mean(dim=norm_dim)
         self.variances = matrix.var(dim=norm_dim)
 
@@ -46,11 +46,11 @@ class NormaliserZeroMeanUnitVariance(Normaliser):
             matrix: torch.Tensor
     ) -> torch.Tensor:
 
-        return (matrix - self.means[:, None]) / torch.sqrt(self.variances[:, None])
+        return (matrix - self.means) / torch.sqrt(self.variances)
 
     def inverse_transform(
             self,
             matrix: torch.Tensor
     ) -> torch.Tensor:
 
-        return matrix * torch.sqrt(self.variances[:, None]) + self.means[:, None]
+        return matrix * torch.sqrt(self.variances) + self.means

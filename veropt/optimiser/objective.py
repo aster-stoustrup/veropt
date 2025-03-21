@@ -9,19 +9,19 @@ class Objective:
     def __init__(
             self,
             bounds: torch.Tensor,
-            n_parameters: int,
+            n_variables: int,
             n_objectives: int,
-            parameter_names: list[str] = None,
+            variable_names: list[str] = None,
             objective_names: list[str] = None
     ):
         self.bounds = bounds
-        self.n_parameters = n_parameters
+        self.n_variables = n_variables
         self.n_objectives = n_objectives
 
-        if parameter_names is None:
-            self.parameter_names = [f"Parameter {i}" for i in range(1, n_parameters + 1)]
+        if variable_names is None:
+            self.variable_names = [f"variable {i}" for i in range(1, n_variables + 1)]
         else:
-            self.parameter_names = parameter_names
+            self.variable_names = variable_names
 
         if objective_names is None:
             self.objective_names = [f"Objective {i}" for i in range(1, n_objectives + 1)]
