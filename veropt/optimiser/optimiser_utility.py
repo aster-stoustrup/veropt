@@ -98,8 +98,6 @@ def format_list(
     return formatted_list
 
 
-# TODO: Consider splitting into separate functions...?
-# TODO: Make a test? :))))
 def get_best_points(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
@@ -108,38 +106,24 @@ def get_best_points(
         best_for_objecive_index: Optional[int] = None
 ) -> (torch.Tensor, torch.Tensor, int):
 
-    n_objs = objective_values.shape[DataShape.index_dimensions]
+    weights = torch.tensor(weights)
 
     assert objectives_greater_than is None or best_for_objecive_index is None, "Specifying both options not supported"
 
-    raise NotImplementedError("Come in with a debugger and fix these dims to the new class")
-
     if objectives_greater_than is None and best_for_objecive_index is None:
 
-        max_index = (objective_values * weights).sum(dim=1).argmax()
+        max_index = (objective_values * weights).sum(dim=DataShape.index_dimensions).argmax()
 
     elif  objectives_greater_than is not None:
 
-        if type(objectives_greater_than) == float:
+        max_index = _get_points_greater_than(
+            objective_values=objective_values,
+            weights=weights,
+            objectives_greater_than=objectives_greater_than
+        )
 
-            large_enough_objective_values = objective_values > objectives_greater_than
-
-        elif type(objectives_greater_than) == list:
-
-            large_enough_objective_values = objective_values > torch.tensor(objectives_greater_than)
-
-        else:
-            raise ValueError
-
-        large_enough_objective_rows = large_enough_objective_values.sum(dim=2) == n_objs
-
-        if large_enough_objective_rows.max() == 0:
-            # Could alternatively raise exception but might be overkill
-            return None, None
-
-        filtered_objective_values = objective_values * large_enough_objective_rows.unsqueeze(2)
-
-        max_index = (filtered_objective_values * weights).sum(dim=1).argmax()
+        if max_index is None:
+            return None, None, None
 
     elif best_for_objecive_index is not None:
         max_index = objective_values[0, :, best_for_objecive_index].argmax()
@@ -147,13 +131,46 @@ def get_best_points(
     else:
         raise ValueError
 
-    best_variables = variable_values[0, max_index]
-    best_values = objective_values[0, max_index]
+    best_variables = variable_values[max_index]
+    best_values = objective_values[max_index]
     max_index = int(max_index)
 
     return best_variables, best_values, max_index
 
 
+def _get_points_greater_than(
+        objective_values: torch.Tensor,
+        weights: torch.Tensor,
+        objectives_greater_than: Optional[float | list[float]] = None
+) -> Union[int, None]:
+
+    n_objs = objective_values.shape[DataShape.index_dimensions]
+
+    if type(objectives_greater_than) == float:
+
+        large_enough_objective_values = objective_values > objectives_greater_than
+
+    elif type(objectives_greater_than) == list:
+
+        large_enough_objective_values = objective_values > torch.tensor(objectives_greater_than)
+
+    else:
+        raise ValueError
+
+    large_enough_objective_rows = large_enough_objective_values.sum(dim=DataShape.index_dimensions) == n_objs
+
+    if large_enough_objective_rows.max() == 0:
+        # Could alternatively raise exception but might be overkill
+        return None
+
+    filtered_objective_values = objective_values * large_enough_objective_rows.unsqueeze(dim=DataShape.index_dimensions)
+
+    max_index = int((filtered_objective_values * weights).sum(dim=DataShape.index_dimensions).argmax())
+
+    return max_index
+
+
+# TODO: Make test? >:))
 def get_pareto_optimal_points(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
@@ -161,11 +178,15 @@ def get_pareto_optimal_points(
         sort_by_max_weighted_sum: bool = True
 ) -> (torch.Tensor, torch.Tensor, list[bool]):
 
+    raise NotImplementedError("Come in with a debugger and fix these dims to the new class")
+
     pareto_optimal_indices = np.ones(objective_values.shape[0], dtype=bool)
     for value_index, value in enumerate(objective_values):
         if pareto_optimal_indices[value_index]:
-            raise NotImplementedError("Come in with a debugger and fix these dims to the new class")
-            pareto_optimal_indices[pareto_optimal_indices] = np.any(objective_values[pareto_optimal_indices] > value, axis=1)
+            pareto_optimal_indices[pareto_optimal_indices] = np.any(
+                objective_values[pareto_optimal_indices] > value,
+                axis=1
+            )
             pareto_optimal_indices[value_index] = True
 
     pareto_optimal_indices = pareto_optimal_indices.nonzero()[0]

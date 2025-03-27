@@ -56,8 +56,8 @@ class BayesianOptimiser:
         else:
             self.normaliser_class = normaliser_class
 
-        self.normaliser_variables = None
-        self.normaliser_values = None
+        self._normaliser_variables = None
+        self._normaliser_values = None
 
         # TODO: Move this assert somewhere else?
         # TODO: Write error message for this assert
@@ -82,7 +82,7 @@ class BayesianOptimiser:
                 [None] * (self.n_initial_points + self.n_bayesian_points)
         )
 
-        self.objective_type = determine_objective_type(
+        self._objective_type = determine_objective_type(
             objective=objective
         )
 
@@ -90,7 +90,7 @@ class BayesianOptimiser:
 
     def run_optimisation_step(self):
 
-        if self.objective_type == ObjectiveKind.integrated:
+        if self._objective_type == ObjectiveKind.integrated:
 
             self.suggest_candidates()
 
@@ -98,7 +98,7 @@ class BayesianOptimiser:
 
             self._add_new_points(new_variables, new_values)
 
-        elif self.objective_type == ObjectiveKind.interface:
+        elif self._objective_type == ObjectiveKind.interface:
 
             self._load_latest_points()
 
@@ -166,7 +166,7 @@ class BayesianOptimiser:
 
     def _evaluate_points(self) -> (TensorWithNormalisationFlag, TensorWithNormalisationFlag):
 
-        assert self.objective_type == ObjectiveKind.integrated, (
+        assert self._objective_type == ObjectiveKind.integrated, (
             "The objective must be an 'IntegratedObjective' to be evaluated during optimisation."
         )
 
@@ -241,7 +241,7 @@ class BayesianOptimiser:
 
     def _load_latest_points(self):
 
-        assert self.objective_type == ObjectiveKind.interface, (
+        assert self._objective_type == ObjectiveKind.interface, (
             "The objective must be an 'InterfaceObjective' to load points."
         )
 
@@ -252,7 +252,7 @@ class BayesianOptimiser:
 
     def _save_candidates(self):
 
-        assert self.objective_type == ObjectiveKind.interface, (
+        assert self._objective_type == ObjectiveKind.interface, (
             "The objective must be an 'InterfaceObjective' to save candidates."
         )
 
@@ -326,10 +326,10 @@ class BayesianOptimiser:
 
     def _fit_normaliser(self):
 
-        self.normaliser_variables = self.normaliser_class(
+        self._normaliser_variables = self.normaliser_class(
             tensor=self.evaluated_variables_real_units
         )
-        self.normaliser_values = self.normaliser_class(
+        self._normaliser_values = self.normaliser_class(
             tensor=self.evaluated_objective_real_units
         )
 
@@ -361,7 +361,7 @@ class BayesianOptimiser:
     ) -> TensorWithNormalisationFlag:
 
         if variable_values.normalised:
-            variables_real_units = self.normaliser_variables.inverse_transform(variable_values.tensor)
+            variables_real_units = self._normaliser_variables.inverse_transform(variable_values.tensor)
         else:
             variables_real_units = variable_values.tensor
 
@@ -478,16 +478,16 @@ class BayesianOptimiser:
 
     @cached_property
     def evaluated_variables_normalised(self) -> TensorWithNormalisationFlag:
-        return self.normaliser_variables.transform(self.evaluated_variables_real_units)
+        return self._normaliser_variables.transform(self.evaluated_variables_real_units)
 
     @cached_property
     def evaluated_objective_normalised(self) -> TensorWithNormalisationFlag:
-        return self.normaliser_values.transform(self.evaluated_objective_real_units)
+        return self._normaliser_values.transform(self.evaluated_objective_real_units)
 
     @cached_property
     def bounds_normalised(self):
-        return self.normaliser_variables.transform(self.bounds_real_units)
+        return self._normaliser_variables.transform(self.bounds_real_units)
 
     @cached_property
     def initial_points_normalised(self):
-        return self.normaliser_variables.transform(self.initial_points_real_units)
+        return self._normaliser_variables.transform(self.initial_points_real_units)

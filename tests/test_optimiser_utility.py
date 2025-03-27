@@ -1,9 +1,74 @@
 import pytest
+import torch
+
+from veropt.optimiser.optimiser_utility import get_best_points
 
 
-def test_get_best_points():
-    # TODO: Implement
-    assert False
+def test_get_best_points_simple():
+
+    variable_values = torch.tensor([
+        [0.4, 0.3, 0.7],
+        [0.4, 2.4, 0.2],
+        [0.1, 1.2, -0.4],
+        [3.5, 0.6, 2.1]
+    ])
+    objective_values = torch.tensor([
+        [1.2, 0.5],
+        [2.3, 3.4],
+        [0.3, 0.5],
+        [1.2, 1.4]
+    ])
+
+    weights = [1.0, 1.0]
+
+    true_max_index = 1
+
+    best_variables, best_values, max_index = get_best_points(
+        variable_values=variable_values,
+        objective_values=objective_values,
+        weights=weights
+    )
+
+    # Internally converting to tensor but shouldn't convert input
+    assert type(weights) == list
+
+    assert max_index == true_max_index
+    assert torch.equal(best_variables, torch.tensor([0.4, 2.4, 0.2]))
+    assert torch.equal(best_values, torch.tensor([2.3, 3.4]))
+
+
+def test_get_best_points_w_objectives_greater_than():
+
+    variable_values = torch.tensor([
+        [0.4, 0.3, 0.7],
+        [0.4, 2.4, 0.2],
+        [0.1, 1.2, -0.4],
+        [3.5, 0.6, 2.1]
+    ])
+    objective_values = torch.tensor([
+        [1.2, 0.5],
+        [0.8, 3.4],
+        [0.3, 0.5],
+        [1.2, 1.4]
+    ])
+
+    weights = [1.0, 1.0]
+
+    true_max_index = 3  # Because we're requiring obj>1
+
+    best_variables, best_values, max_index = get_best_points(
+        variable_values=variable_values,
+        objective_values=objective_values,
+        weights=weights,
+        objectives_greater_than=1.0
+    )
+
+    # Internally converting to tensor but shouldn't convert input
+    assert type(weights) == list
+
+    assert max_index == true_max_index
+    assert torch.equal(best_variables, torch.tensor([3.5, 0.6, 2.1]))
+    assert torch.equal(best_values, torch.tensor([1.2, 1.4]))
 
 
 def test_get_pareto_optimal_points():
