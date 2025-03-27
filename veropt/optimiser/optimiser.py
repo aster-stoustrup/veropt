@@ -70,7 +70,7 @@ class BayesianOptimiser:
             **kwargs
         )
 
-        self.initial_points_real_units = self.generate_initial_points()
+        self.initial_points_real_units = self._generate_initial_points()
         self.evaluated_variables_real_units = None
         self.evaluated_values_real_units = None
 
@@ -86,31 +86,7 @@ class BayesianOptimiser:
             objective=objective
         )
 
-        self.verify_set_up()
-
-    def verify_set_up(self):
-
-        assert self.n_initial_points % self.n_evaluations_per_step == 0, (
-            "The amount of initial points is not divisable by the amount of points evaluated each step."
-        )
-
-        assert self.n_bayesian_points % self.n_evaluations_per_step == 0, (
-            "The amount of bayesian points is not divisable by the amount of points evaluated each step."
-        )
-
-    def generate_initial_points(self) -> torch.Tensor:
-
-        if self.settings.initial_points_generator == InitialPointsGenerationMode.random:
-            return generate_initial_points_random(
-                bounds=self.objective.bounds,
-                n_initial_points=self.n_initial_points,
-                n_variables=self.objective.n_variables
-            )
-
-        else:
-            raise ValueError(
-                f"Initial point mode {self.settings.initial_points_generator} is not understood or not implemented."
-            )
+        self._verify_set_up()
 
     def run_optimisation_step(self):
 
@@ -118,59 +94,17 @@ class BayesianOptimiser:
 
             self.suggest_candidates()
 
-            new_variables, new_values = self.evaluate_points()
+            new_variables, new_values = self._evaluate_points()
 
-            self.add_new_points(new_variables, new_values)
+            self._add_new_points(new_variables, new_values)
 
         elif self.objective_type == ObjectiveKind.interface:
 
-            self.load_latest_points()
+            self._load_latest_points()
 
             self.suggest_candidates()
 
-            self.save_candidates()
-
-    def evaluate_points(self) -> (TensorWithNormalisationFlag, TensorWithNormalisationFlag):
-
-        assert self.objective_type == ObjectiveKind.integrated, (
-            "The objective must be an 'IntegratedObjective' to be evaluated during optimisation."
-        )
-
-        new_variables_real_units = self.unnormalise_variables(self.suggested_points.variables)
-
-        objective_function_values = self.objective.run(new_variables_real_units.tensor)
-
-        self.reset_suggested_points()
-
-        return (
-            new_variables_real_units,
-            TensorWithNormalisationFlag(
-                tensor=objective_function_values,
-                normalised=False
-            )
-        )
-
-    def load_latest_points(self):
-
-        assert self.objective_type == ObjectiveKind.interface, (
-            "The objective must be an 'InterfaceObjective' to load points."
-        )
-
-        # TODO: Implement
-        # self.objective.load_evaluated_points()
-
-        raise NotImplementedError
-
-    def save_candidates(self):
-
-        assert self.objective_type == ObjectiveKind.interface, (
-            "The objective must be an 'InterfaceObjective' to save candidates."
-        )
-
-        # TODO: Implement
-        # self.objective.save_candidates()
-
-        raise NotImplementedError
+            self._save_candidates()
 
     def suggest_candidates(self):
 
@@ -182,7 +116,7 @@ class BayesianOptimiser:
 
         elif self.optimisation_mode == OptimisationMode.bayesian:
 
-            suggested_variables = self.find_candidates_with_model()
+            suggested_variables = self._find_candidates_with_model()
 
         else:
             raise RuntimeError
@@ -202,27 +136,55 @@ class BayesianOptimiser:
             generated_at_step=self.current_step
         )
 
-    def find_candidates_with_model(self) -> TensorWithNormalisationFlag:
+    def get_best_points(self) -> (torch.Tensor, torch.Tensor, int):
 
-        self.refresh_acquisition_function()
-
-        if self.settings.verbose:
-            print("Finding candidates for the next points to evaluate...")
-
-        suggested_variables = TensorWithNormalisationFlag(
-            tensor=self.acquisition_function.suggest_points(),
-            normalised=self.return_normalised_data
+        best_variables, best_values, max_index = get_best_points(
+            variables=self.evaluated_variables.tensor,
+            values=self.evaluated_values.tensor,
+            weights=self.settings.objective_weights
         )
 
-        if self.settings.verbose:
-            print(f"Found all {self.n_evaluations_per_step} candidates.")
+        return (
+            best_variables,
+            best_values,
+            max_index
+        )
 
-        return suggested_variables
+    def get_pareto_optimal_points(self) -> (torch.Tensor, torch.Tensor, list[bool]):
 
-    def refresh_acquisition_function(self):
-        raise NotImplementedError
+        pareto_variables, pareto_values, pareto_indices = get_pareto_optimal_points(
+            variables=self.evaluated_variables.tensor,
+            values=self.evaluated_values.tensor,
+            weights=self.settings.objective_weights
+        )
 
-    def add_new_points(
+        return (
+            pareto_variables,
+            pareto_values,
+            pareto_indices
+        )
+
+    def _evaluate_points(self) -> (TensorWithNormalisationFlag, TensorWithNormalisationFlag):
+
+        assert self.objective_type == ObjectiveKind.integrated, (
+            "The objective must be an 'IntegratedObjective' to be evaluated during optimisation."
+        )
+
+        new_variables_real_units = self._unnormalise_variables(self.suggested_points.variables)
+
+        objective_function_values = self.objective.run(new_variables_real_units.tensor)
+
+        self._reset_suggested_points()
+
+        return (
+            new_variables_real_units,
+            TensorWithNormalisationFlag(
+                tensor=objective_function_values,
+                normalised=False
+            )
+        )
+
+    def _add_new_points(
             self,
             new_variables: TensorWithNormalisationFlag,
             new_values: TensorWithNormalisationFlag
@@ -256,32 +218,98 @@ class BayesianOptimiser:
 
                 if self.settings.renormalise_each_step:
 
-                    self.fit_normaliser()
-                    self.update_normalised_values()
+                    self._fit_normaliser()
+                    self._update_normalised_values()
 
                 else:
 
-                    self.update_normalised_values()
+                    self._update_normalised_values()
 
-            self.train_model()
+            self._train_model()
 
         elif self.n_points_evaluated >= self.settings.n_points_before_fitting:
 
             if self.settings.normalise:
 
-                self.fit_normaliser()
-                self.update_normalised_values()
+                self._fit_normaliser()
+                self._update_normalised_values()
 
-            self.train_model()
+            self._train_model()
 
         if self.settings.verbose:
-            self.print_status()
+            self._print_status()
 
-    def reset_suggested_points(self):
+    def _load_latest_points(self):
+
+        assert self.objective_type == ObjectiveKind.interface, (
+            "The objective must be an 'InterfaceObjective' to load points."
+        )
+
+        # TODO: Implement
+        # self.objective.load_evaluated_points()
+
+        raise NotImplementedError
+
+    def _save_candidates(self):
+
+        assert self.objective_type == ObjectiveKind.interface, (
+            "The objective must be an 'InterfaceObjective' to save candidates."
+        )
+
+        # TODO: Implement
+        # self.objective.save_candidates()
+
+        raise NotImplementedError
+
+    def _verify_set_up(self):
+
+        assert self.n_initial_points % self.n_evaluations_per_step == 0, (
+            "The amount of initial points is not divisable by the amount of points evaluated each step."
+        )
+
+        assert self.n_bayesian_points % self.n_evaluations_per_step == 0, (
+            "The amount of bayesian points is not divisable by the amount of points evaluated each step."
+        )
+
+    def _generate_initial_points(self) -> torch.Tensor:
+
+        if self.settings.initial_points_generator == InitialPointsGenerationMode.random:
+            return generate_initial_points_random(
+                bounds=self.objective.bounds,
+                n_initial_points=self.n_initial_points,
+                n_variables=self.objective.n_variables
+            )
+
+        else:
+            raise ValueError(
+                f"Initial point mode {self.settings.initial_points_generator} is not understood or not implemented."
+            )
+
+    def _find_candidates_with_model(self) -> TensorWithNormalisationFlag:
+
+        self._refresh_acquisition_function()
+
+        if self.settings.verbose:
+            print("Finding candidates for the next points to evaluate...")
+
+        suggested_variables = TensorWithNormalisationFlag(
+            tensor=self.acquisition_function.suggest_points(),
+            normalised=self.return_normalised_data
+        )
+
+        if self.settings.verbose:
+            print(f"Found all {self.n_evaluations_per_step} candidates.")
+
+        return suggested_variables
+
+    def _refresh_acquisition_function(self):
+        raise NotImplementedError
+
+    def _reset_suggested_points(self):
         self.suggested_points_history[self.current_step - 1] = deepcopy(self.suggested_points)
         self.suggested_points = None
 
-    def train_model(self):
+    def _train_model(self):
 
         if self.settings.normalise:
             assert self.data_has_been_normalised
@@ -290,13 +318,13 @@ class BayesianOptimiser:
             variables=self.evaluated_variables.tensor,
             values=self.evaluated_values.tensor
         )
-        self.refresh_acquisition_function()
+        self._refresh_acquisition_function()
 
         self.model_has_been_trained = True
 
         self.suggested_points = None
 
-    def fit_normaliser(self):
+    def _fit_normaliser(self):
 
         self.normaliser_variables = self.normaliser_class(
             tensor=self.evaluated_variables_real_units
@@ -307,7 +335,7 @@ class BayesianOptimiser:
 
         self.data_has_been_normalised = True
 
-    def update_normalised_values(self):
+    def _update_normalised_values(self):
 
         cached_normalised_values = [
             'evaluated_variables_normalised',
@@ -327,7 +355,7 @@ class BayesianOptimiser:
             raise NotImplementedError
             # print("Normalisation has been completed.")
 
-    def unnormalise_variables(
+    def _unnormalise_variables(
             self,
             variables: TensorWithNormalisationFlag
     ) -> TensorWithNormalisationFlag:
@@ -342,7 +370,7 @@ class BayesianOptimiser:
             normalised=False
         )
 
-    def print_status(self):
+    def _print_status(self):
 
         best_variables, best_values, max_index = self.get_best_points()
 
@@ -362,34 +390,6 @@ class BayesianOptimiser:
         )
 
         print(status_string)
-
-    def get_best_points(self) -> (torch.Tensor, torch.Tensor, int):
-
-        best_variables, best_values, max_index = get_best_points(
-            variables=self.evaluated_variables.tensor,
-            values=self.evaluated_values.tensor,
-            weights=self.settings.objective_weights
-        )
-
-        return (
-            best_variables,
-            best_values,
-            max_index
-        )
-
-    def get_pareto_optimal_points(self) -> (torch.Tensor, torch.Tensor, list[bool]):
-
-        pareto_variables, pareto_values, pareto_indices = get_pareto_optimal_points(
-            variables=self.evaluated_variables.tensor,
-            values=self.evaluated_values.tensor,
-            weights=self.settings.objective_weights
-        )
-
-        return (
-            pareto_variables,
-            pareto_values,
-            pareto_indices
-        )
 
     @property
     def n_initial_points(self) -> int:

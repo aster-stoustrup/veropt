@@ -11,6 +11,7 @@ class DataShape:
     index_points = 0
     index_dimensions = 1
 
+
 class OptimisationMode(Enum):
     initial = 1
     bayesian = 2
@@ -97,6 +98,8 @@ def format_list(
     return formatted_list
 
 
+# TODO: Consider splitting into separate functions...?
+# TODO: Make a test? :))))
 def get_best_points(
         variables: torch.Tensor,
         values: torch.Tensor,
@@ -148,6 +151,7 @@ def get_best_points(
     max_index = int(max_index)
 
     return best_variables, best_values, max_index
+
 
 def get_pareto_optimal_points(
         variables: torch.Tensor,
