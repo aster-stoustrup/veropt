@@ -72,7 +72,7 @@ class BayesianOptimiser:
 
         self.initial_points_real_units = self._generate_initial_points()
         self.evaluated_variables_real_units = None
-        self.evaluated_values_real_units = None
+        self.evaluated_objective_real_units = None
 
         self.data_has_been_normalised = False
         self.model_has_been_trained = False
@@ -131,16 +131,16 @@ class BayesianOptimiser:
             predicted_values = None
 
         self.suggested_points = SuggestedPoints(
-            variables=suggested_variables,
-            predicted_values=predicted_values,
+            variable_values=suggested_variables,
+            predicted_objective_values=predicted_values,
             generated_at_step=self.current_step
         )
 
     def get_best_points(self) -> (torch.Tensor, torch.Tensor, int):
 
         best_variables, best_values, max_index = get_best_points(
-            variables=self.evaluated_variables.tensor,
-            values=self.evaluated_values.tensor,
+            variable_values=self.evaluated_variable_values.tensor,
+            objective_values=self.evaluated_objective_values.tensor,
             weights=self.settings.objective_weights
         )
 
@@ -153,8 +153,8 @@ class BayesianOptimiser:
     def get_pareto_optimal_points(self) -> (torch.Tensor, torch.Tensor, list[bool]):
 
         pareto_variables, pareto_values, pareto_indices = get_pareto_optimal_points(
-            variables=self.evaluated_variables.tensor,
-            values=self.evaluated_values.tensor,
+            variable_values=self.evaluated_variable_values.tensor,
+            objective_values=self.evaluated_objective_values.tensor,
             weights=self.settings.objective_weights
         )
 
@@ -170,7 +170,7 @@ class BayesianOptimiser:
             "The objective must be an 'IntegratedObjective' to be evaluated during optimisation."
         )
 
-        new_variables_real_units = self._unnormalise_variables(self.suggested_points.variables)
+        new_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values)
 
         objective_function_values = self.objective.run(new_variables_real_units.tensor)
 
@@ -199,7 +199,7 @@ class BayesianOptimiser:
         if self.n_points_evaluated == 0:
 
             self.evaluated_variables_real_units = new_variables.tensor.detach()
-            self.evaluated_values_real_units = new_values.tensor.detach()
+            self.evaluated_objective_real_units = new_values.tensor.detach()
 
         else:
 
@@ -207,8 +207,8 @@ class BayesianOptimiser:
                 tensors=[self.evaluated_variables_real_units, new_variables.tensor.detach()],
                 dim=DataShape.index_points
             )
-            self.evaluated_values_real_units = torch.cat(
-                tensors=[self.evaluated_values_real_units, new_values.tensor.detach()],
+            self.evaluated_objective_real_units = torch.cat(
+                tensors=[self.evaluated_objective_real_units, new_values.tensor.detach()],
                 dim=DataShape.index_points
             )
 
@@ -315,8 +315,8 @@ class BayesianOptimiser:
             assert self.data_has_been_normalised
 
         self.model.train_model(
-            variables=self.evaluated_variables.tensor,
-            values=self.evaluated_values.tensor
+            variable_values=self.evaluated_variable_values.tensor,
+            values=self.evaluated_objective_values.tensor
         )
         self._refresh_acquisition_function()
 
@@ -330,7 +330,7 @@ class BayesianOptimiser:
             tensor=self.evaluated_variables_real_units
         )
         self.normaliser_values = self.normaliser_class(
-            tensor=self.evaluated_values_real_units
+            tensor=self.evaluated_objective_real_units
         )
 
         self.data_has_been_normalised = True
@@ -357,13 +357,13 @@ class BayesianOptimiser:
 
     def _unnormalise_variables(
             self,
-            variables: TensorWithNormalisationFlag
+            variable_values: TensorWithNormalisationFlag
     ) -> TensorWithNormalisationFlag:
 
-        if variables.normalised:
-            variables_real_units = self.normaliser_variables.inverse_transform(variables.tensor)
+        if variable_values.normalised:
+            variables_real_units = self.normaliser_variables.inverse_transform(variable_values.tensor)
         else:
-            variables_real_units = variables.tensor
+            variables_real_units = variable_values.tensor
 
         return TensorWithNormalisationFlag(
             tensor=variables_real_units,
@@ -378,15 +378,15 @@ class BayesianOptimiser:
 
         best_values_variables_string = format_list(best_variables.tolist())
 
-        newest_value_string = format_list(self.evaluated_values[:, -1].tensor.tolist())
+        newest_value_string = format_list(self.evaluated_objective_values[:, -1].tensor.tolist())
 
-        newest_variables_string = format_list(self.evaluated_variables[:, -1].tensor.tolist())
+        newest_variables_string = format_list(self.evaluated_variable_values[:, -1].tensor.tolist())
 
         status_string = (
             f"Optimisation running in {self.optimisation_mode.name} mode "
             f"at step {self.current_step} out of {self.n_points_evaluated} \n"
-            f"Best value(s): {best_values_string} at variables {best_values_variables_string} \n"
-            f"Newest value(s): {newest_value_string} at variables {newest_variables_string} \n"
+            f"Best objective value(s): {best_values_string} at variable values {best_values_variables_string} \n"
+            f"Newest objective value(s): {newest_value_string} at variable values {newest_variables_string} \n"
         )
 
         print(status_string)
@@ -412,7 +412,7 @@ class BayesianOptimiser:
 
     @property
     def n_points_evaluated(self) -> int:
-        return self.evaluated_variables.shape[DataShape.index_points]
+        return self.evaluated_variable_values.shape[DataShape.index_points]
 
     @property
     def optimisation_mode(self) -> OptimisationMode:
@@ -429,23 +429,23 @@ class BayesianOptimiser:
             return False
 
     @property
-    def evaluated_variables(self) -> TensorWithNormalisationFlag:
+    def evaluated_variable_values(self) -> TensorWithNormalisationFlag:
         if self.return_normalised_data:
-            variables = self.evaluated_variables_normalised
+            variable_values = self.evaluated_variables_normalised
         else:
-            variables = self.evaluated_variables_real_units
+            variable_values = self.evaluated_variables_real_units
 
         return TensorWithNormalisationFlag(
-            tensor=variables,
+            tensor=variable_values,
             normalised=self.return_normalised_data
         )
 
     @property
-    def evaluated_values(self) -> TensorWithNormalisationFlag:
+    def evaluated_objective_values(self) -> TensorWithNormalisationFlag:
         if self.return_normalised_data:
-            values = self.evaluated_values_normalised
+            values = self.evaluated_objective_normalised
         else:
-            values = self.evaluated_values_real_units
+            values = self.evaluated_objective_real_units
 
         return TensorWithNormalisationFlag(
             tensor=values,
@@ -481,8 +481,8 @@ class BayesianOptimiser:
         return self.normaliser_variables.transform(self.evaluated_variables_real_units)
 
     @cached_property
-    def evaluated_values_normalised(self) -> TensorWithNormalisationFlag:
-        return self.normaliser_values.transform(self.evaluated_values_real_units)
+    def evaluated_objective_normalised(self) -> TensorWithNormalisationFlag:
+        return self.normaliser_values.transform(self.evaluated_objective_real_units)
 
     @cached_property
     def bounds_normalised(self):

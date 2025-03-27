@@ -70,8 +70,8 @@ class TensorWithNormalisationFlag:
 
 @dataclass
 class SuggestedPoints:
-    variables: TensorWithNormalisationFlag
-    predicted_values: Optional[TensorWithNormalisationFlag]
+    variable_values: TensorWithNormalisationFlag
+    predicted_objective_values: Optional[TensorWithNormalisationFlag]
     generated_at_step: int
 
 
@@ -101,31 +101,32 @@ def format_list(
 # TODO: Consider splitting into separate functions...?
 # TODO: Make a test? :))))
 def get_best_points(
-        variables: torch.Tensor,
-        values: torch.Tensor,
+        variable_values: torch.Tensor,
+        objective_values: torch.Tensor,
         weights: list[float],
         objectives_greater_than: Optional[float | list[float]] = None,
         best_for_objecive_index: Optional[int] = None
 ) -> (torch.Tensor, torch.Tensor, int):
 
-    n_objs = values.shape[DataShape.index_dimensions]
+    n_objs = objective_values.shape[DataShape.index_dimensions]
 
     assert objectives_greater_than is None or best_for_objecive_index is None, "Specifying both options not supported"
 
+    raise NotImplementedError("Come in with a debugger and fix these dims to the new class")
+
     if objectives_greater_than is None and best_for_objecive_index is None:
 
-        raise NotImplementedError("Come in with a debugger and fix these dims to the new class")
-        max_index = (values * weights).sum(dim=1).argmax()
+        max_index = (objective_values * weights).sum(dim=1).argmax()
 
     elif  objectives_greater_than is not None:
 
         if type(objectives_greater_than) == float:
 
-            large_enough_objective_values = values > objectives_greater_than
+            large_enough_objective_values = objective_values > objectives_greater_than
 
         elif type(objectives_greater_than) == list:
 
-            large_enough_objective_values = values > torch.tensor(objectives_greater_than)
+            large_enough_objective_values = objective_values > torch.tensor(objectives_greater_than)
 
         else:
             raise ValueError
@@ -136,41 +137,41 @@ def get_best_points(
             # Could alternatively raise exception but might be overkill
             return None, None
 
-        filtered_objective_values = values * large_enough_objective_rows.unsqueeze(2)
+        filtered_objective_values = objective_values * large_enough_objective_rows.unsqueeze(2)
 
         max_index = (filtered_objective_values * weights).sum(dim=1).argmax()
 
     elif best_for_objecive_index is not None:
-        max_index = values[0, :, best_for_objecive_index].argmax()
+        max_index = objective_values[0, :, best_for_objecive_index].argmax()
 
     else:
         raise ValueError
 
-    best_variables = variables[0, max_index]
-    best_values = values[0, max_index]
+    best_variables = variable_values[0, max_index]
+    best_values = objective_values[0, max_index]
     max_index = int(max_index)
 
     return best_variables, best_values, max_index
 
 
 def get_pareto_optimal_points(
-        variables: torch.Tensor,
-        values: torch.Tensor,
+        variable_values: torch.Tensor,
+        objective_values: torch.Tensor,
         weights: list[float],
         sort_by_max_weighted_sum: bool = True
 ) -> (torch.Tensor, torch.Tensor, list[bool]):
 
-    pareto_optimal_indices = np.ones(values.shape[0], dtype=bool)
-    for value_index, value in enumerate(values):
+    pareto_optimal_indices = np.ones(objective_values.shape[0], dtype=bool)
+    for value_index, value in enumerate(objective_values):
         if pareto_optimal_indices[value_index]:
             raise NotImplementedError("Come in with a debugger and fix these dims to the new class")
-            pareto_optimal_indices[pareto_optimal_indices] = np.any(values[pareto_optimal_indices] > value, axis=1)
+            pareto_optimal_indices[pareto_optimal_indices] = np.any(objective_values[pareto_optimal_indices] > value, axis=1)
             pareto_optimal_indices[value_index] = True
 
     pareto_optimal_indices = pareto_optimal_indices.nonzero()[0]
 
     if sort_by_max_weighted_sum:
-        pareto_optimal_values = values[pareto_optimal_indices]
+        pareto_optimal_values = objective_values[pareto_optimal_indices]
         weighted_sum_values = pareto_optimal_values @ np.array(weights)
         sorted_index = weighted_sum_values.argsort()
         sorted_index = np.flip(sorted_index)
@@ -179,7 +180,7 @@ def get_pareto_optimal_points(
     pareto_optimal_indices = pareto_optimal_indices.tolist()
 
     return (
-        variables[:, pareto_optimal_indices],
-        values[:, pareto_optimal_indices],
+        variable_values[:, pareto_optimal_indices],
+        objective_values[:, pareto_optimal_indices],
         pareto_optimal_indices
     )

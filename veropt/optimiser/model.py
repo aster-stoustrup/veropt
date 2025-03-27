@@ -12,14 +12,14 @@ class SurrogateModel:
     @abc.abstractmethod
     def __call__(
             self,
-            variables: torch.Tensor
+            variable_values: torch.Tensor
     ) -> torch.Tensor:
         pass
 
     @abc.abstractmethod
     def train_model(
             self,
-            variables: torch.Tensor,
+            variable_values: torch.Tensor,
             values: torch.Tensor
     ):
         pass
@@ -47,13 +47,13 @@ class GPyTorchModel(SurrogateModel):
 
     def __call__(
             self,
-            variables: torch.Tensor
+            variable_values: torch.Tensor
     ) -> torch.Tensor:
         raise NotImplementedError
 
     def train_model(
             self,
-            variables: torch.Tensor,
+            variable_values: torch.Tensor,
             values: torch.Tensor
     ):
         raise NotImplementedError
