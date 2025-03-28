@@ -86,49 +86,7 @@ def test_standard_normaliser_transform_input_output_shapes():
     assert normed_test_matrix.shape == test_matrix.shape
 
 
-# TODO: Update to new system
+# TODO: Implement
+#   - See version in 0.6.1 for inspiration
 # def test_normaliser_integration():
-#
-#     n_init_points = 32
-#     n_bayes_points = 12
-#
-#     n_evals_per_step = 4
-#
-#     obj_func = PredefinedTestFunction("VehicleSafety")
-#
-#     optimiser = BayesOptimiser(
-#         n_init_points=n_init_points,
-#         n_bayes_points=n_bayes_points,
-#         obj_func=obj_func,
-#         n_evals_per_step=n_evals_per_step,
-#         points_before_fitting=n_init_points - n_evals_per_step
-#     )
-#
-#     for i in range(n_init_points//n_evals_per_step):
-#         optimiser.run_opt_step()
-#
-#     assert optimiser.data_has_been_normalised
-#
-#     obj_means = optimiser.obj_func_vals.mean(dim=1).squeeze(0)
-#     obj_stds = optimiser.obj_func_vals.std(dim=1).squeeze(0)
-#
-#     assert len(obj_means) == optimiser.n_objs
-#     assert len(obj_stds) == optimiser.n_objs
-#
-#     for obj_mean in obj_means:
-#         assert obj_mean == pytest.approx(0.0)
-#
-#     for obj_std in obj_stds:
-#         assert obj_std == pytest.approx(1.0)
-#
-#     param_means = optimiser.obj_func_coords.mean(dim=1).squeeze(0)
-#     param_stds = optimiser.obj_func_coords.std(dim=1).squeeze(0)
-#
-#     assert len(param_means) == optimiser.n_params
-#     assert len(param_stds) == optimiser.n_params
-#
-#     for param_mean in param_means:
-#         assert param_mean == pytest.approx(0.0)
-#
-#     for param_std in param_stds:
-#         assert param_std == pytest.approx(1.0)
+#     assert False

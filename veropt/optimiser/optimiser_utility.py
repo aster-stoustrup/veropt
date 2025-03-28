@@ -170,28 +170,28 @@ def _get_points_greater_than(
     return max_index
 
 
-# TODO: Make test? >:))
 def get_pareto_optimal_points(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
-        weights: list[float],
-        sort_by_max_weighted_sum: bool = True
-) -> (torch.Tensor, torch.Tensor, list[bool]):
+        weights: Optional[list[float]] = None,
+        sort_by_max_weighted_sum: bool = False
+) -> (torch.Tensor, torch.Tensor, list[int]):
 
-    raise NotImplementedError("Come in with a debugger and fix these dims to the new class")
-
-    pareto_optimal_indices = np.ones(objective_values.shape[0], dtype=bool)
+    pareto_optimal_indices = np.ones(objective_values.shape[DataShape.index_points], dtype=bool)
     for value_index, value in enumerate(objective_values):
         if pareto_optimal_indices[value_index]:
-            pareto_optimal_indices[pareto_optimal_indices] = np.any(
+            pareto_optimal_indices[pareto_optimal_indices] = torch.any(
                 objective_values[pareto_optimal_indices] > value,
-                axis=1
+                dim=DataShape.index_dimensions
             )
             pareto_optimal_indices[value_index] = True
 
     pareto_optimal_indices = pareto_optimal_indices.nonzero()[0]
 
     if sort_by_max_weighted_sum:
+
+        assert weights is not None, "Must be given weights so sort by weighted sum."
+
         pareto_optimal_values = objective_values[pareto_optimal_indices]
         weighted_sum_values = pareto_optimal_values @ np.array(weights)
         sorted_index = weighted_sum_values.argsort()
@@ -201,7 +201,7 @@ def get_pareto_optimal_points(
     pareto_optimal_indices = pareto_optimal_indices.tolist()
 
     return (
-        variable_values[:, pareto_optimal_indices],
-        objective_values[:, pareto_optimal_indices],
+        variable_values[pareto_optimal_indices],
+        objective_values[pareto_optimal_indices],
         pareto_optimal_indices
     )

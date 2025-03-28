@@ -1,7 +1,8 @@
+import numpy as np
 import pytest
 import torch
 
-from veropt.optimiser.optimiser_utility import get_best_points
+from veropt.optimiser.optimiser_utility import get_best_points, get_pareto_optimal_points
 
 
 def test_get_best_points_simple():
@@ -72,5 +73,41 @@ def test_get_best_points_w_objectives_greater_than():
 
 
 def test_get_pareto_optimal_points():
-    # TODO: Implement
-    assert False
+
+    variable_values = torch.tensor([
+        [0.4, 0.3, 0.7, -0.3],
+        [0.4, 2.4, 0.2, 0.3],
+        [0.1, 1.2, -0.4, 0.5],
+        [3.5, 0.6, 2.1, -0.4],
+        [2.1, -0.3, 0.4, 1.3]
+    ])
+    objective_values = torch.tensor([
+        [1.1, 0.5, 0.3],
+        [2.3, 1.2, 0.7],
+        [0.3, 0.5, 0.6],
+        [1.2, 1.4, 1.1],
+        [0.4, 0.6, 2.1]
+    ])
+
+    true_pareto_variables = torch.tensor([
+        [0.4, 2.4, 0.2, 0.3],
+        [3.5, 0.6, 2.1, -0.4],
+        [2.1, -0.3, 0.4, 1.3]
+    ])
+
+    true_pareto_values = torch.tensor([
+        [2.3, 1.2, 0.7],
+        [1.2, 1.4, 1.1],
+        [0.4, 0.6, 2.1]
+    ])
+
+    true_indices = [1, 3, 4]
+
+    pareto_variables, pareto_values, pareto_indices = get_pareto_optimal_points(
+        variable_values=variable_values,
+        objective_values=objective_values
+    )
+
+    assert torch.equal(true_pareto_variables, pareto_variables)
+    assert torch.equal(true_pareto_values, pareto_values)
+    assert np.array_equal(true_indices, pareto_indices)

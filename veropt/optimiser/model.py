@@ -7,7 +7,7 @@ import torch
 
 class SurrogateModel:
     def __init__(self):
-        raise NotImplementedError
+        pass
 
     @abc.abstractmethod
     def __call__(

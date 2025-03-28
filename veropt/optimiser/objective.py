@@ -19,7 +19,7 @@ class Objective:
         self.n_objectives = n_objectives
 
         if variable_names is None:
-            self.variable_names = [f"variable {i}" for i in range(1, n_variables + 1)]
+            self.variable_names = [f"Variable {i}" for i in range(1, n_variables + 1)]
         else:
             self.variable_names = variable_names
 

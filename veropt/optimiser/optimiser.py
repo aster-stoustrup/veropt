@@ -150,7 +150,7 @@ class BayesianOptimiser:
             max_index
         )
 
-    def get_pareto_optimal_points(self) -> (torch.Tensor, torch.Tensor, list[bool]):
+    def get_pareto_optimal_points(self) -> (torch.Tensor, torch.Tensor, list[int]):
 
         pareto_variables, pareto_values, pareto_indices = get_pareto_optimal_points(
             variable_values=self.evaluated_variable_values.tensor,

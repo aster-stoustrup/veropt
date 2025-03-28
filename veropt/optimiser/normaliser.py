@@ -8,10 +8,8 @@ from veropt.optimiser.optimiser_utility import DataShape
 class Normaliser:
     __metaclass__ = abc.ABCMeta
 
-    @abc.abstractmethod
     def __init__(
             self,
-            tensor: torch.Tensor
     ):
         pass
 
@@ -40,6 +38,8 @@ class NormaliserZeroMeanUnitVariance(Normaliser):
     ):
         self.means = matrix.mean(dim=norm_dim)
         self.variances = matrix.var(dim=norm_dim)
+
+        super().__init__()
 
     def transform(
             self,
