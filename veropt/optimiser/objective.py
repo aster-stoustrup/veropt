@@ -30,6 +30,7 @@ class Objective:
 
 
 class IntegratedObjective(Objective):
+    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def run(self, parameter_values):
@@ -37,6 +38,7 @@ class IntegratedObjective(Objective):
 
 
 class InterfaceObjective(Objective):
+    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def save_candidates(self):

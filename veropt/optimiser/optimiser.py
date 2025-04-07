@@ -3,6 +3,7 @@ from functools import cached_property
 from inspect import get_annotations
 from typing import Optional, Union, Unpack
 
+import gpytorch.settings
 import torch
 
 from veropt.optimiser.acquisition import AcquisitionFunction
@@ -69,6 +70,8 @@ class BayesianOptimiser:
             n_bayesian_points=n_bayesian_points,
             **kwargs
         )
+
+        self._set_up_settings()
 
         self.initial_points_real_units = self._generate_initial_points()
         self.evaluated_variables_real_units = None
@@ -271,6 +274,14 @@ class BayesianOptimiser:
             "The amount of bayesian points is not divisable by the amount of points evaluated each step."
         )
 
+    def _set_up_settings(self):
+
+        if self.settings.mask_nans:
+            raise NotImplementedError(
+                "Make a test to see if this works. Otherwise, might need to use as a context manager during training?"
+            )
+            gpytorch.settings.observation_nan_policy('mask')
+
     def _generate_initial_points(self) -> torch.Tensor:
 
         if self.settings.initial_points_generator == InitialPointsGenerationMode.random:
@@ -316,7 +327,7 @@ class BayesianOptimiser:
 
         self.model.train_model(
             variable_values=self.evaluated_variable_values.tensor,
-            values=self.evaluated_objective_values.tensor
+            objective_values=self.evaluated_objective_values.tensor
         )
         self._refresh_acquisition_function()
 

@@ -33,6 +33,7 @@ class OptimiserSettings:
     verbose: bool = True
     renormalise_each_step: bool = None  # TODO: Write a preset for this somewhere
     initial_points_generator: InitialPointsGenerationMode = InitialPointsGenerationMode.random
+    mask_nans = True
 
     def __post_init__(self):
         if  self.n_points_before_fitting is None:
@@ -46,6 +47,8 @@ class OptimiserSettingsInputDict(TypedDict, total=False):
     n_points_before_fitting: int
     verbose: bool
     renormalise_each_step: bool
+    initial_points_generator: InitialPointsGenerationMode
+    mask_nans: bool
 
 
 class TensorWithNormalisationFlag:
