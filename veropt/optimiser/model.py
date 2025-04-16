@@ -1,12 +1,12 @@
 import abc
 import warnings
 from dataclasses import dataclass
-from typing import Optional, Type, TypedDict, Union, Unpack
+from typing import Iterator, Optional, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
-from gpytorch.constraints import Interval, GreaterThan, LessThan
 import torch
+from gpytorch.constraints import GreaterThan, Interval, LessThan
 
 
 class SurrogateModel:
@@ -71,14 +71,16 @@ class GPyTorchSingleModel:
             self,
             likelihood: gpytorch.likelihoods.likelihood,
             mean_module: gpytorch.means.mean,
-            kernel: gpytorch.kernels.kernel
+            kernel: gpytorch.kernels.kernel,
     ):
 
         self.likelihood = likelihood
         self.mean_module = mean_module
         self.kernel = kernel
 
-        self.model_with_data = None
+        self.model_with_data: GPyTorchDataModel | None = None
+
+        self.trained_parameters: list[dict[str, Iterator[torch.nn.Parameter]]] | None = None
 
     def initialise_model_with_data(
             self,
@@ -184,6 +186,7 @@ class MaternParametersInputDict(TypedDict, total=False):
     lengthscale_upper_bound: float
     noise: float
     noise_lower_bound: float
+    train_noise: bool
 
 
 @dataclass
@@ -192,7 +195,7 @@ class MaternParameters:
     lengthscale_upper_bound: float = 2.0
     noise: float = 1e-8
     noise_lower_bound: float = 1e-8
-
+    train_noise: bool = False
 
 
 class MaternSingleModel(GPyTorchSingleModel):
@@ -200,7 +203,6 @@ class MaternSingleModel(GPyTorchSingleModel):
             self,
             n_variables: int,
             **kwargs: Unpack[MaternParametersInputDict]
-
     ):
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood()
@@ -219,6 +221,29 @@ class MaternSingleModel(GPyTorchSingleModel):
             mean_module=mean_module,
             kernel=kernel
         )
+
+    def _set_up_trained_parameters(self):
+
+        parameter_group_list = []
+
+        if self.settings.train_noise:
+
+            parameter_group_list.append(
+                {'params': self.model_with_data.parameters()}
+            )
+
+        else:
+
+            parameter_group_list.append(
+                {'params': self.model_with_data.mean_module.parameters()}
+            )
+
+            parameter_group_list.append(
+                {'params': self.model_with_data.covar_module.parameters()}
+            )
+
+        self.trained_parameters = parameter_group_list
+
 
     def initialise_model_with_data(
             self,
@@ -244,6 +269,8 @@ class MaternSingleModel(GPyTorchSingleModel):
         self.set_noise_constraint(
             lower_bound=self.settings.noise_lower_bound
         )
+
+        self._set_up_trained_parameters()
 
     def change_lengthscale_constraints(
             self,
@@ -290,6 +317,44 @@ class MaternSingleModel(GPyTorchSingleModel):
         )
 
 
+class GPyTorchModelOptimiser:
+    def __init__(
+            self,
+            optimiser_class: type[torch.optim.Optimizer],
+            optimiser_settings: dict = None
+    ):
+        self.optimiser: torch.optim.Optimizer | None = None
+        self.optimiser_class = optimiser_class
+
+        self.optimiser_settings = optimiser_settings or {}
+
+    def initiate_optimiser(
+            self,
+            parameters: Iterator[torch.nn.Parameter] | list[dict[str, Iterator[torch.nn.Parameter]]]
+    ):
+        self.optimiser = self.optimiser_class(
+            params=parameters,
+            **self.optimiser_settings
+        )
+
+
+class AdamOptimiser:
+    def __init__(
+            self,
+            adam_settings: dict
+    ):
+
+        for key in adam_settings.keys():
+            assert key in torch.optim.Adam.__init__.__code__.co_varnames, (
+                f"{key} is not an accepted argument for the torch optimiser 'Adam'."
+            )
+
+        super().__init__(
+            optimiser_class=torch.optim.Adam,
+            optimiser_settings=adam_settings
+        )
+
+
 class GPyTorchTrainingParametersInputDict(TypedDict, total=False):
     learning_rate: float
     loss_change_to_stop: float
@@ -312,18 +377,23 @@ class GPyTorchFullModel(SurrogateModel):
             n_variables: int,
             n_objectives: int,
             single_model_list: list[GPyTorchSingleModel],
-            training_parameters: GPyTorchTrainingParametersInputDict = None
+            model_optimiser: GPyTorchModelOptimiser,
+            verbose: bool = True,
+            kwargs: Unpack[GPyTorchTrainingParametersInputDict] = None
     ):
 
         self.training_parameters = GPyTorchTrainingParameters(
-            **(training_parameters or {})
+            **(kwargs or {})
         )
 
         self._model_list = single_model_list
         self._model = None
         self._likelihood = None
+        self._marginal_log_likelihood = None
 
-        # TODO: Implement the rest
+        self._model_optimiser = model_optimiser
+
+        self.verbose = verbose
 
         super().__init__(
             n_variables=n_variables,
@@ -358,10 +428,14 @@ class GPyTorchFullModel(SurrogateModel):
 
         self._set_mode_train()
 
+        self._marginal_log_likelihood = gpytorch.mlls.SumMarginalLogLikelihood(
+            likelihood=self._likelihood,
+            model=self._model
+        )
 
+        self._initiate_optimiser()
 
-
-        # TODO: Implement the rest
+        self._train_backwards()
 
     def initialise_model(
             self,
@@ -376,11 +450,58 @@ class GPyTorchFullModel(SurrogateModel):
                 train_targets=objective_values[objective_number]
             )
 
+        # TODO: Might need to look into more options here
+        #   - Currently seems to be assuming independent models. Maybe need to add an option for this?
         self._model = botorch.models.ModelListGP(
             *[model.model_with_data for model in self._model_list]
         )
         self._likelihood = gpytorch.likelihoods.LikelihoodList(
             *[[model.model_with_data.likelihood for model in self._model_list]]
+        )
+
+    def _train_backwards(self):
+
+        loss_difference = 1e5  # initial values
+        loss = 1e20  # TODO: Find a way to make sure this number is always big enough
+        assert self.training_parameters.loss_change_to_stop < loss_difference
+        iteration = 1
+
+        while bool(loss_difference > self.training_parameters.loss_change_to_stop):
+
+            self._model_optimiser.optimiser.zero_grad()  # Set gradients from previous iteration to zero
+
+            output = self._model(*self._model.train_inputs)
+
+            previous_loss = loss
+            loss = -self._marginal_log_likelihood(output, self._model.train_targets)  # Calculate loss
+            loss.backward()  # Backpropagate gradients
+            loss_difference = torch.abs(previous_loss - loss)
+
+            self._model_optimiser.optimiser.step()
+
+            if self.verbose:
+                print(
+                    f"Training model... Iteration {iteration} (of a maximum {self.training_parameters.max_iter})"
+                    f" - Loss: {loss.item():.3f}",
+                    end="\r"
+                )
+
+            iteration += 1
+            if iteration > self.training_parameters.max_iter:
+                warnings.warn("Stopped training due to maximum iterations reached.")
+                break
+
+        if self.verbose:
+            print("\n")
+
+
+    def _initiate_optimiser(self):
+
+        parameters = []
+        parameters += [model.trained_parameters for model in self._model_list]
+
+        self._model_optimiser.initiate_optimiser(
+            parameters=parameters
         )
 
     def _set_mode_evaluate(self):
