@@ -1,6 +1,7 @@
 import abc
 import warnings
 from dataclasses import dataclass
+from enum import Enum
 from typing import Iterator, Optional, TypedDict, Union, Unpack
 
 import botorch
@@ -261,7 +262,6 @@ class MaternSingleModel(GPyTorchSingleModel):
             upper_bound=self.settings.lengthscale_upper_bound
         )
 
-        # TODO: Make sure the noise isn't being trained?
         self.set_noise(
             noise=self.settings.noise
         )
@@ -338,7 +338,7 @@ class GPyTorchModelOptimiser:
         )
 
 
-class AdamOptimiser:
+class AdamModelOptimiser:
     def __init__(
             self,
             adam_settings: dict
@@ -353,6 +353,10 @@ class AdamOptimiser:
             optimiser_class=torch.optim.Adam,
             optimiser_settings=adam_settings
         )
+
+class ModelMode(Enum):
+    training = 1
+    evaluating = 2
 
 
 class GPyTorchTrainingParametersInputDict(TypedDict, total=False):
@@ -405,6 +409,8 @@ class GPyTorchFullModel(SurrogateModel):
             variable_values: torch.Tensor
     ) -> torch.Tensor:
 
+        previous_mode = self._mode
+
         self._set_mode_evaluate()
 
         estimated_objective_values = self._likelihood(
@@ -412,6 +418,8 @@ class GPyTorchFullModel(SurrogateModel):
                 *([variable_values] * self.n_objectives)
             )
         )
+
+        self._set_mode(model_mode=previous_mode)
 
         return estimated_objective_values
 
@@ -523,6 +531,30 @@ class GPyTorchFullModel(SurrogateModel):
 
         else:
             raise RuntimeError("Can't set mode when model is not initialised.")
+
+    def _set_mode(
+            self,
+            model_mode: ModelMode
+    ):
+        if model_mode == ModelMode.evaluating:
+            self._set_mode_evaluate()
+
+        elif model_mode == ModelMode.training:
+            self._set_mode_train()
+
+    @property
+    def _mode(self) -> ModelMode:
+
+        if self.initialised:
+
+            if self._model.training:
+                return ModelMode.training
+
+            else:
+                return ModelMode.evaluating
+
+        else:
+            raise RuntimeError("Can't get mode when model is not initialised.")
 
     @property
     def initialised(self) -> bool:
