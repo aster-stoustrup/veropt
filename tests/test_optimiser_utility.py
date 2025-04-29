@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 import torch
 
 from veropt.optimiser.optimiser_utility import get_best_points, get_pareto_optimal_points
@@ -31,7 +30,7 @@ def test_get_best_points_simple():
     )
 
     # Internally converting to tensor but shouldn't convert input
-    assert type(weights) == list
+    assert type(weights) is list
 
     assert max_index == true_max_index
     assert torch.equal(best_variables, torch.tensor([0.4, 2.4, 0.2]))
@@ -65,7 +64,7 @@ def test_get_best_points_w_objectives_greater_than():
     )
 
     # Internally converting to tensor but shouldn't convert input
-    assert type(weights) == list
+    assert type(weights) is list
 
     assert max_index == true_max_index
     assert torch.equal(best_variables, torch.tensor([3.5, 0.6, 2.1]))

@@ -1,1 +1,0 @@
-from veropt.optimiser.optimiser import BayesianOptimiser

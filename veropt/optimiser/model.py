@@ -2,7 +2,7 @@ import abc
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterator, Optional, TypedDict, Union, Unpack
+from typing import Iterator, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
@@ -245,7 +245,6 @@ class MaternSingleModel(GPyTorchSingleModel):
 
         self.trained_parameters = parameter_group_list
 
-
     def initialise_model_with_data(
             self,
             train_inputs: torch.Tensor,
@@ -353,6 +352,7 @@ class AdamModelOptimiser:
             optimiser_class=torch.optim.Adam,
             optimiser_settings=adam_settings
         )
+
 
 class ModelMode(Enum):
     training = 1
@@ -501,7 +501,6 @@ class GPyTorchFullModel(SurrogateModel):
 
         if self.verbose:
             print("\n")
-
 
     def _initiate_optimiser(self):
 

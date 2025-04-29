@@ -11,7 +11,7 @@ class AcquisitionFunction:
     ):
         raise NotImplementedError
 
-    abc.abstractmethod
+    @abc.abstractmethod
     def suggest_points(self) -> torch.Tensor:
         pass
 
@@ -21,7 +21,3 @@ class AcquisitionFunction:
     ):
         self.bounds = new_bounds
         raise NotImplementedError("Aster, confirm that nothing else needs to happen here.")
-
-
-
-

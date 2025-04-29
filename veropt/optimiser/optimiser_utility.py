@@ -27,16 +27,16 @@ class OptimiserSettings:
     n_initial_points: int
     n_bayesian_points: int
     n_evaluations_per_step: int = 1
-    objective_weights: list[float] = None
+    objective_weights: Optional[list[float]] = None
     normalise: bool = True
-    n_points_before_fitting: int = None
+    n_points_before_fitting: Optional[int] = None
     verbose: bool = True
-    renormalise_each_step: bool = None  # TODO: Write a preset for this somewhere
+    renormalise_each_step: Optional[bool] = None  # TODO: Write a preset for this somewhere
     initial_points_generator: InitialPointsGenerationMode = InitialPointsGenerationMode.random
     mask_nans = True
 
     def __post_init__(self):
-        if  self.n_points_before_fitting is None:
+        if self.n_points_before_fitting is None:
             self.n_points_before_fitting = self.n_initial_points - self.n_evaluations_per_step * 2
 
 
@@ -107,21 +107,21 @@ def get_best_points(
         weights: list[float],
         objectives_greater_than: Optional[float | list[float]] = None,
         best_for_objecive_index: Optional[int] = None
-) -> (torch.Tensor, torch.Tensor, int):
+) -> tuple[torch.Tensor, torch.Tensor, int]:
 
-    weights = torch.tensor(weights)
+    weights_tensor = torch.tensor(weights)
 
     assert objectives_greater_than is None or best_for_objecive_index is None, "Specifying both options not supported"
 
     if objectives_greater_than is None and best_for_objecive_index is None:
 
-        max_index = (objective_values * weights).sum(dim=DataShape.index_dimensions).argmax()
+        max_index = (objective_values * weights_tensor).sum(dim=DataShape.index_dimensions).argmax()
 
-    elif  objectives_greater_than is not None:
+    elif objectives_greater_than is not None:
 
         max_index = _get_points_greater_than(
             objective_values=objective_values,
-            weights=weights,
+            weights=weights_tensor,
             objectives_greater_than=objectives_greater_than
         )
 
@@ -149,11 +149,11 @@ def _get_points_greater_than(
 
     n_objs = objective_values.shape[DataShape.index_dimensions]
 
-    if type(objectives_greater_than) == float:
+    if type(objectives_greater_than) is float:
 
         large_enough_objective_values = objective_values > objectives_greater_than
 
-    elif type(objectives_greater_than) == list:
+    elif type(objectives_greater_than) is list:
 
         large_enough_objective_values = objective_values > torch.tensor(objectives_greater_than)
 
