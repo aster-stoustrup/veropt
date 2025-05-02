@@ -178,7 +178,7 @@ def get_pareto_optimal_points(
         objective_values: torch.Tensor,
         weights: Optional[list[float]] = None,
         sort_by_max_weighted_sum: bool = False
-) -> (torch.Tensor, torch.Tensor, list[int]):
+) -> tuple[torch.Tensor, torch.Tensor, list[int]]:
 
     pareto_optimal_indices = np.ones(objective_values.shape[DataShape.index_points], dtype=bool)
     for value_index, value in enumerate(objective_values):
