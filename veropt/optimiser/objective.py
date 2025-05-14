@@ -1,6 +1,6 @@
 import abc
 from enum import Enum
-from typing import Union
+from typing import Optional, Union
 
 import torch
 
@@ -11,8 +11,8 @@ class Objective:
             bounds: torch.Tensor,
             n_variables: int,
             n_objectives: int,
-            variable_names: list[str] = None,
-            objective_names: list[str] = None
+            variable_names: Optional[list[str]] = None,
+            objective_names: Optional[list[str]] = None
     ):
         self.bounds = bounds
         self.n_variables = n_variables
@@ -33,7 +33,7 @@ class IntegratedObjective(Objective):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
-    def run(self, parameter_values):
+    def run(self, parameter_values: torch.Tensor) -> torch.Tensor:
         pass
 
 

@@ -21,23 +21,45 @@ class InitialPointsGenerationMode(Enum):
     random = 1
 
 
-# TODO: Write a test to make sure the arguments of this and the dict are the same? (except n_init and n_bayes)
-@dataclass
+# TODO: Write a test to make sure the arguments of this and the dict are the same? (except n_init, n_bayes, n_objs)
 class OptimiserSettings:
-    n_initial_points: int
-    n_bayesian_points: int
-    n_evaluations_per_step: int = 1
-    objective_weights: Optional[list[float]] = None
-    normalise: bool = True
-    n_points_before_fitting: Optional[int] = None
-    verbose: bool = True
-    renormalise_each_step: Optional[bool] = None  # TODO: Write a preset for this somewhere
-    initial_points_generator: InitialPointsGenerationMode = InitialPointsGenerationMode.random
-    mask_nans = True
 
-    def __post_init__(self):
-        if self.n_points_before_fitting is None:
+    def __init__(
+            self,
+            n_initial_points: int,
+            n_bayesian_points: int,
+            n_objectives: int,
+            n_evaluations_per_step: int = 1,
+            initial_points_generator: InitialPointsGenerationMode = InitialPointsGenerationMode.random,
+            normalise: bool = True,
+            verbose: bool = True,
+            renormalise_each_step: Optional[bool] = None,  # TODO: Write a preset for this somewhere
+            mask_nans: bool = True,
+            n_points_before_fitting: Optional[int] = None,
+            objective_weights: Optional[list[float]] = None
+    ):
+        self.n_initial_points = n_initial_points
+        self.n_bayesian_points = n_bayesian_points
+        self.n_objectives = n_objectives
+
+        self.n_evaluations_per_step = n_evaluations_per_step
+
+        self.initial_points_generator = initial_points_generator
+
+        self.normalise = normalise
+        self.verbose = verbose
+        self.renormalise_each_step = renormalise_each_step
+        self.mask_nans = mask_nans
+
+        if n_points_before_fitting is None:
             self.n_points_before_fitting = self.n_initial_points - self.n_evaluations_per_step * 2
+        else:
+            self.n_points_before_fitting = n_points_before_fitting
+
+        if objective_weights is None:
+            self.objective_weights = torch.ones(self.n_objectives) / self.n_objectives
+        else:
+            self.objective_weights = torch.tensor(objective_weights)
 
 
 class OptimiserSettingsInputDict(TypedDict, total=False):
@@ -80,7 +102,8 @@ class SuggestedPoints:
 
 def format_list(
         unformatted_list: Union[list, list[list]]
-):
+) -> str:
+
     formatted_list = "["
     if isinstance(unformatted_list[0], list):
         for iteration, list_item in enumerate(unformatted_list):
@@ -104,10 +127,10 @@ def format_list(
 def get_best_points(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
-        weights: list[float],
+        weights: torch.Tensor,
         objectives_greater_than: Optional[float | list[float]] = None,
         best_for_objecive_index: Optional[int] = None
-) -> tuple[torch.Tensor, torch.Tensor, int]:
+) -> tuple[torch.Tensor, torch.Tensor, int] | tuple[None, None, None]:
 
     weights_tensor = torch.tensor(weights)
 
@@ -115,28 +138,31 @@ def get_best_points(
 
     if objectives_greater_than is None and best_for_objecive_index is None:
 
-        max_index = (objective_values * weights_tensor).sum(dim=DataShape.index_dimensions).argmax()
+        max_index_tensor = (objective_values * weights_tensor).sum(dim=DataShape.index_dimensions).argmax()
+        max_index = int(max_index_tensor)
 
     elif objectives_greater_than is not None:
 
-        max_index = _get_points_greater_than(
+        max_index_or_none = _get_points_greater_than(
             objective_values=objective_values,
             weights=weights_tensor,
             objectives_greater_than=objectives_greater_than
         )
 
-        if max_index is None:
+        if max_index_or_none is None:
             return None, None, None
+        else:
+            max_index = max_index_or_none
 
     elif best_for_objecive_index is not None:
-        max_index = objective_values[0, :, best_for_objecive_index].argmax()
+        max_index_tensor = objective_values[0, :, best_for_objecive_index].argmax()
+        max_index = int(max_index_tensor)
 
     else:
         raise ValueError
 
     best_variables = variable_values[max_index]
     best_values = objective_values[max_index]
-    max_index = int(max_index)
 
     return best_variables, best_values, max_index
 
@@ -176,35 +202,35 @@ def _get_points_greater_than(
 def get_pareto_optimal_points(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
-        weights: Optional[list[float]] = None,
+        weights: Optional[torch.Tensor] = None,
         sort_by_max_weighted_sum: bool = False
 ) -> tuple[torch.Tensor, torch.Tensor, list[int]]:
 
-    pareto_optimal_indices = np.ones(objective_values.shape[DataShape.index_points], dtype=bool)
+    pareto_optimal_booleans = np.ones(objective_values.shape[DataShape.index_points], dtype=bool)
     for value_index, value in enumerate(objective_values):
-        if pareto_optimal_indices[value_index]:
-            pareto_optimal_indices[pareto_optimal_indices] = torch.any(
-                objective_values[pareto_optimal_indices] > value,
+        if pareto_optimal_booleans[value_index]:
+            pareto_optimal_booleans[pareto_optimal_booleans] = torch.any(
+                objective_values[pareto_optimal_booleans] > value,
                 dim=DataShape.index_dimensions
             )
-            pareto_optimal_indices[value_index] = True
+            pareto_optimal_booleans[value_index] = True
 
-    pareto_optimal_indices = pareto_optimal_indices.nonzero()[0]
+    pareto_optimal_indices_array = pareto_optimal_booleans.nonzero()[0]
 
     if sort_by_max_weighted_sum:
 
-        assert weights is not None, "Must be given weights so sort by weighted sum."
+        assert weights is not None, "Must be given weights to sort by weighted sum."
 
-        pareto_optimal_values = objective_values[pareto_optimal_indices]
-        weighted_sum_values = pareto_optimal_values @ np.array(weights)
+        pareto_optimal_values = objective_values[pareto_optimal_indices_array]
+        weighted_sum_values = pareto_optimal_values @ weights
         sorted_index = weighted_sum_values.argsort()
-        sorted_index = np.flip(sorted_index)
-        pareto_optimal_indices = pareto_optimal_indices[sorted_index]
+        sorted_index = torch.flip(sorted_index, dims=(0,))
+        pareto_optimal_indices_array = pareto_optimal_indices_array[sorted_index]
 
-    pareto_optimal_indices = pareto_optimal_indices.tolist()
+    pareto_optimal_indices = pareto_optimal_indices_array.tolist()
 
     return (
-        variable_values[pareto_optimal_indices],
-        objective_values[pareto_optimal_indices],
+        variable_values[pareto_optimal_indices_array],
+        objective_values[pareto_optimal_indices_array],
         pareto_optimal_indices
     )

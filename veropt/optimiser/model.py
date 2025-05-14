@@ -2,7 +2,7 @@ import abc
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterator, TypedDict, Union, Unpack
+from typing import Iterator, Optional, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
@@ -33,7 +33,7 @@ class SurrogateModel:
             self,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor
-    ):
+    ) -> None:
         pass
 
 
@@ -44,10 +44,10 @@ class GPyTorchDataModel(gpytorch.models.ExactGP):
             self,
             train_inputs: torch.Tensor,
             train_targets: torch.Tensor,
-            likelihood: gpytorch.likelihoods.likelihood,
-            mean_module: gpytorch.means.mean,
-            kernel: gpytorch.kernels.kernel
-    ):
+            likelihood: gpytorch.likelihoods.GaussianLikelihood,
+            mean_module: gpytorch.means.Mean,
+            kernel: gpytorch.kernels.Kernel
+    ) -> None:
 
         super().__init__(
             train_inputs=train_inputs,
@@ -60,7 +60,7 @@ class GPyTorchDataModel(gpytorch.models.ExactGP):
 
         self.to(tensor=train_inputs)  # make sure we're on the right device/dtype
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
@@ -70,10 +70,10 @@ class GPyTorchSingleModel:
 
     def __init__(
             self,
-            likelihood: gpytorch.likelihoods.likelihood,
-            mean_module: gpytorch.means.mean,
-            kernel: gpytorch.kernels.kernel,
-    ):
+            likelihood: gpytorch.likelihoods.GaussianLikelihood,
+            mean_module: gpytorch.means.Mean,
+            kernel: gpytorch.kernels.Kernel,
+    ) -> None:
 
         self.likelihood = likelihood
         self.mean_module = mean_module
@@ -87,7 +87,7 @@ class GPyTorchSingleModel:
             self,
             train_inputs: torch.Tensor,
             train_targets: torch.Tensor,
-    ):
+    ) -> None:
 
         self.model_with_data = GPyTorchDataModel(
             train_inputs=train_inputs,
@@ -102,8 +102,8 @@ class GPyTorchSingleModel:
             constraint: Union[Interval, GreaterThan, LessThan],
             parameter_name: str,
             module: str,
-            second_module: str = None
-    ):
+            second_module: Optional[str] = None
+    ) -> None:
         if self.model_with_data is not None:
 
             if second_module is None:
@@ -130,8 +130,8 @@ class GPyTorchSingleModel:
             upper_bound: float,
             parameter_name: str,
             module: str,
-            second_module: str = None
-    ):
+            second_module: Optional[str] = None
+    ) -> None:
         constraint = Interval(
             lower_bound=lower_bound,
             upper_bound=upper_bound
@@ -149,9 +149,9 @@ class GPyTorchSingleModel:
             lower_bound: float,
             parameter_name: str,
             module: str,
-            second_module: str = None
+            second_module: Optional[str] = None
 
-    ):
+    ) -> None:
         constraint = GreaterThan(
             lower_bound=lower_bound
         )
@@ -168,8 +168,8 @@ class GPyTorchSingleModel:
             upper_bound: float,
             parameter_name: str,
             module: str,
-            second_module: str = None
-    ):
+            second_module: Optional[str] = None
+    ) -> None:
         constraint = LessThan(
             upper_bound=upper_bound
         )
@@ -204,7 +204,7 @@ class MaternSingleModel(GPyTorchSingleModel):
             self,
             n_variables: int,
             **kwargs: Unpack[MaternParametersInputDict]
-    ):
+    ) -> None:
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood()
         mean_module = gpytorch.means.ConstantMean()
@@ -223,9 +223,11 @@ class MaternSingleModel(GPyTorchSingleModel):
             kernel=kernel
         )
 
-    def _set_up_trained_parameters(self):
+    def _set_up_trained_parameters(self) -> None:
 
         parameter_group_list = []
+
+        assert self.model_with_data is not None, "Model must be initialised to use this function."
 
         if self.settings.train_noise:
 
@@ -249,7 +251,7 @@ class MaternSingleModel(GPyTorchSingleModel):
             self,
             train_inputs: torch.Tensor,
             train_targets: torch.Tensor,
-    ):
+    ) -> None:
 
         super().initialise_model_with_data(
             train_inputs=train_inputs,
@@ -275,7 +277,7 @@ class MaternSingleModel(GPyTorchSingleModel):
             self,
             lower_bound: float,
             upper_bound: float
-    ):
+    ) -> None:
 
         super().change_interval_constraints(
             lower_bound=lower_bound,
@@ -287,7 +289,7 @@ class MaternSingleModel(GPyTorchSingleModel):
     def set_noise(
             self,
             noise: float
-    ):
+    ) -> None:
 
         if self.model_with_data is not None:
 
@@ -302,11 +304,13 @@ class MaternSingleModel(GPyTorchSingleModel):
     def set_noise_constraint(
             self,
             lower_bound: float
-    ):
+    ) -> None:
 
         # Default seems to be 1e-4
         #   - Would like to make sure we don't have noise when we try to set it to zero
         #   - Alternatively, setting it too low might risk numerical instability?
+
+        assert self.model_with_data is not None, "Model must be initiated to change constraints"
 
         self.model_with_data.change_greater_than_constraint(
             lower_bound=lower_bound,
@@ -320,9 +324,9 @@ class GPyTorchModelOptimiser:
     def __init__(
             self,
             optimiser_class: type[torch.optim.Optimizer],
-            optimiser_settings: dict = None
-    ):
-        self.optimiser: torch.optim.Optimizer | None = None
+            optimiser_settings: Optional[dict] = None
+    ) -> None:
+        self.optimiser: Optional[torch.optim.Optimizer] = None
         self.optimiser_class = optimiser_class
 
         self.optimiser_settings = optimiser_settings or {}
@@ -330,18 +334,19 @@ class GPyTorchModelOptimiser:
     def initiate_optimiser(
             self,
             parameters: Iterator[torch.nn.Parameter] | list[dict[str, Iterator[torch.nn.Parameter]]]
-    ):
+    ) -> None:
+
         self.optimiser = self.optimiser_class(
             params=parameters,
             **self.optimiser_settings
         )
 
 
-class AdamModelOptimiser:
+class AdamModelOptimiser(GPyTorchModelOptimiser):
     def __init__(
             self,
             adam_settings: dict
-    ):
+    ) -> None:
 
         for key in adam_settings.keys():
             assert key in torch.optim.Adam.__init__.__code__.co_varnames, (
@@ -383,17 +388,17 @@ class GPyTorchFullModel(SurrogateModel):
             single_model_list: list[GPyTorchSingleModel],
             model_optimiser: GPyTorchModelOptimiser,
             verbose: bool = True,
-            kwargs: Unpack[GPyTorchTrainingParametersInputDict] = None
-    ):
+            **kwargs: Unpack[GPyTorchTrainingParametersInputDict]
+    ) -> None:
 
         self.training_parameters = GPyTorchTrainingParameters(
-            **(kwargs or {})
+            **kwargs
         )
 
         self._model_list = single_model_list
-        self._model = None
-        self._likelihood = None
-        self._marginal_log_likelihood = None
+        self._model: Optional[botorch.models.ModelListGP] = None
+        self._likelihood: Optional[gpytorch.likelihoods.LikelihoodList] = None
+        self._marginal_log_likelihood: Optional[gpytorch.mlls.SumMarginalLogLikelihood] = None
 
         self._model_optimiser = model_optimiser
 
@@ -413,6 +418,9 @@ class GPyTorchFullModel(SurrogateModel):
 
         self._set_mode_evaluate()
 
+        assert self._likelihood is not None, "Model must be initiated to call it"
+        assert self._model is not None, "Model must be initiated to call it"
+
         estimated_objective_values = self._likelihood(
             *self._model(
                 *([variable_values] * self.n_objectives)
@@ -421,13 +429,15 @@ class GPyTorchFullModel(SurrogateModel):
 
         self._set_mode(model_mode=previous_mode)
 
+        # TODO: Fix output (either change type hint or change output)
+
         return estimated_objective_values
 
     def train_model(
             self,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor
-    ):
+    ) -> None:
 
         self.initialise_model(
             variable_values=variable_values,
@@ -449,7 +459,7 @@ class GPyTorchFullModel(SurrogateModel):
             self,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor
-    ):
+    ) -> None:
 
         for objective_number in range(self.n_objectives):
 
@@ -467,22 +477,32 @@ class GPyTorchFullModel(SurrogateModel):
             *[[model.model_with_data.likelihood for model in self._model_list]]
         )
 
-    def _train_backwards(self):
+    def _train_backwards(self) -> None:
 
-        loss_difference = 1e5  # initial values
-        loss = 1e20  # TODO: Find a way to make sure this number is always big enough
+        assert self._model is not None, "Model must be initialised to use this function"
+        assert self._marginal_log_likelihood is not None, "Model must be initialised to use this function"
+
+        assert self._model_optimiser.optimiser is not None, "Model optimiser must be initiated to use this function"
+
+        loss_difference = torch.Tensor(1e5)  # initial values
+        loss = torch.Tensor(1e20)  # TODO: Find a way to make sure this number is always big enough
         assert self.training_parameters.loss_change_to_stop < loss_difference
         iteration = 1
 
         while bool(loss_difference > self.training_parameters.loss_change_to_stop):
 
-            self._model_optimiser.optimiser.zero_grad()  # Set gradients from previous iteration to zero
+            self._model_optimiser.optimiser.zero_grad()
 
             output = self._model(*self._model.train_inputs)
 
             previous_loss = loss
-            loss = -self._marginal_log_likelihood(output, self._model.train_targets)  # Calculate loss
-            loss.backward()  # Backpropagate gradients
+            # Ignoring mypy here because gpytorch seems to be missing type-hints
+            loss = -1.0 * self._marginal_log_likelihood(  # type: ignore
+                output,
+                self._model.train_targets
+            )
+
+            loss.backward()
             loss_difference = torch.abs(previous_loss - loss)
 
             self._model_optimiser.optimiser.step()
@@ -502,7 +522,7 @@ class GPyTorchFullModel(SurrogateModel):
         if self.verbose:
             print("\n")
 
-    def _initiate_optimiser(self):
+    def _initiate_optimiser(self) -> None:
 
         parameters = []
         parameters += [model.trained_parameters for model in self._model_list]
@@ -511,30 +531,28 @@ class GPyTorchFullModel(SurrogateModel):
             parameters=parameters
         )
 
-    def _set_mode_evaluate(self):
+    def _set_mode_evaluate(self) -> None:
 
-        if self.initialised:
+        assert self._model is not None, "Model must be initialised to set its mode."
+        assert self._likelihood is not None, "Model must be initialised to set its mode."
 
-            self._model.eval()
-            self._likelihood.eval()
+        self._model.eval()
+        self._likelihood.eval()
 
-        else:
-            raise RuntimeError("Can't set mode when model is not initialised.")
+    def _set_mode_train(self) -> None:
 
-    def _set_mode_train(self):
 
-        if self.initialised:
+        assert self._model is not None, "Model must be initialised to set its mode."
+        assert self._likelihood is not None, "Model must be initialised to set its mode."
 
-            self._model.train()
-            self._likelihood.train()
-
-        else:
-            raise RuntimeError("Can't set mode when model is not initialised.")
+        self._model.train()
+        self._likelihood.train()
 
     def _set_mode(
             self,
             model_mode: ModelMode
-    ):
+    ) -> None:
+
         if model_mode == ModelMode.evaluating:
             self._set_mode_evaluate()
 
@@ -544,24 +562,13 @@ class GPyTorchFullModel(SurrogateModel):
     @property
     def _mode(self) -> ModelMode:
 
-        if self.initialised:
+        assert self._model is not None, "Model must be initialised to get its mode."
 
-            if self._model.training:
-                return ModelMode.training
-
-            else:
-                return ModelMode.evaluating
+        if self._model.training:
+            return ModelMode.training
 
         else:
-            raise RuntimeError("Can't get mode when model is not initialised.")
-
-    @property
-    def initialised(self) -> bool:
-
-        if self._model is None:
-            return False
-        else:
-            return True
+            return ModelMode.evaluating
 
     @property
     def multi_objective(self) -> bool:

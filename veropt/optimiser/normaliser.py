@@ -10,8 +10,9 @@ class Normaliser:
 
     def __init__(
             self,
-    ):
-        pass
+            tensor: torch.Tensor,
+    ) -> None:
+        self.tensor = tensor
 
     @abc.abstractmethod
     def transform(
@@ -33,24 +34,26 @@ class Normaliser:
 class NormaliserZeroMeanUnitVariance(Normaliser):
     def __init__(
             self,
-            matrix: torch.Tensor,
+            tensor: torch.Tensor,
             norm_dim: int = DataShape.index_points
     ):
-        self.means = matrix.mean(dim=norm_dim)
-        self.variances = matrix.var(dim=norm_dim)
+        self.means = tensor.mean(dim=norm_dim)
+        self.variances = tensor.var(dim=norm_dim)
 
-        super().__init__()
+        super().__init__(
+            tensor=tensor
+        )
 
     def transform(
             self,
-            matrix: torch.Tensor
+            tensor: torch.Tensor
     ) -> torch.Tensor:
 
-        return (matrix - self.means) / torch.sqrt(self.variances)
+        return (tensor - self.means) / torch.sqrt(self.variances)
 
     def inverse_transform(
             self,
-            matrix: torch.Tensor
+            tensor: torch.Tensor
     ) -> torch.Tensor:
 
-        return matrix * torch.sqrt(self.variances) + self.means
+        return tensor * torch.sqrt(self.variances) + self.means

@@ -8,7 +8,7 @@ class AcquisitionFunction:
 
     def __init__(
             self
-    ):
+    ) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -18,6 +18,6 @@ class AcquisitionFunction:
     def set_bounds(
             self,
             new_bounds: torch.Tensor
-    ):
+    ) -> None:
         self.bounds = new_bounds
         raise NotImplementedError("Aster, confirm that nothing else needs to happen here.")

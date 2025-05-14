@@ -32,33 +32,22 @@ class BayesianOptimiser:
             n_initial_points: int,
             n_bayesian_points: int,
             objective: Union[IntegratedObjective, InterfaceObjective],
-            acquisition_function: AcquisitionFunction = None,
-            model: SurrogateModel = None,
-            normaliser_class: type[Normaliser] = None,
+            acquisition_function: AcquisitionFunction,
+            model: SurrogateModel,
+            normaliser_class: type[Normaliser],
             **kwargs: Unpack[OptimiserSettingsInputDict]
     ):
 
         self.objective = objective
+        self.n_objectives = objective.n_objectives
         self.bounds_real_units = objective.bounds
 
-        # TODO: Consider making methods for these to keep init as clean as possible?
-        if acquisition_function is None:
-            raise NotImplementedError
-        else:
-            self.acquisition_function = acquisition_function
+        self.acquisition_function = acquisition_function
+        self.model = model
+        self.normaliser_class = normaliser_class
 
-        if model is None:
-            raise NotImplementedError
-        else:
-            self.model = model
-
-        if normaliser_class is None:
-            raise NotImplementedError
-        else:
-            self.normaliser_class = normaliser_class
-
-        self._normaliser_variables = None
-        self._normaliser_values = None
+        self._normaliser_variables: Optional[Normaliser] = None
+        self._normaliser_values: Optional[Normaliser] = None
 
         # TODO: Move this assert somewhere else?
         # TODO: Write error message for this assert
@@ -68,14 +57,15 @@ class BayesianOptimiser:
         self.settings = OptimiserSettings(
             n_initial_points=n_initial_points,
             n_bayesian_points=n_bayesian_points,
+            n_objectives=self.n_objectives,
             **kwargs
         )
 
         self._set_up_settings()
 
         self.initial_points_real_units = self._generate_initial_points()
-        self.evaluated_variables_real_units = None
-        self.evaluated_objective_real_units = None
+        self.evaluated_variables_real_units: torch.Tensor = torch.Tensor()
+        self.evaluated_objective_real_units: torch.Tensor = torch.Tensor()
 
         self.data_has_been_normalised = False
         self.model_has_been_trained = False
@@ -91,7 +81,7 @@ class BayesianOptimiser:
 
         self._verify_set_up()
 
-    def run_optimisation_step(self):
+    def run_optimisation_step(self) -> None:
 
         if self._objective_type == ObjectiveKind.integrated:
 
@@ -109,7 +99,7 @@ class BayesianOptimiser:
 
             self._save_candidates()
 
-    def suggest_candidates(self):
+    def suggest_candidates(self) -> None:
 
         if self.optimisation_mode == OptimisationMode.initial:
 
@@ -125,12 +115,15 @@ class BayesianOptimiser:
             raise RuntimeError
 
         if self.model_has_been_trained:
-            predicted_values = self.model(suggested_variables.tensor)
+
+            predicted_values_tensor = self.model(suggested_variables.tensor)
             predicted_values = TensorWithNormalisationFlag(
-                tensor=predicted_values,
+                tensor=predicted_values_tensor,
                 normalised=self.return_normalised_data
             )
+
         else:
+
             predicted_values = None
 
         self.suggested_points = SuggestedPoints(
@@ -139,7 +132,7 @@ class BayesianOptimiser:
             generated_at_step=self.current_step
         )
 
-    def get_best_points(self) -> (torch.Tensor, torch.Tensor, int):
+    def get_best_points(self) -> tuple[torch.Tensor, torch.Tensor, int] | tuple[None, None, None]:
 
         best_variables, best_values, max_index = get_best_points(
             variable_values=self.evaluated_variable_values.tensor,
@@ -153,7 +146,7 @@ class BayesianOptimiser:
             max_index
         )
 
-    def get_pareto_optimal_points(self) -> (torch.Tensor, torch.Tensor, list[int]):
+    def get_pareto_optimal_points(self) -> tuple[torch.Tensor, torch.Tensor, list[int]]:
 
         pareto_variables, pareto_values, pareto_indices = get_pareto_optimal_points(
             variable_values=self.evaluated_variable_values.tensor,
@@ -167,15 +160,17 @@ class BayesianOptimiser:
             pareto_indices
         )
 
-    def _evaluate_points(self) -> (TensorWithNormalisationFlag, TensorWithNormalisationFlag):
+    def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:
 
         assert self._objective_type == ObjectiveKind.integrated, (
             "The objective must be an 'IntegratedObjective' to be evaluated during optimisation."
         )
 
+        assert self.suggested_points is not None, "Suggested points must be created before using this function"
+
         new_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values)
 
-        objective_function_values = self.objective.run(new_variables_real_units.tensor)
+        objective_function_values = self.objective.run(new_variables_real_units.tensor) # type: ignore[union-attr]
 
         self._reset_suggested_points()
 
@@ -191,7 +186,7 @@ class BayesianOptimiser:
             self,
             new_variables: TensorWithNormalisationFlag,
             new_values: TensorWithNormalisationFlag
-    ):
+    ) -> None:
 
         assert new_variables.normalised is False
         assert new_values.normalised is False
@@ -249,6 +244,7 @@ class BayesianOptimiser:
         )
 
         # TODO: Implement
+        #   - Add type hints
         # self.objective.load_evaluated_points()
 
         raise NotImplementedError
@@ -260,11 +256,12 @@ class BayesianOptimiser:
         )
 
         # TODO: Implement
+        #   - Add type hints
         # self.objective.save_candidates()
 
         raise NotImplementedError
 
-    def _verify_set_up(self):
+    def _verify_set_up(self) -> None:
 
         assert self.n_initial_points % self.n_evaluations_per_step == 0, (
             "The amount of initial points is not divisable by the amount of points evaluated each step."
@@ -274,7 +271,7 @@ class BayesianOptimiser:
             "The amount of bayesian points is not divisable by the amount of points evaluated each step."
         )
 
-    def _set_up_settings(self):
+    def _set_up_settings(self) -> None:
 
         if self.settings.mask_nans:
             raise NotImplementedError(
@@ -313,14 +310,14 @@ class BayesianOptimiser:
 
         return suggested_variables
 
-    def _refresh_acquisition_function(self):
+    def _refresh_acquisition_function(self) -> None:
         raise NotImplementedError
 
-    def _reset_suggested_points(self):
+    def _reset_suggested_points(self) -> None:
         self.suggested_points_history[self.current_step - 1] = deepcopy(self.suggested_points)
         self.suggested_points = None
 
-    def _train_model(self):
+    def _train_model(self) -> None:
 
         if self.settings.normalise:
             assert self.data_has_been_normalised
@@ -335,7 +332,7 @@ class BayesianOptimiser:
 
         self.suggested_points = None
 
-    def _fit_normaliser(self):
+    def _fit_normaliser(self) -> None:
 
         self._normaliser_variables = self.normaliser_class(
             tensor=self.evaluated_variables_real_units
@@ -346,7 +343,7 @@ class BayesianOptimiser:
 
         self.data_has_been_normalised = True
 
-    def _update_normalised_values(self):
+    def _update_normalised_values(self) -> None:
 
         cached_normalised_values = [
             'evaluated_variables_normalised',
@@ -371,6 +368,8 @@ class BayesianOptimiser:
             variable_values: TensorWithNormalisationFlag
     ) -> TensorWithNormalisationFlag:
 
+        assert self._normaliser_variables is not None, "Normaliser must be initialised to do this action"
+
         if variable_values.normalised:
             variables_real_units = self._normaliser_variables.inverse_transform(variable_values.tensor)
         else:
@@ -381,9 +380,13 @@ class BayesianOptimiser:
             normalised=False
         )
 
-    def _print_status(self):
+    def _print_status(self) -> None:
 
         best_variables, best_values, max_index = self.get_best_points()
+
+        assert best_variables is not None, "Failed to get best points"
+        assert best_values is not None, "Failed to get best points"
+        assert max_index is not None, "Failed to get best points"
 
         best_values_string = format_list(best_values.tolist())
 
@@ -415,7 +418,7 @@ class BayesianOptimiser:
         return self.settings.n_evaluations_per_step
 
     @property
-    def current_step(self):
+    def current_step(self) -> int:
         assert self.n_points_evaluated % self.n_evaluations_per_step == 0, (
             "Amount of points evaluated does not match step size."
         )
@@ -423,7 +426,7 @@ class BayesianOptimiser:
 
     @property
     def n_points_evaluated(self) -> int:
-        return self.evaluated_variable_values.shape[DataShape.index_points]
+        return self.evaluated_variable_values.tensor.shape[DataShape.index_points]
 
     @property
     def optimisation_mode(self) -> OptimisationMode:
@@ -488,17 +491,29 @@ class BayesianOptimiser:
         )
 
     @cached_property
-    def evaluated_variables_normalised(self) -> TensorWithNormalisationFlag:
+    def evaluated_variables_normalised(self) -> torch.Tensor:
+
+        assert self._normaliser_variables is not None, "Normaliser must be initiated to get these values"
+
         return self._normaliser_variables.transform(self.evaluated_variables_real_units)
 
     @cached_property
-    def evaluated_objective_normalised(self) -> TensorWithNormalisationFlag:
+    def evaluated_objective_normalised(self) -> torch.Tensor:
+
+        assert self._normaliser_values is not None, "Normaliser must be initiated to get these values"
+
         return self._normaliser_values.transform(self.evaluated_objective_real_units)
 
     @cached_property
-    def bounds_normalised(self):
+    def bounds_normalised(self) -> torch.Tensor:
+
+        assert self._normaliser_variables is not None, "Normaliser must be initiated to get these values"
+
         return self._normaliser_variables.transform(self.bounds_real_units)
 
     @cached_property
-    def initial_points_normalised(self):
+    def initial_points_normalised(self) -> torch.Tensor:
+
+        assert self._normaliser_variables is not None, "Normaliser must be initiated to get these values"
+
         return self._normaliser_variables.transform(self.initial_points_real_units)
