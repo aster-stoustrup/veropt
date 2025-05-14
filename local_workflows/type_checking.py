@@ -8,7 +8,6 @@ def run_mypy():
     go_up_to_find_veropt_folder()
 
     # Note: Should be the same as in the github workflow. Please change both if you change this.
-    # TODO: Update workflow
     os.system('mypy veropt tests --disallow-untyped-defs --follow-untyped-imports')
 
 

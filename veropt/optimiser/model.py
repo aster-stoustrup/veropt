@@ -468,13 +468,16 @@ class GPyTorchFullModel(SurrogateModel):
                 train_targets=objective_values[objective_number]
             )
 
+        for model in self._model_list:
+            assert model.model_with_data is not None, "Model initialisation seems to have failed"
+
         # TODO: Might need to look into more options here
         #   - Currently seems to be assuming independent models. Maybe need to add an option for this?
         self._model = botorch.models.ModelListGP(
-            *[model.model_with_data for model in self._model_list]
+            *[model.model_with_data for model in self._model_list]  # type: ignore
         )
         self._likelihood = gpytorch.likelihoods.LikelihoodList(
-            *[[model.model_with_data.likelihood for model in self._model_list]]
+            *[[model.model_with_data.likelihood for model in self._model_list]]  # type: ignore[union-attr]
         )
 
     def _train_backwards(self) -> None:
@@ -526,6 +529,8 @@ class GPyTorchFullModel(SurrogateModel):
 
         parameters = []
         parameters += [model.trained_parameters for model in self._model_list]
+
+        # TODO: Come in with debugger. Mypy is mad about this.
 
         self._model_optimiser.initiate_optimiser(
             parameters=parameters
