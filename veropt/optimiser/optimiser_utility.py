@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, TypedDict, Union
 
-import numpy as np
 import torch
 
 
@@ -206,31 +205,34 @@ def get_pareto_optimal_points(
         sort_by_max_weighted_sum: bool = False
 ) -> tuple[torch.Tensor, torch.Tensor, list[int]]:
 
-    pareto_optimal_booleans = np.ones(objective_values.shape[DataShape.index_points], dtype=bool)
+    pareto_optimal_booleans = torch.ones(
+        size=(objective_values.shape[DataShape.index_points],),
+        dtype=torch.bool
+    )
     for value_index, value in enumerate(objective_values):
         if pareto_optimal_booleans[value_index]:
-            pareto_optimal_booleans[pareto_optimal_booleans] = torch.any(
-                objective_values[pareto_optimal_booleans] > value,
+            pareto_optimal_booleans[pareto_optimal_booleans.clone()] = torch.any(
+                input=objective_values[pareto_optimal_booleans] > value,
                 dim=DataShape.index_dimensions
             )
             pareto_optimal_booleans[value_index] = True
 
-    pareto_optimal_indices_array = pareto_optimal_booleans.nonzero()[0]
+    pareto_optimal_indices_tensor = pareto_optimal_booleans.nonzero().squeeze()
 
     if sort_by_max_weighted_sum:
 
         assert weights is not None, "Must be given weights to sort by weighted sum."
 
-        pareto_optimal_values = objective_values[pareto_optimal_indices_array]
+        pareto_optimal_values = objective_values[pareto_optimal_indices_tensor]
         weighted_sum_values = pareto_optimal_values @ weights
         sorted_index = weighted_sum_values.argsort()
         sorted_index = torch.flip(sorted_index, dims=(0,))
-        pareto_optimal_indices_array = pareto_optimal_indices_array[sorted_index]
+        pareto_optimal_indices_tensor = pareto_optimal_indices_tensor[sorted_index]
 
-    pareto_optimal_indices = pareto_optimal_indices_array.tolist()
+    pareto_optimal_indices = pareto_optimal_indices_tensor.tolist()
 
     return (
-        variable_values[pareto_optimal_indices_array],
-        objective_values[pareto_optimal_indices_array],
+        variable_values[pareto_optimal_indices_tensor],
+        objective_values[pareto_optimal_indices_tensor],
         pareto_optimal_indices
     )
