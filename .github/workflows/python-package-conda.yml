@@ -22,8 +22,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        conda config --set verbosity 1
-        conda env update --file environment.yml --name base
+        conda env update --file environment.yml --name base -verbose
     - name: Lint with flake8
       run: |
         conda install flake8
