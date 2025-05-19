@@ -25,7 +25,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        conda install pytorch -c conda-forge
+        pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
         conda env update --file environment.yml --name base
     - name: Lint with flake8
       run: |
