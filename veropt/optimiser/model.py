@@ -546,7 +546,6 @@ class GPyTorchFullModel(SurrogateModel):
 
     def _set_mode_train(self) -> None:
 
-
         assert self._model is not None, "Model must be initialised to set its mode."
         assert self._likelihood is not None, "Model must be initialised to set its mode."
 

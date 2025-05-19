@@ -41,11 +41,14 @@ class InterfaceObjective(Objective):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
-    def save_candidates(self):
+    def save_candidates(
+            self,
+            suggested_variables: dict[str, torch.Tensor]
+    ) -> None:
         pass
 
     @abc.abstractmethod
-    def load_evaluated_points(self):
+    def load_evaluated_points(self) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         pass
 
 

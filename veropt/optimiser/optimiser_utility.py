@@ -99,26 +99,40 @@ class SuggestedPoints:
     generated_at_step: int
 
 
-def format_list(
-        unformatted_list: Union[list, list[list]]
+def list_with_floats_to_string(
+        unformatted_list: Union[list[float], list[list[float]]]
 ) -> str:
 
-    formatted_list = "["
-    if isinstance(unformatted_list[0], list):
-        for iteration, list_item in enumerate(unformatted_list):
-            for number_ind, number in enumerate(list_item):
-                if number_ind < len(list_item) - 1:
-                    formatted_list += f"{number:.2f}, "
-                elif iteration < len(unformatted_list) - 1:
-                    formatted_list += f"{number:.2f}], ["
-                else:
-                    formatted_list += f"{number:.2f}]"
+    if type(unformatted_list[0]) == list:
+
+        formatted_list = _nested_list_of_floats_to_string(unformatted_list)  # type: ignore[arg-type]
+
     else:
+
+        formatted_list = "["
+
         for iteration, list_item in enumerate(unformatted_list):
             if iteration < len(unformatted_list) - 1:
                 formatted_list += f"{list_item:.2f}, "
             else:
                 formatted_list += f"{list_item:.2f}]"
+
+    return formatted_list
+
+
+def _nested_list_of_floats_to_string(
+        unformatted_list: list[list[float]]
+) -> str:
+    formatted_list = "["
+
+    for iteration, list_item in enumerate(unformatted_list):
+        for number_ind, number in enumerate(list_item):
+            if number_ind < len(list_item) - 1:
+                formatted_list += f"{number:.2f}, "
+            elif iteration < len(unformatted_list) - 1:
+                formatted_list += f"{number:.2f}], ["
+            else:
+                formatted_list += f"{number:.2f}]"
 
     return formatted_list
 
@@ -236,3 +250,43 @@ def get_pareto_optimal_points(
         objective_values[pareto_optimal_indices_tensor],
         pareto_optimal_indices
     )
+
+
+def format_input_from_objective(
+        new_variable_values: dict[str, torch.Tensor],
+        new_objective_values: dict[str, torch.Tensor],
+        variable_names: list[str],
+        objective_names: list[str],
+        expected_amount_points: int
+) -> tuple[torch.Tensor, torch.Tensor]:
+
+    for name in variable_names:
+        assert len(new_variable_values[name]) == expected_amount_points
+
+    for name in objective_names:
+        assert len(new_objective_values[name]) == expected_amount_points
+
+    new_variable_values_tensor = torch.vstack(
+        [new_variable_values[name] for name in variable_names],
+    )
+
+    new_objective_values_tensor = torch.vstack(
+        [new_objective_values[name] for name in objective_names]
+    )
+
+    return (
+        new_variable_values_tensor,
+        new_objective_values_tensor
+    )
+
+
+def format_output_for_objective(
+    suggested_variables: torch.Tensor,
+    variable_names: list[str]
+) -> dict[str, torch.Tensor]:
+
+    suggested_variables_dict = {
+        name: suggested_variables[variable_number] for (variable_number, name) in enumerate(variable_names)
+    }
+
+    return suggested_variables_dict

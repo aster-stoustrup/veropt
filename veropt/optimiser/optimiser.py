@@ -12,7 +12,8 @@ from veropt.optimiser.normaliser import Normaliser
 from veropt.optimiser.objective import IntegratedObjective, InterfaceObjective, ObjectiveKind, determine_objective_type
 from veropt.optimiser.optimiser_utility import (
     DataShape, InitialPointsGenerationMode, OptimisationMode,
-    OptimiserSettings, OptimiserSettingsInputDict, SuggestedPoints, TensorWithNormalisationFlag, format_list,
+    OptimiserSettings, OptimiserSettingsInputDict, SuggestedPoints, TensorWithNormalisationFlag,
+    format_input_from_objective, format_output_for_objective, list_with_floats_to_string,
     get_best_points, get_pareto_optimal_points
 )
 
@@ -47,7 +48,7 @@ class BayesianOptimiser:
         self.normaliser_class = normaliser_class
 
         self._normaliser_variables: Optional[Normaliser] = None
-        self._normaliser_values: Optional[Normaliser] = None
+        self._normaliser_objective_values: Optional[Normaliser] = None
 
         # TODO: Move this assert somewhere else?
         # TODO: Write error message for this assert
@@ -170,7 +171,7 @@ class BayesianOptimiser:
 
         new_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values)
 
-        objective_function_values = self.objective.run(new_variables_real_units.tensor) # type: ignore[union-attr]
+        objective_function_values = self.objective.run(new_variables_real_units.tensor)  # type: ignore[union-attr]
 
         self._reset_suggested_points()
 
@@ -237,29 +238,51 @@ class BayesianOptimiser:
         if self.settings.verbose:
             self._print_status()
 
-    def _load_latest_points(self):
+    def _load_latest_points(self) -> None:
 
         assert self._objective_type == ObjectiveKind.interface, (
             "The objective must be an 'InterfaceObjective' to load points."
         )
 
-        # TODO: Implement
-        #   - Add type hints
-        # self.objective.load_evaluated_points()
+        (new_variable_values, new_objective_values) = self.objective.load_evaluated_points()  # type: ignore[union-attr]
 
-        raise NotImplementedError
+        new_variable_values_tensor, new_objective_values_tensor = format_input_from_objective(
+            new_variable_values=new_variable_values,
+            new_objective_values=new_objective_values,
+            variable_names=self.objective.variable_names,
+            objective_names=self.objective.objective_names,
+            expected_amount_points=self.n_evaluations_per_step
+        )
 
-    def _save_candidates(self):
+        self._add_new_points(
+            new_variables=TensorWithNormalisationFlag(
+                tensor=new_variable_values_tensor,
+                normalised=False
+            ),
+            new_values=TensorWithNormalisationFlag(
+                tensor=new_objective_values_tensor,
+                normalised=False
+            )
+        )
+
+    def _save_candidates(self) -> None:
 
         assert self._objective_type == ObjectiveKind.interface, (
             "The objective must be an 'InterfaceObjective' to save candidates."
         )
 
-        # TODO: Implement
-        #   - Add type hints
-        # self.objective.save_candidates()
+        assert self.suggested_points is not None, "Must have made suggestions before saving them."
 
-        raise NotImplementedError
+        suggested_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values)
+
+        suggested_variables_dict = format_output_for_objective(
+            suggested_variables=suggested_variables_real_units.tensor,
+            variable_names=self.objective.variable_names
+        )
+
+        self.objective.save_candidates(  # type: ignore[union-attr]
+            suggested_variables=suggested_variables_dict
+        )
 
     def _verify_set_up(self) -> None:
 
@@ -337,7 +360,7 @@ class BayesianOptimiser:
         self._normaliser_variables = self.normaliser_class(
             tensor=self.evaluated_variables_real_units
         )
-        self._normaliser_values = self.normaliser_class(
+        self._normaliser_objective_values = self.normaliser_class(
             tensor=self.evaluated_objective_real_units
         )
 
@@ -388,13 +411,13 @@ class BayesianOptimiser:
         assert best_values is not None, "Failed to get best points"
         assert max_index is not None, "Failed to get best points"
 
-        best_values_string = format_list(best_values.tolist())
+        best_values_string = list_with_floats_to_string(best_values.tolist())
 
-        best_values_variables_string = format_list(best_variables.tolist())
+        best_values_variables_string = list_with_floats_to_string(best_variables.tolist())
 
-        newest_value_string = format_list(self.evaluated_objective_values[:, -1].tensor.tolist())
+        newest_value_string = list_with_floats_to_string(self.evaluated_objective_values[:, -1].tensor.tolist())
 
-        newest_variables_string = format_list(self.evaluated_variable_values[:, -1].tensor.tolist())
+        newest_variables_string = list_with_floats_to_string(self.evaluated_variable_values[:, -1].tensor.tolist())
 
         status_string = (
             f"Optimisation running in {self.optimisation_mode.name} mode "
@@ -500,9 +523,9 @@ class BayesianOptimiser:
     @cached_property
     def evaluated_objective_normalised(self) -> torch.Tensor:
 
-        assert self._normaliser_values is not None, "Normaliser must be initiated to get these values"
+        assert self._normaliser_objective_values is not None, "Normaliser must be initiated to get these values"
 
-        return self._normaliser_values.transform(self.evaluated_objective_real_units)
+        return self._normaliser_objective_values.transform(self.evaluated_objective_real_units)
 
     @cached_property
     def bounds_normalised(self) -> torch.Tensor:

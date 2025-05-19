@@ -20,4 +20,5 @@ class AcquisitionFunction:
             new_bounds: torch.Tensor
     ) -> None:
         self.bounds = new_bounds
+        # TODO: Check this
         raise NotImplementedError("Aster, confirm that nothing else needs to happen here.")
