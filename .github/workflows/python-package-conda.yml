@@ -25,7 +25,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        conda env update --file environment.yml --name base --verbose
+        conda env update --file environment.yml --name base --verbose --show-channel-urls
     - name: Lint with flake8
       run: |
         conda install flake8
