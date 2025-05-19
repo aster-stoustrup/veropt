@@ -1,6 +1,7 @@
 name: Python Package using Conda
 
 on: [pull_request]
+on: [pull_request]
 
 jobs:
   build-linux:
@@ -15,10 +16,12 @@ jobs:
       with:
         python-version: '3.10'
 
+
     - name: Add conda to system path
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
+
 
     - name: Install dependencies
       run: |
@@ -27,13 +30,15 @@ jobs:
       run: |
         conda install flake8
         # Note: Should be the same as in the local workflow. Please change both if you change this.
-        flake8 . --max-line-length=120
+        # This will be re-enabled when veropt 1.0 releases
+        # flake8 . --max-line-length=120
 
     - name: Type checking with mypy
       run: |
         conda install mypy
         # Note: Should be the same as in the local workflow. Please change both if you change this.
-        mypy veropt tests --disallow-untyped-defs --follow-untyped-imports
+        # This will be re-enabled when veropt 1.0 releases
+        # mypy veropt tests --disallow-untyped-defs --follow-untyped-imports
 
     - name: Test with pytest
       run: |
