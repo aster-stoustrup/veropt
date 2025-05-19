@@ -1,6 +1,6 @@
 name: Python Package using Conda
 
-on: [push]
+on: [pull_request]
 
 jobs:
   build-linux:
@@ -14,21 +14,29 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: '3.10'
+
     - name: Add conda to system path
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
+
     - name: Install dependencies
       run: |
         conda env update --file environment.yml --name base
     - name: Lint with flake8
       run: |
         conda install flake8
-        # TODO: Re-enable flake8 when reviewing first draft of 1.0
-        # stop the build if there are Python syntax errors or undefined names
-        # flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        # flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        # Note: Should be the same as in the local workflow. Please change both if you change this.
+        # This will be re-enabled when veropt 1.0 releases
+        # flake8 . --max-line-length=120
+
+    - name: Type checking with mypy
+      run: |
+        conda install mypy
+        # Note: Should be the same as in the local workflow. Please change both if you change this.
+        # This will be re-enabled when veropt 1.0 releases
+        # mypy veropt tests --disallow-untyped-defs --follow-untyped-imports
+
     - name: Test with pytest
       run: |
         conda install pytest
