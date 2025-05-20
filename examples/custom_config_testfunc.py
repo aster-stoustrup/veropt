@@ -1,5 +1,5 @@
 from veropt import BayesOptimiser
-from veropt.obj_funcs.test_functions import *
+from veropt.obj_funcs.predefined_test_functions import *
 from veropt.gui import veropt_gui
 from veropt.acq_funcs import *
 from veropt.kernels import *

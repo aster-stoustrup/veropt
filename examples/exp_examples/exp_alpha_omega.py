@@ -1,6 +1,6 @@
 if __name__ == '__main__':
     from veropt import BayesOptimiser, BayesExperiment
-    from veropt.obj_funcs.test_functions import *
+    from veropt.obj_funcs.predefined_test_functions import *
     from veropt.acq_funcs import *
     from veropt.kernels import *
 
