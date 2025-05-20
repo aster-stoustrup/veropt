@@ -25,8 +25,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        conda install openblas -c conda-forge
         conda env update --file environment.yml --name base
+
     - name: Lint with flake8
       run: |
         conda install flake8
@@ -34,14 +34,14 @@ jobs:
         # This will be re-enabled when veropt 1.0 releases
         # flake8 . --max-line-length=120
 
-    - name: Test with pytest
-      run: |
-        conda install pytest
-        pytest
-
     - name: Type checking with mypy
       run: |
         conda install mypy
         # Note: Should be the same as in the local workflow. Please change both if you change this.
         # This will be re-enabled when veropt 1.0 releases
         # mypy veropt tests --disallow-untyped-defs --follow-untyped-imports
+
+    - name: Test with pytest
+      run: |
+        conda install pytest
+        pytest
