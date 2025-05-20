@@ -3,7 +3,7 @@ import torch
 
 from veropt.utility import NormaliserZeroMeanUnitVariance
 from veropt import BayesOptimiser
-from veropt.obj_funcs.test_functions import PredefinedTestFunction
+from veropt.obj_funcs.predefined_test_functions import PredefinedTestFunction
 
 
 def test_standard_normaliser_transform():
