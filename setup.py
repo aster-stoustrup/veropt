@@ -9,7 +9,8 @@ install_requires = [
     "dill",
     "click",
     "scipy",
-    "scikit-learn"
+    "scikit-learn",
+    "matplotlib"
 ]
 
 extras_require = {
