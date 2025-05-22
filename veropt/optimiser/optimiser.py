@@ -6,7 +6,7 @@ from typing import Optional, Union, Unpack
 import gpytorch.settings
 import torch
 
-from veropt.optimiser.acquisition import AcquisitionFunction
+from veropt.optimiser.acquisition import Acquisition
 from veropt.optimiser.model import SurrogateModel
 from veropt.optimiser.normaliser import Normaliser
 from veropt.optimiser.objective import IntegratedObjective, InterfaceObjective, ObjectiveKind, determine_objective_type
@@ -16,6 +16,7 @@ from veropt.optimiser.optimiser_utility import (
     format_input_from_objective, format_output_for_objective, list_with_floats_to_string,
     get_best_points, get_pareto_optimal_points
 )
+from veropt.optimiser.prediction import Predictor
 
 
 def generate_initial_points_random(
@@ -33,8 +34,7 @@ class BayesianOptimiser:
             n_initial_points: int,
             n_bayesian_points: int,
             objective: Union[IntegratedObjective, InterfaceObjective],
-            acquisition_function: AcquisitionFunction,
-            model: SurrogateModel,
+            predictor: Predictor,
             normaliser_class: type[Normaliser],
             **kwargs: Unpack[OptimiserSettingsInputDict]
     ):
@@ -43,8 +43,7 @@ class BayesianOptimiser:
         self.n_objectives = objective.n_objectives
         self.bounds_real_units = objective.bounds
 
-        self.acquisition_function = acquisition_function
-        self.model = model
+        self.predictor = predictor
         self.normaliser_class = normaliser_class
 
         self._normaliser_variables: Optional[Normaliser] = None
@@ -110,14 +109,21 @@ class BayesianOptimiser:
 
         elif self.optimisation_mode == OptimisationMode.bayesian:
 
-            suggested_variables = self._find_candidates_with_model()
+            suggested_variables_tensor = self.predictor.suggest_points(
+                verbose=self.settings.verbose
+            )
+
+            suggested_variables = TensorWithNormalisationFlag(
+                tensor=suggested_variables_tensor,
+                normalised=self.return_normalised_data
+            )
 
         else:
             raise RuntimeError
 
         if self.model_has_been_trained:
 
-            predicted_values_tensor = self.model(suggested_variables.tensor)
+            predicted_values_tensor = self.predictor.predict_values(variable_values=suggested_variables.tensor)
             predicted_values = TensorWithNormalisationFlag(
                 tensor=predicted_values_tensor,
                 normalised=self.return_normalised_data
@@ -130,7 +136,7 @@ class BayesianOptimiser:
         self.suggested_points = SuggestedPoints(
             variable_values=suggested_variables,
             predicted_objective_values=predicted_values,
-            generated_at_step=self.current_step
+            generated_at_step=deepcopy(self.current_step)
         )
 
     def get_best_points(self) -> tuple[torch.Tensor, torch.Tensor, int] | tuple[None, None, None]:
@@ -316,26 +322,6 @@ class BayesianOptimiser:
                 f"Initial point mode {self.settings.initial_points_generator} is not understood or not implemented."
             )
 
-    def _find_candidates_with_model(self) -> TensorWithNormalisationFlag:
-
-        self._refresh_acquisition_function()
-
-        if self.settings.verbose:
-            print("Finding candidates for the next points to evaluate...")
-
-        suggested_variables = TensorWithNormalisationFlag(
-            tensor=self.acquisition_function.suggest_points(),
-            normalised=self.return_normalised_data
-        )
-
-        if self.settings.verbose:
-            print(f"Found all {self.n_evaluations_per_step} candidates.")
-
-        return suggested_variables
-
-    def _refresh_acquisition_function(self) -> None:
-        raise NotImplementedError
-
     def _reset_suggested_points(self) -> None:
         self.suggested_points_history[self.current_step - 1] = deepcopy(self.suggested_points)
         self.suggested_points = None
@@ -345,11 +331,10 @@ class BayesianOptimiser:
         if self.settings.normalise:
             assert self.data_has_been_normalised
 
-        self.model.train_model(
+        self.predictor.update_with_new_data(
             variable_values=self.evaluated_variable_values.tensor,
             objective_values=self.evaluated_objective_values.tensor
         )
-        self._refresh_acquisition_function()
 
         self.model_has_been_trained = True
 
@@ -379,7 +364,7 @@ class BayesianOptimiser:
         for normalised_value in cached_normalised_values:
             del self.__dict__[normalised_value]
 
-        self.acquisition_function.set_bounds(self.bounds.tensor)
+        self.predictor.update_bounds(self.bounds.tensor)
 
         if self.settings.verbose:
             # TODO: Find a way to do this. Don't want it to print this every time.

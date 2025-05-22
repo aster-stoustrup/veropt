@@ -228,7 +228,6 @@ def test_format_input_from_objective_too_few_points() -> None:
 
 
 def test_format_output_for_objective() -> None:
-
     variable_names = ['var_1', 'var_2', 'var_3']
 
     suggested_variables_tensor = torch.tensor([
@@ -254,3 +253,6 @@ def test_format_output_for_objective() -> None:
     for name, tensor in expected_suggested_variables_dict.items():
         assert torch.equal(suggested_variables_dict[name], tensor)
 
+
+def test_get_nadir_point() -> None:
+    assert False

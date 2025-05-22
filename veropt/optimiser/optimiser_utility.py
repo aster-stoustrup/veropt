@@ -280,6 +280,18 @@ def format_input_from_objective(
     )
 
 
+def get_nadir_point(
+        variable_values: torch.Tensor,
+        objective_values: torch.Tensor,
+) -> torch.Tensor:
+    _, pareto_values, _ = get_pareto_optimal_points(
+        variable_values=variable_values,
+        objective_values=objective_values
+    )
+
+    return pareto_values.min()
+
+
 def format_output_for_objective(
     suggested_variables: torch.Tensor,
     variable_names: list[str]

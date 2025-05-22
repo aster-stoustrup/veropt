@@ -25,7 +25,7 @@ class SurrogateModel:
     def __call__(
             self,
             variable_values: torch.Tensor
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pass
 
     @abc.abstractmethod
@@ -320,7 +320,7 @@ class MaternSingleModel(GPyTorchSingleModel):
         )
 
 
-class GPyTorchModelOptimiser:
+class TorchModelOptimiser:
     def __init__(
             self,
             optimiser_class: type[torch.optim.Optimizer],
@@ -342,7 +342,7 @@ class GPyTorchModelOptimiser:
         )
 
 
-class AdamModelOptimiser(GPyTorchModelOptimiser):
+class AdamModelOptimiser(TorchModelOptimiser):
     def __init__(
             self,
             adam_settings: dict
@@ -386,7 +386,7 @@ class GPyTorchFullModel(SurrogateModel):
             n_variables: int,
             n_objectives: int,
             single_model_list: list[GPyTorchSingleModel],
-            model_optimiser: GPyTorchModelOptimiser,
+            model_optimiser: TorchModelOptimiser,
             verbose: bool = True,
             **kwargs: Unpack[GPyTorchTrainingParametersInputDict]
     ) -> None:
@@ -412,7 +412,7 @@ class GPyTorchFullModel(SurrogateModel):
     def __call__(
             self,
             variable_values: torch.Tensor
-    ) -> torch.Tensor:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
         previous_mode = self._mode
 
@@ -430,6 +430,10 @@ class GPyTorchFullModel(SurrogateModel):
         self._set_mode(model_mode=previous_mode)
 
         # TODO: Fix output (either change type hint or change output)
+        #   - Think we want this to return mean, min, max?
+        #       - Potentially with min and max being optional? To support models without uncertainty
+        #       - That does mean adding some checks in various places
+        #   - Might want to add subclass-specific function to return native gpytorch output
 
         return estimated_objective_values
 
@@ -479,6 +483,12 @@ class GPyTorchFullModel(SurrogateModel):
         self._likelihood = gpytorch.likelihoods.LikelihoodList(
             *[[model.model_with_data.likelihood for model in self._model_list]]  # type: ignore[union-attr]
         )
+
+    def get_gpytorch_model(self) -> botorch.models.ModelListGP:
+
+        assert self._model is not None, "Model must be initiated to use this function"
+
+        return self._model
 
     def _train_backwards(self) -> None:
 
