@@ -6,14 +6,14 @@ from typing import Optional, Union, Unpack
 import gpytorch.settings
 import torch
 
-from veropt.optimiser.model import SurrogateModel
 from veropt.optimiser.normaliser import Normaliser
 from veropt.optimiser.objective import IntegratedObjective, InterfaceObjective, ObjectiveKind, determine_objective_type
 from veropt.optimiser.optimiser_utility import (
     DataShape, InitialPointsGenerationMode, OptimisationMode,
-    OptimiserSettings, OptimiserSettingsInputDict, SuggestedPoints, TensorWithNormalisationFlag,
-    format_input_from_objective, format_output_for_objective, list_with_floats_to_string,
-    get_best_points, get_pareto_optimal_points
+    OptimiserSettings, OptimiserSettingsInputDict, SuggestedPoints,
+    TensorWithNormalisationFlag, format_input_from_objective,
+    format_output_for_objective, get_best_points, get_pareto_optimal_points,
+    list_with_floats_to_string
 )
 from veropt.optimiser.prediction import Predictor
 

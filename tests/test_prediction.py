@@ -77,7 +77,7 @@ def _build_matern_predictor_qlogehvi(
     return predictor
 
 
-def test_botorch_predict_values_1_objective():
+def test_botorch_predict_values_1_objective() -> None:
 
     bounds = torch.tensor([-10.0, 10.0])
 
@@ -116,7 +116,7 @@ def test_botorch_predict_values_1_objective():
         assert list(prediction[prediction_band].shape) == [variable_1_array.shape[0], 1]
 
 
-def test_botorch_predict_values_2_objectives():
+def test_botorch_predict_values_2_objectives() -> None:
 
     bounds = torch.tensor([-10.0, 10.0])
 

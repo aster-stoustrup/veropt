@@ -1,5 +1,5 @@
 import abc
-from typing import Any, Callable, Optional, TypeVar
+from typing import Callable, Optional
 
 import botorch
 import numpy as np
@@ -7,7 +7,6 @@ import scipy
 import torch
 from botorch.utils.multi_objective.box_decompositions.non_dominated import FastNondominatedPartitioning
 
-from veropt.optimiser.model import GPyTorchFullModel, SurrogateModel
 from veropt.optimiser.optimiser_utility import get_nadir_point
 
 

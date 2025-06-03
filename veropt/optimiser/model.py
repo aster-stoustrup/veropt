@@ -13,6 +13,7 @@ from gpytorch.distributions import MultivariateNormal
 from veropt.optimiser.optimiser_utility import DataShape
 
 
+# TODO: Consider deleting this abstraction. Does it have a function at this point?
 class SurrogateModel:
     __metaclass__ = abc.ABCMeta
 
@@ -23,13 +24,6 @@ class SurrogateModel:
     ):
         self.n_variables = n_variables
         self.n_objectives = n_objectives
-
-    @abc.abstractmethod
-    def __call__(
-            self,
-            variable_values: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        pass
 
     @abc.abstractmethod
     def train_model(
@@ -84,7 +78,7 @@ class GPyTorchSingleModel:
 
         self.model_with_data: GPyTorchDataModel | None = None
 
-        self.trained_parameters: list[dict[str, Iterator[torch.nn.Parameter]]] | None = None
+        self.trained_parameters: list[dict[str, Iterator[torch.nn.Parameter]]] = [{}]
 
     def initialise_model_with_data(
             self,
@@ -544,7 +538,7 @@ class GPyTorchFullModel(SurrogateModel):
 
     def _initiate_optimiser(self) -> None:
 
-        parameters = []
+        parameters: list[dict[str, Iterator[torch.nn.Parameter]]] = []
         for model in self._model_list:
             parameters += model.trained_parameters
 
