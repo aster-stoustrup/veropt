@@ -10,8 +10,6 @@ import torch
 from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
-from veropt.optimiser.optimiser_utility import DataShape
-
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
 class SurrogateModel:

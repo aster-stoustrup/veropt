@@ -103,7 +103,7 @@ def list_with_floats_to_string(
         unformatted_list: Union[list[float], list[list[float]]]
 ) -> str:
 
-    if type(unformatted_list[0]) == list:
+    if type(unformatted_list[0]) is list:
 
         formatted_list = _nested_list_of_floats_to_string(unformatted_list)  # type: ignore[arg-type]
 
@@ -289,7 +289,7 @@ def get_nadir_point(
         objective_values=objective_values
     )
 
-    return pareto_values.min()
+    return pareto_values.min(dim=DataShape.index_points)[0]
 
 
 def format_output_for_objective(

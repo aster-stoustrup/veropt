@@ -109,8 +109,8 @@ def test_botorch_predict_values_1_objective() -> None:
         variable_values=variable_1_array
     )
 
-    assert bool((prediction['mean'] > prediction['lower']).min()) == True
-    assert bool((prediction['upper'] > prediction['mean']).min()) == True
+    assert bool((prediction['mean'] > prediction['lower']).min()) is True
+    assert bool((prediction['upper'] > prediction['mean']).min()) is True
 
     for prediction_band in ['mean', 'lower', 'upper']:
         assert list(prediction[prediction_band].shape) == [variable_1_array.shape[0], 1]

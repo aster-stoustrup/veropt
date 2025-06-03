@@ -136,5 +136,3 @@ class BotorchPredictor(Predictor):
         # TODO: Check if anything else need to happen here
 
         raise NotImplementedError
-
-

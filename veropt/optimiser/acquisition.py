@@ -69,7 +69,7 @@ class QLogExpectedHyperVolumeImprovement(BotorchAcquisitionFunction):
         )
 
         self.function = botorch.acquisition.multi_objective.logei.qLogExpectedHypervolumeImprovement(
-            model=model.get_gpytorch_model(),
+            model=model,
             ref_point=nadir_point,
             partitioning=partitioning
         )
