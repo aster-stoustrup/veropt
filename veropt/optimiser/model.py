@@ -8,6 +8,9 @@ import botorch
 import gpytorch
 import torch
 from gpytorch.constraints import GreaterThan, Interval, LessThan
+from gpytorch.distributions import MultivariateNormal
+
+from veropt.optimiser.optimiser_utility import DataShape
 
 
 class SurrogateModel:
@@ -37,7 +40,7 @@ class SurrogateModel:
         pass
 
 
-class GPyTorchDataModel(gpytorch.models.ExactGP):
+class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorchModel):
     _num_outputs = 1
 
     def __init__(
@@ -58,7 +61,7 @@ class GPyTorchDataModel(gpytorch.models.ExactGP):
         self.mean_module = mean_module
         self.covar_module = kernel
 
-        self.to(tensor=train_inputs)  # make sure we're on the right device/dtype
+        self.to(tensor=train_inputs)  # making sure we're on the right device/dtype
 
     def forward(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
         mean_x = self.mean_module(x)
@@ -279,12 +282,18 @@ class MaternSingleModel(GPyTorchSingleModel):
             upper_bound: float
     ) -> None:
 
-        super().change_interval_constraints(
+        self.change_interval_constraints(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
             module='covar_module',
             parameter_name='raw_lengthscale'
         )
+
+    def get_lengthscale(self) -> float:
+
+        assert self.model_with_data is not None, "Must have trained model before calling this"
+
+        return float(self.model_with_data.covar_module.lengthscale)
 
     def set_noise(
             self,
@@ -312,7 +321,7 @@ class MaternSingleModel(GPyTorchSingleModel):
 
         assert self.model_with_data is not None, "Model must be initiated to change constraints"
 
-        self.model_with_data.change_greater_than_constraint(
+        self.change_greater_than_constraint(
             lower_bound=lower_bound,
             parameter_name='raw_noise',
             module='likelihood',
@@ -345,17 +354,17 @@ class TorchModelOptimiser:
 class AdamModelOptimiser(TorchModelOptimiser):
     def __init__(
             self,
-            adam_settings: dict
+            **kwarfs: dict
     ) -> None:
 
-        for key in adam_settings.keys():
+        for key in kwarfs.keys():
             assert key in torch.optim.Adam.__init__.__code__.co_varnames, (
                 f"{key} is not an accepted argument for the torch optimiser 'Adam'."
             )
 
         super().__init__(
             optimiser_class=torch.optim.Adam,
-            optimiser_settings=adam_settings
+            optimiser_settings=kwarfs
         )
 
 
@@ -395,6 +404,8 @@ class GPyTorchFullModel(SurrogateModel):
             **kwargs
         )
 
+        assert len(single_model_list) == n_objectives, "Number of objectives must match the length of the model list"
+
         self._model_list = single_model_list
         self._model: Optional[botorch.models.ModelListGP] = None
         self._likelihood: Optional[gpytorch.likelihoods.LikelihoodList] = None
@@ -412,7 +423,7 @@ class GPyTorchFullModel(SurrogateModel):
     def __call__(
             self,
             variable_values: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> list[MultivariateNormal]:
 
         previous_mode = self._mode
 
@@ -428,12 +439,6 @@ class GPyTorchFullModel(SurrogateModel):
         )
 
         self._set_mode(model_mode=previous_mode)
-
-        # TODO: Fix output (either change type hint or change output)
-        #   - Think we want this to return mean, min, max?
-        #       - Potentially with min and max being optional? To support models without uncertainty
-        #       - That does mean adding some checks in various places
-        #   - Might want to add subclass-specific function to return native gpytorch output
 
         return estimated_objective_values
 
@@ -469,7 +474,7 @@ class GPyTorchFullModel(SurrogateModel):
 
             self._model_list[objective_number].initialise_model_with_data(
                 train_inputs=variable_values,
-                train_targets=objective_values[objective_number]
+                train_targets=objective_values[:, objective_number]
             )
 
         for model in self._model_list:
@@ -477,11 +482,13 @@ class GPyTorchFullModel(SurrogateModel):
 
         # TODO: Might need to look into more options here
         #   - Currently seems to be assuming independent models. Maybe need to add an option for this?
+        #       - Probably would need a different class (GPyTorchIndependentModels vs the opposite)
+        #       - Botorch has some options for this
         self._model = botorch.models.ModelListGP(
             *[model.model_with_data for model in self._model_list]  # type: ignore
         )
         self._likelihood = gpytorch.likelihoods.LikelihoodList(
-            *[[model.model_with_data.likelihood for model in self._model_list]]  # type: ignore[union-attr]
+            *[model.model_with_data.likelihood for model in self._model_list]  # type: ignore[union-attr]
         )
 
     def get_gpytorch_model(self) -> botorch.models.ModelListGP:
@@ -497,8 +504,8 @@ class GPyTorchFullModel(SurrogateModel):
 
         assert self._model_optimiser.optimiser is not None, "Model optimiser must be initiated to use this function"
 
-        loss_difference = torch.Tensor(1e5)  # initial values
-        loss = torch.Tensor(1e20)  # TODO: Find a way to make sure this number is always big enough
+        loss_difference = torch.tensor(1e5)  # initial values
+        loss = torch.tensor(1e20)  # TODO: Find a way to make sure this number is always big enough
         assert self.training_parameters.loss_change_to_stop < loss_difference
         iteration = 1
 
@@ -510,7 +517,7 @@ class GPyTorchFullModel(SurrogateModel):
 
             previous_loss = loss
             # Ignoring mypy here because gpytorch seems to be missing type-hints
-            loss = -1.0 * self._marginal_log_likelihood(  # type: ignore
+            loss = -self._marginal_log_likelihood(  # type: ignore
                 output,
                 self._model.train_targets
             )
@@ -538,9 +545,8 @@ class GPyTorchFullModel(SurrogateModel):
     def _initiate_optimiser(self) -> None:
 
         parameters = []
-        parameters += [model.trained_parameters for model in self._model_list]
-
-        # TODO: Come in with debugger. Mypy is mad about this.
+        for model in self._model_list:
+            parameters += model.trained_parameters
 
         self._model_optimiser.initiate_optimiser(
             parameters=parameters

@@ -6,7 +6,6 @@ from typing import Optional, Union, Unpack
 import gpytorch.settings
 import torch
 
-from veropt.optimiser.acquisition import Acquisition
 from veropt.optimiser.model import SurrogateModel
 from veropt.optimiser.normaliser import Normaliser
 from veropt.optimiser.objective import IntegratedObjective, InterfaceObjective, ObjectiveKind, determine_objective_type
@@ -64,8 +63,8 @@ class BayesianOptimiser:
         self._set_up_settings()
 
         self.initial_points_real_units = self._generate_initial_points()
-        self.evaluated_variables_real_units: torch.Tensor = torch.Tensor()
-        self.evaluated_objective_real_units: torch.Tensor = torch.Tensor()
+        self.evaluated_variables_real_units: torch.Tensor = torch.tensor([])
+        self.evaluated_objective_real_units: torch.Tensor = torch.tensor([])
 
         self.data_has_been_normalised = False
         self.model_has_been_trained = False
@@ -123,9 +122,14 @@ class BayesianOptimiser:
 
         if self.model_has_been_trained:
 
-            predicted_values_tensor = self.predictor.predict_values(variable_values=suggested_variables.tensor)
+            prediction = self.predictor.predict_values(
+                variable_values=suggested_variables.tensor
+            )
+
+            # TODO: If we're saving this anyway, should we consider saving min and max too?
+
             predicted_values = TensorWithNormalisationFlag(
-                tensor=predicted_values_tensor,
+                tensor=prediction['mean'],
                 normalised=self.return_normalised_data
             )
 

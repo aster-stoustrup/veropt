@@ -16,6 +16,9 @@ from veropt.optimiser.optimiser_utility import get_nadir_point
 #   - How do we implement dist punish stuff
 
 
+# TODO: Implement distance punishment optimiser
+
+
 class AcquisitionFunction:
 
     def __init__(self) -> None:
@@ -26,7 +29,7 @@ class AcquisitionFunction:
             points: torch.Tensor
     ) -> torch.Tensor:
 
-        assert self.function is not None, "The acquisition function must receive data before being called."
+        assert self.function is not None, "The acquisition function must receive a model before being called."
 
         return self.function(points)
 
@@ -43,11 +46,9 @@ class BotorchAcquisitionFunction(AcquisitionFunction):
         pass
 
 
-class AcquisitionBotorchqLogEHVI(BotorchAcquisitionFunction):
+class QLogExpectedHyperVolumeImprovement(BotorchAcquisitionFunction):
 
     def __init__(self) -> None:
-
-        self.function_class = botorch.acquisition.multi_objective.logei.qLogExpectedHypervolumeImprovement
 
         super().__init__()
 
@@ -68,10 +69,34 @@ class AcquisitionBotorchqLogEHVI(BotorchAcquisitionFunction):
             Y=objective_values
         )
 
-        self.function = self.function_class(
+        self.function = botorch.acquisition.multi_objective.logei.qLogExpectedHypervolumeImprovement(
             model=model.get_gpytorch_model(),
             ref_point=nadir_point,
             partitioning=partitioning
+        )
+
+
+class UpperConfidenceBound(BotorchAcquisitionFunction):
+
+    def __init__(
+            self,
+            beta: float = 3.0
+    ):
+
+        self.beta = beta
+
+        super().__init__()
+
+    def refresh(
+            self,
+            model: botorch.models.model.Model,
+            variable_values: torch.Tensor,
+            objective_values: torch.Tensor,
+    ) -> None:
+
+        self.function = botorch.acquisition.analytic.UpperConfidenceBound(
+            model=model,
+            beta=self.beta
         )
 
 
@@ -87,6 +112,12 @@ class AcquisitionOptimiser:
             acquisition_function: AcquisitionFunction,
     ) -> torch.Tensor:
         return self.optimise(acquisition_function)
+
+    def update_bounds(
+            self,
+            new_bounds: torch.Tensor
+    ) -> None:
+        self.bounds = new_bounds
 
     @abc.abstractmethod
     def optimise(
@@ -115,7 +146,7 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
     def __init__(
             self,
             bounds: torch.Tensor,
-            max_iter: int,
+            max_iter: int = 1000
     ):
         self.max_iter = max_iter
 
@@ -141,25 +172,3 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
         candidates = torch.tensor(optimisation_result.x)
 
         return candidates
-
-
-class Acquisition:
-
-    def __init__(
-            self,
-            function: AcquisitionFunction,
-            optimiser: AcquisitionOptimiser,
-    ) -> None:
-        self.function = function
-        self.optimiser = optimiser
-
-    def suggest_points(self) -> torch.Tensor:
-        return self.optimiser(self.function)
-
-    def set_bounds(
-            self,
-            new_bounds: torch.Tensor
-    ) -> None:
-        self.bounds = new_bounds
-        # TODO: Check this
-        raise NotImplementedError("Aster, confirm that nothing else needs to happen here.")

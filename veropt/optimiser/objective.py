@@ -18,6 +18,8 @@ class Objective:
         self.n_variables = n_variables
         self.n_objectives = n_objectives
 
+        # TODO: Consider dropping these defaults?
+        #   - maybe annoying for integrated objective...?
         if variable_names is None:
             self.variable_names = [f"Variable {i}" for i in range(1, n_variables + 1)]
         else:
@@ -37,6 +39,7 @@ class IntegratedObjective(Objective):
         pass
 
 
+# TODO: Consider if we want to check that var and obj names match at this level
 class InterfaceObjective(Objective):
     __metaclass__ = abc.ABCMeta
 
