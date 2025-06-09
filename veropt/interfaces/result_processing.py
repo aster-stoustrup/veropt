@@ -4,11 +4,6 @@ from veropt.interfaces.simulation import SimulationResult
 
 
 class ResultProcessor(ABC):
-    def __init__(
-            self
-    ) -> None:
-        ...
-        
     @abstractmethod
     def process(
             self,

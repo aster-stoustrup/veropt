@@ -1,4 +1,4 @@
-import abc
+from abc import ABC, abstractmethod
 import os
 import shutil
 from typing import TypeVar, Generic, List, Dict, Literal
@@ -51,7 +51,7 @@ def copy_files(
             print(f"Skipping non-file: {source_file}")
 
 
-class BatchManager(abc.ABC, Generic[SR, ConfigType]):
+class BatchManager(ABC, Generic[SR, ConfigType]):
     def __init__(
             self,
             simulation_runner: SR,
@@ -60,7 +60,7 @@ class BatchManager(abc.ABC, Generic[SR, ConfigType]):
         self.simulation_runner = simulation_runner
         self.config = config
 
-    @abc.abstractmethod
+    @abstractmethod
     def run_batch(
             self,
             list_of_parameters: List[dict]
@@ -69,6 +69,12 @@ class BatchManager(abc.ABC, Generic[SR, ConfigType]):
 
 
 class BatchManagerFactory:
+    @staticmethod
+    def make_batch_manager_config(
+        experiment_mode: Literal["local", "local_slurm", "remote_slurm"]
+    ) -> ConfigType:
+        raise NotImplementedError
+
     @staticmethod
     def make_batch_manager(
         experiment_mode: Literal["local", "local_slurm", "remote_slurm"], 
