@@ -60,11 +60,11 @@ class LocalSimulation(Simulation):
     """Run a simulation in a specified environment as a subprocess."""
     def __init__(
             self,
-            id: str,
+            simulation_id: str,
             setup_path: str,
             env_manager: EnvManager
     ) -> None:
-        self.id = id
+        self.id = simulation_id
         self.setup_path = setup_path
         self.env_manager = env_manager
     
@@ -96,9 +96,9 @@ class MockRunner(SimulationRunner):
     """A mock simulation runner for testing purposes."""
     def __init__(
             self,
-            cfg: MockConfig
+            config: MockConfig
     ) -> None:
-        self.cfg = cfg
+        self.config = config
 
     def set_up_and_run(
             self,
@@ -107,7 +107,7 @@ class MockRunner(SimulationRunner):
             setup_path: Optional[str] = None,
             setup_name: Optional[str] = None
     ) -> SimulationResult:
-        print(f"Running test simulation with parameters: {parameters} and config: {self.cfg.model_dump()}")
+        print(f"Running test simulation with parameters: {parameters} and config: {self.config.model_dump()}")
         return SimulationResult(
             simulation_id=id,
             stdout_file="test_stdout.txt",
@@ -132,9 +132,9 @@ class LocalVerosRunner(SimulationRunner):
     """Set up and run a Veros simulation in a local environment."""
     def __init__(
             self,
-            cfg: LocalVerosConfig
+            config: LocalVerosConfig
     ) -> None:
-        self.cfg = cfg
+        self.config = config
 
     # TODO: Should there be a way to override the command to include custom settings?
     def _make_command(
@@ -142,9 +142,9 @@ class LocalVerosRunner(SimulationRunner):
             setup: str,
             setup_path: str
     ) -> str:
-        gpu_string = f"--backend {self.cfg.backend} --device {self.cfg.device}"
+        gpu_string = f"--backend {self.config.backend} --device {self.config.device}"
         # TODO: Using "veros_path" here is misleading. It should be the path to the Veros executable.
-        command = f"cd {setup_path} && {self.cfg.veros_path} run {gpu_string} --float-type {self.cfg.float_type} {setup}"
+        command = f"cd {setup_path} && {self.config.veros_path} run {gpu_string} --float-type {self.config.float_type} {setup}"
         return command
 
     def _edit_setup_file(
@@ -171,30 +171,30 @@ class LocalVerosRunner(SimulationRunner):
 
     def set_up_and_run(
             self,
-            id: str,
+            simulation_id: str,
             parameters: dict,
             setup_path: str,
             setup_name: str
     ) -> SimulationResult:
         setup = os.path.join(setup_path, f"{setup_name}.py")
-        self._edit_setup_file(setup, parameters) if not self.cfg.keep_old_params else ...
-        command = self._make_command(setup, setup_path) if self.cfg.command is None else self.cfg.command
+        self._edit_setup_file(setup, parameters) if not self.config.keep_old_params else None
+        command = self._make_command(setup, setup_path) if self.config.command is None else self.config.command
 
         # TODO: This is bad. It should be a factory method or similar?
         env_manager_classes = {
             "conda": Conda,
             "venv": Venv,
         }
-        EnvManagerClass = env_manager_classes[self.cfg.env_manager]
+        EnvManagerClass = env_manager_classes[self.config.env_manager]
         
         env_manager = EnvManagerClass(
-            path_to_env=self.cfg.path_to_env,
-            env_name=self.cfg.env_name,
+            path_to_env=self.config.path_to_env,
+            env_name=self.config.env_name,
             command=command
         )
 
         simulation = LocalSimulation(
-            id=id,
+            simulation_id=simulation_id,
             setup_path=setup_path, 
             env_manager=env_manager)
         result = simulation.run()
