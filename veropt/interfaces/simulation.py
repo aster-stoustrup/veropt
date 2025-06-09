@@ -7,6 +7,7 @@ import os
 # TODO: Do we stick with TypeDict throughout or can we use BaseModel?
 class SimulationResult(BaseModel):
     simulation_id: str
+    parameters: dict
     stdout_file: str
     stderr_file: str
     return_code: int
@@ -15,7 +16,8 @@ class SimulationResult(BaseModel):
 class Simulation(abc.ABC):
     @abc.abstractmethod
     def run(
-            self
+            self,
+            parameters: dict
     ) -> SimulationResult:
         ...
 

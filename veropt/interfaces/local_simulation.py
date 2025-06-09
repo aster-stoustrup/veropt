@@ -70,7 +70,8 @@ class LocalSimulation(Simulation):
     
     # TODO: Should there be an option to supress output files?
     def run(
-            self
+            self,
+            parameters: dict
     ) -> SimulationResult:
         result = self.env_manager.run_in_env()
         stdout_file = f"{self.setup_path}/{self.id}.out"
@@ -81,35 +82,37 @@ class LocalSimulation(Simulation):
             f_err.write(result.stderr)
         return SimulationResult(
             simulation_id=self.id,
+            parameters=parameters,
             stdout_file=stdout_file,
             stderr_file=stderr_file,
             return_code=result.returncode
         )
 
 
-class MockConfig(BaseModel):
+class MockSimulationConfig(BaseModel):
     cfg1: str
     cfg2: str
 
 
-class MockRunner(SimulationRunner):
+class MockSimulationRunner(SimulationRunner):
     """A mock simulation runner for testing purposes."""
     def __init__(
             self,
-            config: MockConfig
+            config: MockSimulationConfig
     ) -> None:
         self.config = config
 
     def set_up_and_run(
             self,
-            id: str,
+            simulation_id: str,
             parameters: dict,
             setup_path: Optional[str] = None,
             setup_name: Optional[str] = None
     ) -> SimulationResult:
         print(f"Running test simulation with parameters: {parameters} and config: {self.config.model_dump()}")
         return SimulationResult(
-            simulation_id=id,
+            simulation_id=simulation_id,
+            parameters=parameters,
             stdout_file="test_stdout.txt",
             stderr_file="test_stderr.txt",
             return_code=0
@@ -197,5 +200,5 @@ class LocalVerosRunner(SimulationRunner):
             simulation_id=simulation_id,
             setup_path=setup_path, 
             env_manager=env_manager)
-        result = simulation.run()
+        result = simulation.run(parameters=parameters)
         return result
