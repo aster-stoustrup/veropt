@@ -1,7 +1,7 @@
 import abc
 import os
 import shutil
-from typing import TypeVar, Generic, List, Dict
+from typing import TypeVar, Generic, List, Dict, Literal
 from pydantic import BaseModel
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner
 
@@ -55,18 +55,53 @@ class BatchManager(abc.ABC, Generic[SR, ConfigType]):
     def __init__(
             self,
             simulation_runner: SR,
-            list_of_parameters: List[dict],
             config: ConfigType
     ) -> None:
         self.simulation_runner = simulation_runner
-        self.list_of_parameters = list_of_parameters
         self.config = config
 
     @abc.abstractmethod
     def run_batch(
-            self
+            self,
+            list_of_parameters: List[dict]
     ) -> List[SimulationResult]:
         ...
+
+
+class BatchManagerFactory:
+    @staticmethod
+    def make_batch_manager(
+        experiment_mode: Literal["local", "local_slurm", "remote_slurm"], 
+        simulation_runner: SR,
+        config: ConfigType
+    ) -> BatchManager:
+        
+        if experiment_mode == "local":
+
+            assert isinstance(config, LocalBatchManagerConfig)
+
+            return LocalBatchManager(
+                simulation_runner=simulation_runner,
+                config=config
+            )
+        
+        elif experiment_mode == "local_slurm":
+
+            assert isinstance(config, LocalSlurmBatchManagerConfig)
+
+            return LocalSlurmBatchManager(             
+                simulation_runner=simulation_runner,
+                config=config
+            )
+        
+        elif experiment_mode == "remote_slurm":
+
+            assert isinstance(config, RemoteSlurmBatchManagerConfig)
+
+            return RemoteSlurmBatchManager(             
+                simulation_runner=simulation_runner,
+                config=config
+            )
 
 
 class LocalBatchManagerConfig(BaseModel):
@@ -90,7 +125,8 @@ class LocalBatchManager(BatchManager):
 
 
     def run_batch(
-            self
+            self,
+            list_of_parameters: List[dict]
     ) -> List[SimulationResult]:
         
         results = []
@@ -99,7 +135,7 @@ class LocalBatchManager(BatchManager):
 
         create_directories(path=self.config.experiment_directory, names=directory_names)
 
-        for parameters, id in zip(self.list_of_parameters, point_ids):
+        for parameters, id in zip(list_of_parameters, point_ids):
 
             setup_path = os.path.join(self.config.experiment_directory, "results", id)
 
@@ -114,8 +150,35 @@ class LocalBatchManager(BatchManager):
                 setup_path=setup_path,
                 setup_name=self.config.experiment_id)
             
-            assert isinstance(result, (SimulationResult, List[SimulationResult]))
+            # TODO: How to assert that list entries are SimulationResults?
+            assert isinstance(result, (SimulationResult, list))
 
             results.extend(result if isinstance(result, list) else [result])
 
         return results
+
+
+class LocalSlurmBatchManagerConfig(BaseModel):
+    ...
+
+
+class LocalSlurmBatchManager(BatchManager):
+    def run_batch(
+            self,
+            list_of_parameters: List[dict]
+    ) -> List[SimulationResult]:
+        # TODO: Implement
+        raise NotImplementedError
+    
+
+class RemoteSlurmBatchManagerConfig(BaseModel):
+    ...
+    
+
+class RemoteSlurmBatchManager(BatchManager):
+    def run_batch(
+            self,
+            list_of_parameters: List[dict]
+    ) -> List[SimulationResult]:
+        # TODO: Implement
+        raise NotImplementedError
