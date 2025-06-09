@@ -114,13 +114,8 @@ class LocalBatchManager(BatchManager):
                 setup_path=setup_path,
                 setup_name=self.config.experiment_id)
             
-            if isinstance(result, SimulationResult):
-                results.append(result) 
-            elif isinstance(result, List[SimulationResult]):
-                for r in result:
-                    results.append(r)
-            else:
-                # TODO: is this redundant?
-                raise TypeError("The result of save_set_up_and_run must be a SimulationResult or a list of SimulationResults.")
+            assert isinstance(result, (SimulationResult, List[SimulationResult]))
+
+            results.extend(result if isinstance(result, list) else [result])
 
         return results
