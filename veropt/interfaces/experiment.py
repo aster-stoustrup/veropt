@@ -6,6 +6,7 @@ import os
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner
 from veropt.interfaces.batch_manager import BatchManager, BatchManagerFactory
 from veropt.interfaces.result_processing import ResultProcessor
+from veropt.mock_optimizer import MockOptimizer, OptimizerObject
 
 SR = TypeVar("SR", bound=SimulationRunner)
 ConfigType = TypeVar("ConfigType", bound=BaseModel)
@@ -70,31 +71,21 @@ class ExperimentalState(BaseModel):
 class Experiment:
     def __init__(
         self, 
-        state: ExperimentalState,
-        result_processor: ResultProcessor,
         simulation_runner: SimulationRunner,
+        result_processor: ResultProcessor,
         experiment_config: ConfigType,
+        state: Optional[ExperimentalState] = None,
         batch_manager: Optional[BatchManager] = None
     ) -> None:
         
         self.experiment_config = experiment_config
-        self.state = state or ExperimentalState()
-        self.result_processor = result_processor
+        self.state = ExperimentalState() if state is None else state
         self.simulation_runner = simulation_runner
-        # TODO: Things are becoming messy here;
-        #       Need to think about config structure.
-        self.batch_manager = BatchManagerFactory.make_batch_manager(
-            experiment_mode=self.experiment_config.experiment_mode,
-            simulation_runner=self.simulation_runner,
-            config=self.batch_manager_config
-        ) if batch_manager is None else batch_manager
+        self.result_processor = result_processor
+        self.batch_manager = batch_manager
+        self.experimental_set_up_initialized = False
 
     def initialize_directory_structure(
-            self
-    ) -> None:
-        ...
-
-    def initialize_configs(
             self
     ) -> None:
         ...
@@ -104,11 +95,25 @@ class Experiment:
     ) -> None:
         ...
 
+    def initialize_batch_manager(
+            self
+    ) -> None:
+        
+        self.batch_manager_config = BatchManagerFactory.make_batch_manager_config(
+            experiment_mode=self.experiment_config.experiment_mode
+        )
+        
+        self.batch_manager = BatchManagerFactory.make_batch_manager(
+            experiment_mode=self.experiment_config.experiment_mode,
+            simulation_runner=self.simulation_runner,
+            config=self.batch_manager_config
+        )
+
     # TODO: is this redundant?
     def _check_initialization(
             self
     ) -> None:
-        
+        assert isinstance(self.simulation_runner, SimulationRunner)
         assert isinstance(self.batch_manager, BatchManager)
         assert isinstance(self.result_processor, ResultProcessor)
 
@@ -126,7 +131,6 @@ class Experiment:
     #       with a loader method?
         ...
 
-
     def _sanity_check(
             self,
             list_of_parameters: List[dict],
@@ -140,18 +144,26 @@ class Experiment:
         """
         ...
 
-    def run_optimization_experiment(
+    def initialize_experimental_set_up(
             self
     ) -> None:
         
-        # initialization
         self.initialize_directory_structure()
-        self.initialize_configs()  # how to do this???
         self.initialize_optimizer()
-        self._check_initialization()
         
-        # run
-        for i in self.n_iterations:
+        if self.batch_manager is None:
+            self.initialize_batch_manager()
+
+        self._check_initialization()
+
+        self.experimental_set_up_initialized = True
+        
+    def run_optimization_step(
+            self
+    ) -> None:
+            
+            assert self.experimental_set_up_initialized == True
+
             list_of_parameters = self.get_parameters_from_optimizer()
             results = self.batch_manager.run_batch(list_of_parameters)
             objectives = self.result_processor.process(results)
@@ -159,6 +171,18 @@ class Experiment:
             self.state.update(list_of_parameters, results, objectives)
             self.state.save_to_json(self.path)
             self.send_objectives_to_optimizer(objectives)
+
+    def run_optimization_experiment(
+            self
+    ) -> None:
+        
+        # initialization
+        if not self.experimental_set_up_initialized:
+            self.initialize_experimental_set_up()
+        
+        # run
+        for i in self.n_iterations:
+            self.run_optimization_step()
 
     def restart_optimization_experiment(
             self
