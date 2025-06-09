@@ -1,4 +1,5 @@
 import abc
+from enum import Enum
 import json
 import os
 import subprocess
@@ -22,7 +23,7 @@ class EnvManager(abc.ABC):
     def run_in_env(
             self
     ) -> subprocess.CompletedProcess:
-        pass
+        ...
 
 
 class Conda(EnvManager):
@@ -115,16 +116,8 @@ class MockRunner(SimulationRunner):
         )
 
 
-from enum import Enum
-
-
-class EnvManagerType(Enum):
-    conda = "conda"
-    venv = "venv"
-
-
 class LocalVerosConfig(BaseModel):
-    env_manager: EnvManagerType
+    env_manager: Literal["conda", "venv"]
     env_name: str
     path_to_env: str
     veros_path: str
