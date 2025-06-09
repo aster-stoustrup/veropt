@@ -6,25 +6,25 @@ import os
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner
 from veropt.interfaces.batch_manager import BatchManager, BatchManagerFactory
 from veropt.interfaces.result_processing import ResultProcessor
-from veropt.mock_optimizer import MockOptimizer, OptimizerObject
+from veropt.mock_optimiser import MockOptimiser, OptimiserObject
 
 SR = TypeVar("SR", bound=SimulationRunner)
 ConfigType = TypeVar("ConfigType", bound=BaseModel)
 
 # TODO: Aster, how to handle nan inputs? 
-# TODO: Aster, do we implement an option to minimize or maximize in the experiment 
-#       (and maximize in VerOpt core by default)?
+# TODO: Aster, do we implement an option to minimise or maximise in the experiment 
+#       (and maximise in VerOpt core by default)?
 # TODO: Aster, should VerOpt core be able to read in pre-simulated initial points?
-# TODO: Aster, how to ensure that the objectives passed on to the optimizer
+# TODO: Aster, how to ensure that the objectives passed on to the optimiser
 #       are in the correct order?    
 # TODO: Should the console output be saved when experiment is finished or stopped?
-# TODO: Aster, here is the list of what experiment wants from the optimizer:
-#       - At minimum, what info do I have to pass to the optimizer to initialize it?
+# TODO: Aster, here is the list of what experiment wants from the optimiser:
+#       - At minimum, what info do I have to pass to the optimiser to initialise it?
 #       - Default hyperparameter options for default models
-#       - Should Experiment take in the optimizer object in order to change the hyperparameters easily?
+#       - Should Experiment take in the optimiser object in order to change the hyperparameters easily?
 #       - How to run a single optimization step?
 #       - How to access objective functions vals and coords in order to sanity check?
-#       - If possible, a log of what optimizer does per optimization step
+#       - If possible, a log of what optimiser does per optimization step
 
 class ExperimentalState(BaseModel):
     history: List[Dict[str, Any]] = Field(default_factory=list)
@@ -83,19 +83,19 @@ class Experiment:
         self.simulation_runner = simulation_runner
         self.result_processor = result_processor
         self.batch_manager = batch_manager
-        self.experimental_set_up_initialized = False
+        self.experimental_set_up_initialised = False
 
-    def initialize_directory_structure(
+    def initialise_directory_structure(
             self
     ) -> None:
         ...
 
-    def initialize_optimizer(
+    def initialise_optimiser(
             self
     ) -> None:
         ...
 
-    def initialize_batch_manager(
+    def initialise_batch_manager(
             self
     ) -> None:
         
@@ -117,12 +117,12 @@ class Experiment:
         assert isinstance(self.batch_manager, BatchManager)
         assert isinstance(self.result_processor, ResultProcessor)
 
-    def get_parameters_from_optimizer(
+    def get_parameters_from_optimiser(
         self
     ) -> List[dict]:
         ...
 
-    def send_objectives_to_optimizer(
+    def send_objectives_to_optimiser(
             self,
             objectives: List[float]
     ) -> None:
@@ -144,41 +144,41 @@ class Experiment:
         """
         ...
 
-    def initialize_experimental_set_up(
+    def initialise_experimental_set_up(
             self
     ) -> None:
         
-        self.initialize_directory_structure()
-        self.initialize_optimizer()
+        self.initialise_directory_structure()
+        self.initialise_optimiser()
         
         if self.batch_manager is None:
-            self.initialize_batch_manager()
+            self.initialise_batch_manager()
 
         self._check_initialization()
 
-        self.experimental_set_up_initialized = True
+        self.experimental_set_up_initialised = True
         
     def run_optimization_step(
             self
     ) -> None:
             
-            assert self.experimental_set_up_initialized == True
+            assert self.experimental_set_up_initialised == True
 
-            list_of_parameters = self.get_parameters_from_optimizer()
+            list_of_parameters = self.get_parameters_from_optimiser()
             results = self.batch_manager.run_batch(list_of_parameters)
             objectives = self.result_processor.process(results)
             self._sanity_check(list_of_parameters, results, objectives)
             self.state.update(list_of_parameters, results, objectives)
             self.state.save_to_json(self.path)
-            self.send_objectives_to_optimizer(objectives)
+            self.send_objectives_to_optimiser(objectives)
 
     def run_optimization_experiment(
             self
     ) -> None:
         
         # initialization
-        if not self.experimental_set_up_initialized:
-            self.initialize_experimental_set_up()
+        if not self.experimental_set_up_initialised:
+            self.initialise_experimental_set_up()
         
         # run
         for i in self.n_iterations:

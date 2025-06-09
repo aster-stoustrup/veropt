@@ -64,7 +64,7 @@ class LocalSimulation(Simulation):
             setup_path: str,
             env_manager: EnvManager
     ) -> None:
-        self.id = simulation_id
+        self.simulation_id = simulation_id
         self.setup_path = setup_path
         self.env_manager = env_manager
     
@@ -74,14 +74,14 @@ class LocalSimulation(Simulation):
             parameters: dict
     ) -> SimulationResult:
         result = self.env_manager.run_in_env()
-        stdout_file = f"{self.setup_path}/{self.id}.out"
-        stderr_file = f"{self.setup_path}/{self.id}.err"
+        stdout_file = f"{self.setup_path}/{self.simulation_id}.out"
+        stderr_file = f"{self.setup_path}/{self.simulation_id}.err"
         with open(stdout_file, "w") as f_out:
             f_out.write(result.stdout)
         with open(stderr_file, "w") as f_err:
             f_err.write(result.stderr)
         return SimulationResult(
-            simulation_id=self.id,
+            simulation_id=self.simulation_id,
             parameters=parameters,
             stdout_file=stdout_file,
             stderr_file=stderr_file,

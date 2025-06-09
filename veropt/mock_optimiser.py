@@ -2,16 +2,16 @@ from typing import Dict
 from pydantic import BaseModel
 
 
-class OptimizerObject(BaseModel):
+class OptimiserObject(BaseModel):
     n_init_points: int
     n_Bayes_points: int
     n_evals_per_step: int
     
 
-class MockOptimizer:
+class MockOptimiser:
     def __init__(
             self,
-            points = Dict
+            points: dict
     ) -> None:
         self.points = points 
 
