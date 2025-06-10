@@ -76,7 +76,7 @@ class BotorchPredictor(Predictor):
         super().__init__()
 
     @staticmethod
-    def _check_input[T, **P](
+    def _check_input_dimensions[T, **P](
             function: Callable[P, T]
     ) -> Callable[P, T]:
 
@@ -109,7 +109,7 @@ class BotorchPredictor(Predictor):
 
         return check_dimensions
 
-    @_check_input
+    @_check_input_dimensions
     def predict_values(
             self,
             *,
@@ -148,7 +148,7 @@ class BotorchPredictor(Predictor):
         return candidates
 
     @check_variable_objective_values_matching
-    @_check_input
+    @_check_input_dimensions
     def update_with_new_data(
             self,
             *,

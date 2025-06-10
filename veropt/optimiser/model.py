@@ -2,7 +2,7 @@ import abc
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterator, Optional, TypedDict, Union, Unpack
+from typing import Callable, Iterator, Optional, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
@@ -10,7 +10,8 @@ import torch
 from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
-from veropt.optimiser.utility import check_variable_objective_values_matching
+from veropt.optimiser.utility import check_variable_and_objective_shapes, check_variable_objective_values_matching, \
+    unpack_variables_objectives_from_kwargs
 
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
@@ -414,6 +415,41 @@ class GPyTorchFullModel(SurrogateModel):
             n_objectives=n_objectives
         )
 
+    @staticmethod
+    def _check_input_dimensions[T, **P](
+            function: Callable[P, T]
+    ) -> Callable[P, T]:
+
+        def check_dimensions(
+                *args: P.args,
+                **kwargs: P.kwargs,
+        ) -> T:
+
+            self = args[0]
+            assert type(self) is GPyTorchFullModel
+
+            variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)
+
+            if variable_values is None and objective_values is None:
+                raise RuntimeError("This decorator was called to check input shapes but found no valid inputs.")
+
+            check_variable_and_objective_shapes(
+                n_variables=self.n_variables,
+                n_objectives=self.n_objectives,
+                function_name=function.__name__,
+                class_name=self.__class__.__name__,
+                variable_values=variable_values,
+                objective_values=objective_values,
+            )
+
+            return function(
+                *args,
+                **kwargs
+            )
+
+        return check_dimensions
+
+    @_check_input_dimensions
     def __call__(
             self,
             variable_values: torch.Tensor
@@ -437,6 +473,7 @@ class GPyTorchFullModel(SurrogateModel):
         return estimated_objective_values
 
     @check_variable_objective_values_matching
+    @_check_input_dimensions
     def train_model(
             self,
             variable_values: torch.Tensor,
@@ -459,6 +496,8 @@ class GPyTorchFullModel(SurrogateModel):
 
         self._train_backwards()
 
+    @check_variable_objective_values_matching
+    @_check_input_dimensions
     def initialise_model(
             self,
             variable_values: torch.Tensor,

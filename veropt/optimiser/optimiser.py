@@ -1,7 +1,7 @@
 from copy import deepcopy
 from functools import cached_property
 from inspect import get_annotations
-from typing import Optional, Union, Unpack
+from typing import Callable, Optional, Union, Unpack
 
 import gpytorch.settings
 import torch
@@ -16,6 +16,8 @@ from veropt.optimiser.optimiser_utility import (
     list_with_floats_to_string
 )
 from veropt.optimiser.prediction import Predictor
+from veropt.optimiser.utility import check_variable_and_objective_shapes, \
+    unpack_flagged_variables_objectives_from_kwargs
 
 
 def generate_initial_points_random(
@@ -79,6 +81,40 @@ class BayesianOptimiser:
         )
 
         self._verify_set_up()
+
+    @staticmethod
+    def _check_input_dimensions[T, **P](
+            function: Callable[P, T]
+    ) -> Callable[P, T]:
+
+        def check_dimensions(
+                *args: P.args,
+                **kwargs: P.kwargs,
+        ) -> T:
+
+            self = args[0]
+            assert type(self) is BayesianOptimiser
+
+            variable_values, objective_values = unpack_flagged_variables_objectives_from_kwargs(kwargs)
+
+            if variable_values is None and objective_values is None:
+                raise RuntimeError("This decorator was called to check input shapes but found no valid inputs.")
+
+            check_variable_and_objective_shapes(
+                n_variables=self.n_variables,
+                n_objectives=self.n_objectives,
+                function_name=function.__name__,
+                class_name=self.__class__.__name__,
+                variable_values=variable_values,
+                objective_values=objective_values,
+            )
+
+            return function(
+                *args,
+                **kwargs
+            )
+
+        return check_dimensions
 
     def run_optimisation_step(self) -> None:
 
@@ -193,31 +229,35 @@ class BayesianOptimiser:
             )
         )
 
+    @_check_input_dimensions
     def _add_new_points(
             self,
-            new_variables: TensorWithNormalisationFlag,
-            new_values: TensorWithNormalisationFlag
+            variable_values: TensorWithNormalisationFlag,
+            objective_values: TensorWithNormalisationFlag
     ) -> None:
 
-        assert new_variables.normalised is False
-        assert new_values.normalised is False
+        assert variable_values.normalised is False
+        assert objective_values.normalised is False
 
-        assert new_variables.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
-        assert new_values.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
+        # TODO: Write good error message
+        #   - Could also move this check somewhere...?
+        #   - Then again, maybe we want a more flexible way to handle this in the future...?
+        assert variable_values.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
+        assert objective_values.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
 
         if self.n_points_evaluated == 0:
 
-            self.evaluated_variables_real_units = new_variables.tensor.detach()
-            self.evaluated_objective_real_units = new_values.tensor.detach()
+            self.evaluated_variables_real_units = variable_values.tensor.detach()
+            self.evaluated_objective_real_units = objective_values.tensor.detach()
 
         else:
 
             self.evaluated_variables_real_units = torch.cat(
-                tensors=[self.evaluated_variables_real_units, new_variables.tensor.detach()],
+                tensors=[self.evaluated_variables_real_units, variable_values.tensor.detach()],
                 dim=DataShape.index_points
             )
             self.evaluated_objective_real_units = torch.cat(
-                tensors=[self.evaluated_objective_real_units, new_values.tensor.detach()],
+                tensors=[self.evaluated_objective_real_units, objective_values.tensor.detach()],
                 dim=DataShape.index_points
             )
 
@@ -265,11 +305,11 @@ class BayesianOptimiser:
         )
 
         self._add_new_points(
-            new_variables=TensorWithNormalisationFlag(
+            variable_values=TensorWithNormalisationFlag(
                 tensor=new_variable_values_tensor,
                 normalised=False
             ),
-            new_values=TensorWithNormalisationFlag(
+            objective_values=TensorWithNormalisationFlag(
                 tensor=new_objective_values_tensor,
                 normalised=False
             )
@@ -375,6 +415,7 @@ class BayesianOptimiser:
             raise NotImplementedError
             # print("Normalisation has been completed.")
 
+    @_check_input_dimensions
     def _unnormalise_variables(
             self,
             variable_values: TensorWithNormalisationFlag

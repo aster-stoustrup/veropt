@@ -2,7 +2,7 @@ from typing import Callable, Optional
 
 import torch
 
-from veropt.optimiser.optimiser_utility import DataShape
+from veropt.optimiser.optimiser_utility import DataShape, TensorWithNormalisationFlag
 
 
 def check_variable_values_shape(
@@ -131,6 +131,27 @@ def unpack_variables_objectives_from_kwargs(
     if 'objective_values' in kwargs:
         objective_values = kwargs['objective_values']
         assert type(objective_values) is torch.Tensor
+    else:
+        objective_values = None
+
+    return variable_values, objective_values
+
+
+def unpack_flagged_variables_objectives_from_kwargs(
+        kwargs: dict
+) -> tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+
+    if 'variable_values' in kwargs:
+        flagged_variable_values = kwargs['variable_values']
+        assert type(flagged_variable_values) is TensorWithNormalisationFlag
+        variable_values = flagged_variable_values.tensor
+    else:
+        variable_values = None
+
+    if 'objective_values' in kwargs:
+        flagged_objective_values = kwargs['objective_values']
+        assert type(flagged_objective_values) is TensorWithNormalisationFlag
+        objective_values = flagged_objective_values.tensor
     else:
         objective_values = None
 
