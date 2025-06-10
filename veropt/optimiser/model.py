@@ -10,6 +10,8 @@ import torch
 from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
+from veropt.optimiser.utility import check_variable_objective_values_matching
+
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
 class SurrogateModel:
@@ -434,6 +436,7 @@ class GPyTorchFullModel(SurrogateModel):
 
         return estimated_objective_values
 
+    @check_variable_objective_values_matching
     def train_model(
             self,
             variable_values: torch.Tensor,

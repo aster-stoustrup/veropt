@@ -1,11 +1,13 @@
 import abc
-from typing import TypedDict
+from typing import Callable, TypedDict
 
 import torch
 
 from veropt.optimiser.acquisition import AcquisitionOptimiser, BotorchAcquisitionFunction
 from veropt.optimiser.model import GPyTorchFullModel
 from veropt.optimiser.optimiser_utility import DataShape
+from veropt.optimiser.utility import check_variable_and_objective_shapes, check_variable_objective_values_matching, \
+    unpack_variables_objectives_from_kwargs
 
 
 # TODO: If PEP 764 is accepted, convert this to inline
@@ -21,6 +23,7 @@ class Predictor:
     @abc.abstractmethod
     def predict_values(
             self,
+            *,
             variable_values: torch.Tensor,
     ) -> PredictionDict:
         pass
@@ -35,6 +38,7 @@ class Predictor:
     @abc.abstractmethod
     def update_with_new_data(
             self,
+            *,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor,
     ) -> None:
@@ -71,8 +75,44 @@ class BotorchPredictor(Predictor):
 
         super().__init__()
 
+    @staticmethod
+    def _check_input[T, **P](
+            function: Callable[P, T]
+    ) -> Callable[P, T]:
+
+        def check_dimensions(
+                *args: P.args,
+                **kwargs: P.kwargs,
+        ) -> T:
+
+            self = args[0]
+            assert type(self) is BotorchPredictor
+
+            variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)
+
+            if variable_values is None and objective_values is None:
+                raise RuntimeError("This decorator was called to check input shapes but found no valid inputs.")
+
+            check_variable_and_objective_shapes(
+                n_variables=self.model.n_variables,
+                n_objectives=self.model.n_objectives,
+                function_name=function.__name__,
+                class_name=self.__class__.__name__,
+                variable_values=variable_values,
+                objective_values=objective_values,
+            )
+
+            return function(
+                *args,
+                **kwargs
+            )
+
+        return check_dimensions
+
+    @_check_input
     def predict_values(
             self,
+            *,
             variable_values: torch.Tensor
     ) -> PredictionDict:
 
@@ -107,8 +147,11 @@ class BotorchPredictor(Predictor):
 
         return candidates
 
+    @check_variable_objective_values_matching
+    @_check_input
     def update_with_new_data(
             self,
+            *,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor
     ) -> None:
