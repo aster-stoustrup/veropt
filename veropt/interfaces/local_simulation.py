@@ -61,27 +61,27 @@ class LocalSimulation(Simulation):
     def __init__(
             self,
             simulation_id: str,
-            setup_path: str,
+            run_script_directory: str,
             env_manager: EnvManager
     ) -> None:
-        self.simulation_id = simulation_id
-        self.setup_path = setup_path
+        self.id = simulation_id
+        self.run_script_directory = run_script_directory
         self.env_manager = env_manager
     
     # TODO: Should there be an option to supress output files?
     def run(
             self,
-            parameters: dict
+            parameters: Dict[str,float]
     ) -> SimulationResult:
         result = self.env_manager.run_in_env()
-        stdout_file = f"{self.setup_path}/{self.simulation_id}.out"
-        stderr_file = f"{self.setup_path}/{self.simulation_id}.err"
+        stdout_file = f"{self.run_script_directory}/{self.id}.out"
+        stderr_file = f"{self.run_script_directory}/{self.id}.err"
         with open(stdout_file, "w") as f_out:
             f_out.write(result.stdout)
         with open(stderr_file, "w") as f_err:
             f_err.write(result.stderr)
         return SimulationResult(
-            simulation_id=self.simulation_id,
+            simulation_id=self.id,
             parameters=parameters,
             stdout_file=stdout_file,
             stderr_file=stderr_file,
@@ -105,9 +105,9 @@ class MockSimulationRunner(SimulationRunner):
     def set_up_and_run(
             self,
             simulation_id: str,
-            parameters: dict,
-            setup_path: Optional[str] = None,
-            setup_name: Optional[str] = None
+            parameters: Dict[str,float],
+            run_script_directory: Optional[str] = None,
+            run_script_filename: Optional[str] = None
     ) -> SimulationResult:
         print(f"Running test simulation with parameters: {parameters} and config: {self.config.model_dump()}")
         return SimulationResult(
@@ -142,20 +142,20 @@ class LocalVerosRunner(SimulationRunner):
     # TODO: Should there be a way to override the command to include custom settings?
     def _make_command(
             self,
-            setup: str,
-            setup_path: str
+            run_script: str,
+            run_script_directory: str
     ) -> str:
         gpu_string = f"--backend {self.config.backend} --device {self.config.device}"
         # TODO: Using "veros_path" here is misleading. It should be the path to the Veros executable.
-        command = f"cd {setup_path} && {self.config.veros_path} run {gpu_string} --float-type {self.config.float_type} {setup}"
+        command = f"cd {run_script_directory} && {self.config.veros_path} run {gpu_string} --float-type {self.config.float_type} {run_script}"
         return command
 
-    def _edit_setup_file(
+    def _edit_run_script(
             self,
-            setup: str,
-            parameters: dict
+            run_script: str,
+            parameters: Dict[str,float]
     ) -> None:
-        with open(setup, 'r') as file:
+        with open(run_script, 'r') as file:
             data = file.readlines()
 
         # TODO: This is not robust. Need to figure out how to handle the indentation.
@@ -169,19 +169,19 @@ class LocalVerosRunner(SimulationRunner):
                     data[i] = f"        settings.{key} = {value}  # default {old_line}\n"
                     break
 
-        with open(setup, 'w') as file:
+        with open(run_script, 'w') as file:
             file.writelines(data)
 
     def set_up_and_run(
             self,
             simulation_id: str,
-            parameters: dict,
-            setup_path: str,
-            setup_name: str
+            parameters: Dict[str,float],
+            run_script_directory: str,
+            run_script_filename: str
     ) -> SimulationResult:
-        setup = os.path.join(setup_path, f"{setup_name}.py")
-        self._edit_setup_file(setup, parameters) if not self.config.keep_old_params else None
-        command = self._make_command(setup, setup_path) if self.config.command is None else self.config.command
+        run_script = os.path.join(run_script_directory, f"{run_script_filename}.py")
+        self._edit_run_script(run_script, parameters) if not self.config.keep_old_params else None
+        command = self._make_command(run_script, run_script_directory) if self.config.command is None else self.config.command
 
         # TODO: This is bad. It should be a factory method or similar?
         env_manager_classes = {
@@ -198,7 +198,7 @@ class LocalVerosRunner(SimulationRunner):
 
         simulation = LocalSimulation(
             simulation_id=simulation_id,
-            setup_path=setup_path, 
+            run_script_directory=run_script_directory, 
             env_manager=env_manager)
         result = simulation.run(parameters=parameters)
         return result
