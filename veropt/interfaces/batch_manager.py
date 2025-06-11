@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from enum import StrEnum
 import os
 import shutil
 from typing import TypeVar, Generic, List, Dict, Literal
@@ -8,6 +9,12 @@ from veropt.interfaces.simulation import SimulationResult, SimulationRunner
 
 SR = TypeVar("SR", bound=SimulationRunner)
 ConfigType = TypeVar("ConfigType", bound=BaseModel)
+
+
+class ExperimentMode(StrEnum):
+    LOCAL = "local"
+    LOCAL_SLURM = "local_slurm"
+    REMOTE_SLURM = "remote_slurm"
 
 
 def create_directories(
@@ -51,19 +58,17 @@ def copy_files(
             print(f"Skipping non-file: {source_file}")
 
 
-class BatchManager(ABC, Generic[SR, ConfigType]):
+class BatchManager(ABC, Generic[SR]):
     def __init__(
             self,
             simulation_runner: SR,
-            config: ConfigType
     ) -> None:
         self.simulation_runner = simulation_runner
-        self.config = config
 
     @abstractmethod
     def run_batch(
             self,
-            list_of_parameters: List[dict]
+            list_of_parameters: List[Dict[str,float]]
     ) -> List[SimulationResult]:
         ...
 
@@ -71,18 +76,18 @@ class BatchManager(ABC, Generic[SR, ConfigType]):
 class BatchManagerFactory:
     @staticmethod
     def make_batch_manager_config(
-        experiment_mode: Literal["local", "local_slurm", "remote_slurm"]
+        experiment_mode: str
     ) -> ConfigType:
         raise NotImplementedError
 
     @staticmethod
     def make_batch_manager(
-        experiment_mode: Literal["local", "local_slurm", "remote_slurm"], 
+        experiment_mode: str,
         simulation_runner: SR,
         config: ConfigType
     ) -> BatchManager:
         
-        if experiment_mode == "local":
+        if experiment_mode == ExperimentMode.LOCAL:
 
             assert isinstance(config, LocalBatchManagerConfig)
 
@@ -91,7 +96,7 @@ class BatchManagerFactory:
                 config=config
             )
         
-        elif experiment_mode == "local_slurm":
+        elif experiment_mode == ExperimentMode.LOCAL_SLURM:
 
             assert isinstance(config, LocalSlurmBatchManagerConfig)
 
@@ -100,7 +105,7 @@ class BatchManagerFactory:
                 config=config
             )
         
-        elif experiment_mode == "remote_slurm":
+        elif experiment_mode == ExperimentMode.REMOTE_SLURM:
 
             assert isinstance(config, RemoteSlurmBatchManagerConfig)
 
@@ -109,10 +114,14 @@ class BatchManagerFactory:
                 config=config
             )
 
+        else:
+
+            raise ValueError(f"Unsupported mode: {experiment_mode!r}")
+
 
 class LocalBatchManagerConfig(BaseModel):
-    experiment_id: str
-    experiment_root: str
+    run_script_filename: str
+    run_script_root_directory: str
     experiment_directory: str
     latest_point: int
     max_workers: int
@@ -120,6 +129,12 @@ class LocalBatchManagerConfig(BaseModel):
 
 # TODO: should latest_point be read from the directory structure?
 class LocalBatchManager(BatchManager):
+    def __init__(
+            self,
+            config: LocalBatchManagerConfig
+    ) -> None:
+        self.config = config
+
     def _make_point_ids(
             self
     ) -> List[str]:
@@ -132,7 +147,7 @@ class LocalBatchManager(BatchManager):
 
     def run_batch(
             self,
-            list_of_parameters: List[dict]
+            list_of_parameters: List[Dict[str,float]]
     ) -> List[SimulationResult]:
         
         results = []
@@ -143,18 +158,18 @@ class LocalBatchManager(BatchManager):
 
         for parameters, id in zip(list_of_parameters, point_ids):
 
-            setup_path = os.path.join(self.config.experiment_directory, "results", id)
+            run_script_directory = os.path.join(self.config.experiment_directory, "results", id)
 
             copy_files(
-                source_directory=self.config.experiment_root,
-                destination_directory=setup_path
+                source_directory=self.config.run_script_root_directory,
+                destination_directory=run_script_directory
             )
             # TODO: how should the information about the setup in experiment_rootdir be passed?
             result = self.simulation_runner.save_set_up_and_run(
                 simulation_id=id,
                 parameters=parameters,
-                setup_path=setup_path,
-                setup_name=self.config.experiment_id)
+                run_script_directory=run_script_directory,
+                run_script_filename=self.config.run_script_filename)
             
             # TODO: How to assert that list entries are SimulationResults?
             assert isinstance(result, (SimulationResult, list))
