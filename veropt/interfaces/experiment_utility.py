@@ -1,33 +1,28 @@
 from pathlib import Path
 from pydantic import BaseModel
-from typing import Dict, Union, Optional, List
+from typing import Dict, Union, Optional, List, Self
 import os
+from veropt.interfaces.simulation import SimulationResult
 
 
 class Point(BaseModel):
     parameters: Dict[str, float]
-    objective_value: Union[float, List[float]]
     state: Optional[str] = None
-    processing_method: Optional[str] = None
     job_id: Optional[int] = None
     output_file: Optional[str] = None
+    result: Optional[Union[SimulationResult,List[SimulationResult]]] = None
+    processing_method: Optional[str] = None
+    objective_value: Optional[Union[float, List[float]]] = None
 
 
-# TODO: Should include timestamps?
-class ExperimentalState(BaseModel):
-    experiment_name: str
-    experiment_directory: str
-    points: Dict[int, Point] = {}
-    next_point: int = 0
-
-    def update(
-        self, 
-        new_point: Point
-    ) -> None:
-        
-        self.points[self.next_point] = new_point
-        self.next_point += 1
-
+class Config(BaseModel):
+    # TODO: Better name for this maybe?
+    #       Make this class:
+    #       - Be able to load itself from json and save itself to json
+    #       - Be able to load itself from Self or str
+    #       - Raise warnings/errors if paths to source jsons are not found
+    #       - Raise warning (?) and make a path if destination json path does not exist
+    #       - PS. Check if BaseModel does this already
     def save_to_json(
         self, 
         path: str, 
@@ -42,15 +37,36 @@ class ExperimentalState(BaseModel):
     def load_from_json(
         cls, 
         path: str
-    ) -> "ExperimentalState":
+    ) -> Self:
         """Load state from JSON file; returns a fresh state if not found."""
         if not os.path.exists(path):
             return cls()
         
         return cls.parse_file(path)
+    
+
+class OptimiserConfig(Config):
+    n_evals_per_step: int
+    n_iterations: int
 
 
-class ExperimentConfig(BaseModel):
+# TODO: Should include timestamps?
+class ExperimentalState(Config):
+    experiment_name: str
+    experiment_directory: str
+    points: Dict[int, Point] = {}
+    next_point: int = 0
+
+    def update(
+        self, 
+        new_point: Point
+    ) -> None:
+        
+        self.points[self.next_point] = new_point
+        self.next_point += 1
+
+
+class ExperimentConfig(Config):
     experiment_name: str
     parameter_names: List[str]
     parameter_bounds: Dict[str,List[float]]
@@ -58,20 +74,8 @@ class ExperimentConfig(BaseModel):
     experiment_mode: str
     experiment_directory_name: Optional[str] = None
     run_script_filename: str
-    run_script_directory: Optional[str] = None
+    run_script_root_directory: Optional[str] = None
     output_filename: str
-
-    @classmethod
-    def load_from_json(
-        cls, 
-        path: str
-    ) -> "ExperimentConfig":
-        # TODO: Does BaseModel already check if the path exists? 
-        #       Maybe this is redundant.
-        if not os.path.exists(path):
-            return cls()
-        
-        return cls.parse_file(path)
 
 
 class PathManager:
@@ -82,7 +86,8 @@ class PathManager:
         
         self.experiment_config = experiment_config
         self.experiment_directory = self.make_experiment_directory_path()
-        self.run_script_directory = self.make_run_script_directory_path()
+        self.run_script_root_directory = self.make_run_script_root_directory_path()
+        self.experimental_state_json = self.make_experimental_state_json()
 
     def make_experiment_directory_path(
             self
@@ -100,12 +105,12 @@ class PathManager:
                 self.experiment_config.experiment_name
                 )
         
-    def make_run_script_directory_path(
+    def make_run_script_root_directory_path(
             self,
     ) -> Path:
         
-        if self.experiment_config.run_script_directory is not None:
-            return self.experiment_config.run_script_directory
+        if self.experiment_config.run_script_root_directory is not None:
+            return self.experiment_config.run_script_root_directory
         
         else:
             return os.path.join(
@@ -114,8 +119,18 @@ class PathManager:
             )
         
     @staticmethod
-    def make_result_directory_name(
-            index: int,
+    def make_simulation_id(
+            i: int,
     ) -> str:
         
-        return f"point={index}"
+        return f"point={i}"
+    
+    def make_experimental_state_json(
+            self
+    ) -> Path:
+        
+        return os.path.join(
+            self.experiment_directory,
+            "results",
+            f"{self.experiment_config.experiment_name}_experimental_state.json"
+        )
