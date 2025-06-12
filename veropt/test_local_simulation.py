@@ -27,11 +27,11 @@ local_config = LocalVerosConfig(
 )
 
 simulation_runner = LocalVerosRunner(
-    cfg=local_config
+    config=local_config
 )
-result = simulation_runner.set_up_and_run(
-    id="point=0", 
+result = simulation_runner.save_set_up_and_run(
+    simulation_id="point=0", 
     parameters=parameters,
-    setup_path="/Users/martamrozowska/Desktop/veros/acc",
-    setup_name="acc")
+    run_script_directory="/Users/martamrozowska/Desktop/veros/acc",
+    run_script_filename="acc")
 print("Output dict:", result.model_dump())

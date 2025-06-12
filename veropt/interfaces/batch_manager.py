@@ -2,9 +2,10 @@ from abc import ABC, abstractmethod
 from enum import StrEnum
 import os
 import shutil
-from typing import TypeVar, Generic, List, Dict, Literal
+from typing import TypeVar, Generic, List, Dict, Literal, Union
 from pydantic import BaseModel
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner
+from veropt.interfaces.experiment_utility import PathManager
 
 
 SR = TypeVar("SR", bound=SimulationRunner)
@@ -17,21 +18,19 @@ class ExperimentMode(StrEnum):
     REMOTE_SLURM = "remote_slurm"
 
 
-def create_directories(
+def create_directory(
         path: str,
-        names: List[str]
+        name: List[str]
 ) -> None:
     
-    for name in names:
+    full_path = os.path.join(path, name)
 
-        full_path = os.path.join(path, name)
+    if not os.path.exists(full_path):
+        os.makedirs(full_path, exist_ok=True)
+        print(f"Created directory: {full_path}")
 
-        if not os.path.exists(full_path):
-            os.makedirs(full_path, exist_ok=True)
-            print(f"Created directory: {full_path}")
-
-        else:
-            print(f"Directory already exists: {full_path}")
+    else:
+        print(f"Directory already exists: {full_path}")
 
 
 def copy_files(
@@ -68,8 +67,8 @@ class BatchManager(ABC, Generic[SR]):
     @abstractmethod
     def run_batch(
             self,
-            list_of_parameters: List[Dict[str,float]]
-    ) -> List[SimulationResult]:
+            dict_of_parameters: Dict[int,dict]
+    ) -> Union[Dict[int,list], Dict[int,SimulationResult]]:
         ...
 
 
@@ -123,7 +122,8 @@ class LocalBatchManagerConfig(BaseModel):
     run_script_filename: str
     run_script_root_directory: str
     experiment_directory: str
-    latest_point: int
+    n_evals_per_step: int
+    next_point: int
     max_workers: int
 
 
@@ -131,34 +131,31 @@ class LocalBatchManagerConfig(BaseModel):
 class LocalBatchManager(BatchManager):
     def __init__(
             self,
+            simulation_runner: SR,
             config: LocalBatchManagerConfig
     ) -> None:
+        self.simulation_runner = simulation_runner
         self.config = config
-
-    def _make_point_ids(
-            self
-    ) -> List[str]:
-        
-        start = self.config.latest_point + 1
-        end = start + self.config.max_workers
-
-        return [f"point={p}" for p in range(start, end)]
-
 
     def run_batch(
             self,
-            list_of_parameters: List[Dict[str,float]]
-    ) -> List[SimulationResult]:
+            dict_of_parameters: Dict[int,dict]
+    ) -> Union[Dict[int,list], Dict[int,SimulationResult]]:
         
-        results = []
-        point_ids = self._make_point_ids()
-        directory_names = [os.path.join("results", id) for id in point_ids]
+        results = {}
 
-        create_directories(path=self.config.experiment_directory, names=directory_names)
+        for index, parameters in dict_of_parameters.items():
 
-        for parameters, id in zip(list_of_parameters, point_ids):
+            result_name = PathManager.make_result_directory_name(index=index)
 
-            run_script_directory = os.path.join(self.config.experiment_directory, "results", id)
+            create_directory(
+                path=os.path.join(self.config.experiment_directory, "results"),
+                name=result_name)
+
+            run_script_directory = os.path.join(
+                self.config.experiment_directory,
+                "results",
+                result_name)
 
             copy_files(
                 source_directory=self.config.run_script_root_directory,
@@ -166,7 +163,7 @@ class LocalBatchManager(BatchManager):
             )
             # TODO: how should the information about the setup in experiment_rootdir be passed?
             result = self.simulation_runner.save_set_up_and_run(
-                simulation_id=id,
+                simulation_id=result_name,
                 parameters=parameters,
                 run_script_directory=run_script_directory,
                 run_script_filename=self.config.run_script_filename)
@@ -174,7 +171,7 @@ class LocalBatchManager(BatchManager):
             # TODO: How to assert that list entries are SimulationResults?
             assert isinstance(result, (SimulationResult, list))
 
-            results.extend(result if isinstance(result, list) else [result])
+            results[index] = result
 
         return results
 
@@ -186,7 +183,7 @@ class LocalSlurmBatchManagerConfig(BaseModel):
 class LocalSlurmBatchManager(BatchManager):
     def run_batch(
             self,
-            list_of_parameters: List[dict]
+            dict_of_parameters: Dict[int,dict]
     ) -> List[SimulationResult]:
         # TODO: Implement
         raise NotImplementedError
@@ -199,7 +196,7 @@ class RemoteSlurmBatchManagerConfig(BaseModel):
 class RemoteSlurmBatchManager(BatchManager):
     def run_batch(
             self,
-            list_of_parameters: List[dict]
+            dict_of_parameters: Dict[int,dict]
     ) -> List[SimulationResult]:
         # TODO: Implement
         raise NotImplementedError

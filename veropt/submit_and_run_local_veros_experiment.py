@@ -13,26 +13,27 @@ sim_cfg = LocalVerosConfig(
     keep_old_params=False,
 )
 
-batch_cfg = LocalBatchManagerConfig(
-    experiment_id="test_experiment",
-    path_to_experiment="/Users/martamrozowska/Desktop/veropt_testing",
-    latest_point=0,
+batch_config = LocalBatchManagerConfig(
+    run_script_filename="test_experiment",
+    run_script_root_directory="/Users/martamrozowska/Desktop/veropt_testing/exp_test_experiment/test_experiment_setup",
+    experiment_directory="/Users/martamrozowska/Desktop/veropt_testing/exp_test_experiment",
+    n_evals_per_step=1,
+    next_point=0,
     max_workers=3
 )
 
-parameters = [{"c_k": 0.05, "c_eps": 1.0},
-              {"c_k": 0.1,  "c_eps": 0.5}, 
-              {"c_k": 0.2,  "c_eps": 0.1}]
+parameters = {0: {"c_k": 0.05, "c_eps": 1.0},
+              1: {"c_k": 0.1,  "c_eps": 0.5}, 
+              2: {"c_k": 0.2,  "c_eps": 0.1}}
 
-runner = LocalVerosRunner(cfg=sim_cfg)
+runner = LocalVerosRunner(config=sim_cfg)
 batch_manager = LocalBatchManager(
-    cfg=batch_cfg,
+    config=batch_config,
     simulation_runner=runner,
-    list_of_parameters=parameters,
 )
 
-results = batch_manager.run_batch()
-for result in results:
+results = batch_manager.run_batch(dict_of_parameters=parameters)
+for result in results.values():
     print("Output dict:", result.model_dump())
     print("Return code:", result.return_code)
     print("Stdout file:", result.stdout_file)
