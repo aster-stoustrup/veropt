@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 from enum import StrEnum
 import os
 import shutil
-from typing import TypeVar, Generic, List, Dict, Literal, Union
+from typing import TypeVar, Generic, List, Dict, Literal, Union, Tuple
 from pydantic import BaseModel
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner
-from veropt.interfaces.experiment_utility import PathManager
+from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
 
 
 SR = TypeVar("SR", bound=SimulationRunner)
@@ -20,7 +20,7 @@ class ExperimentMode(StrEnum):
 
 def create_directory(
         path: str,
-        name: List[str]
+        name: str
 ) -> None:
     
     full_path = os.path.join(path, name)
@@ -67,7 +67,8 @@ class BatchManager(ABC, Generic[SR]):
     @abstractmethod
     def run_batch(
             self,
-            dict_of_parameters: Dict[int,dict]
+            dict_of_parameters: Dict[int,dict],
+            experimental_state: ExperimentalState
     ) -> Union[Dict[int,list], Dict[int,SimulationResult]]:
         ...
 
@@ -75,9 +76,20 @@ class BatchManager(ABC, Generic[SR]):
 class BatchManagerFactory:
     @staticmethod
     def make_batch_manager_config(
-        experiment_mode: str
+        experiment_mode: str,
+        run_script_filename: str,
+        run_script_root_directory: str
     ) -> ConfigType:
-        raise NotImplementedError
+        
+        if experiment_mode == ExperimentMode.LOCAL:
+
+            return LocalBatchManagerConfig(
+                run_script_filename=run_script_filename,
+                run_script_root_directory=run_script_root_directory,
+            )
+        
+        else:
+            raise NotImplementedError
 
     @staticmethod
     def make_batch_manager(
@@ -121,10 +133,6 @@ class BatchManagerFactory:
 class LocalBatchManagerConfig(BaseModel):
     run_script_filename: str
     run_script_root_directory: str
-    experiment_directory: str
-    n_evals_per_step: int
-    next_point: int
-    max_workers: int
 
 
 # TODO: should latest_point be read from the directory structure?
@@ -139,39 +147,39 @@ class LocalBatchManager(BatchManager):
 
     def run_batch(
             self,
-            dict_of_parameters: Dict[int,dict]
+            dict_of_parameters: Dict[int,dict],
+            experimental_state: ExperimentalState
     ) -> Union[Dict[int,list], Dict[int,SimulationResult]]:
         
         results = {}
 
-        for index, parameters in dict_of_parameters.items():
+        for i, parameters in dict_of_parameters.items():
 
-            result_name = PathManager.make_result_directory_name(index=index)
-
-            create_directory(
-                path=os.path.join(self.config.experiment_directory, "results"),
-                name=result_name)
-
-            run_script_directory = os.path.join(
-                self.config.experiment_directory,
+            simulation_id = PathManager.make_simulation_id(i=i)
+            result_directory = os.path.join(
+                experimental_state.experiment_directory,
                 "results",
-                result_name)
+                simulation_id)
+
+            create_directory(path=result_directory)
 
             copy_files(
                 source_directory=self.config.run_script_root_directory,
-                destination_directory=run_script_directory
+                destination_directory=result_directory
             )
-            # TODO: how should the information about the setup in experiment_rootdir be passed?
+            
+            experimental_state.points[i].state = "Simulation started"
             result = self.simulation_runner.save_set_up_and_run(
-                simulation_id=result_name,
+                simulation_id=simulation_id,
                 parameters=parameters,
-                run_script_directory=run_script_directory,
+                run_script_directory=result_directory,
                 run_script_filename=self.config.run_script_filename)
             
             # TODO: How to assert that list entries are SimulationResults?
             assert isinstance(result, (SimulationResult, list))
 
-            results[index] = result
+            experimental_state.points[i].state.result = result
+            results[i] = result
 
         return results
 
