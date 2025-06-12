@@ -141,14 +141,14 @@ def unpack_flagged_variables_objectives_from_kwargs(
         kwargs: dict
 ) -> tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
 
-    if 'variable_values' in kwargs:
+    if 'variable_values_flagged' in kwargs:
         flagged_variable_values = kwargs['variable_values']
         assert type(flagged_variable_values) is TensorWithNormalisationFlag
         variable_values = flagged_variable_values.tensor
     else:
         variable_values = None
 
-    if 'objective_values' in kwargs:
+    if 'objective_values_flagged' in kwargs:
         flagged_objective_values = kwargs['objective_values']
         assert type(flagged_objective_values) is TensorWithNormalisationFlag
         objective_values = flagged_objective_values.tensor

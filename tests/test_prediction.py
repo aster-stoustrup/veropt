@@ -37,7 +37,10 @@ def _build_matern_predictor_ucb(
         n_objectives=n_objectives
     )
 
-    acquisition_function = UpperConfidenceBound()
+    acquisition_function = UpperConfidenceBound(
+        n_variables=n_variables,
+        n_objectives=n_objectives,
+    )
 
     acquisition_optimiser = DualAnnealingOptimiser(
         bounds=bounds
@@ -63,7 +66,10 @@ def _build_matern_predictor_qlogehvi(
         n_objectives=n_objectives
     )
 
-    acquisition_function = QLogExpectedHyperVolumeImprovement()
+    acquisition_function = QLogExpectedHyperVolumeImprovement(
+        n_variables=n_variables,
+        n_objectives=n_objectives,
+    )
 
     acquisition_optimiser = DualAnnealingOptimiser(
         bounds=bounds
@@ -113,8 +119,8 @@ def test_botorch_predict_values_1_objective() -> None:
     assert bool((prediction['mean'] > prediction['lower']).min()) is True
     assert bool((prediction['upper'] > prediction['mean']).min()) is True
 
-    for prediction_band in ['mean', 'lower', 'upper']:  # type: ignore
-        assert list(prediction[prediction_band].shape) == [variable_1_array.shape[0], 1]
+    for prediction_band in ['mean', 'lower', 'upper']:
+        assert list(prediction[prediction_band].shape) == [variable_1_array.shape[0], 1]  # type: ignore
 
 
 def test_botorch_predict_values_2_objectives() -> None:

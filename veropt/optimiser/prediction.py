@@ -167,6 +167,10 @@ class BotorchPredictor(Predictor):
             objective_values=objective_values
         )
 
+        self.acquisition_optimiser.refresh(
+            acquisition_function=self.acquisition_function
+        )
+
     def update_bounds(
             self,
             new_bounds: torch.Tensor

@@ -5,6 +5,8 @@ from typing import Optional, TypedDict, Union
 
 import torch
 
+from veropt.optimiser.prediction import PredictionDict
+
 
 class DataShape:
     index_points = 0
@@ -83,7 +85,7 @@ class TensorWithNormalisationFlag:
 
     def __getitem__(
             self,
-            item
+            item: Union[int, slice, tuple[Union[int, slice], ...]]  # type-hint should technically be as in torch.Tensor
     ) -> 'TensorWithNormalisationFlag':
 
         return TensorWithNormalisationFlag(
@@ -94,9 +96,17 @@ class TensorWithNormalisationFlag:
 
 @dataclass
 class SuggestedPoints:
-    variable_values: TensorWithNormalisationFlag
-    predicted_objective_values: Optional[TensorWithNormalisationFlag]
+    variable_values: torch.Tensor
+    predicted_objective_values: Optional[PredictionDict]
     generated_at_step: int
+    normalised: bool
+
+    @property
+    def variable_values_flagged(self) -> TensorWithNormalisationFlag:
+        return TensorWithNormalisationFlag(
+            tensor=self.variable_values,
+            normalised=self.normalised
+        )
 
 
 def list_with_floats_to_string(

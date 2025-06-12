@@ -101,7 +101,7 @@ class BayesianOptimiser:
                 raise RuntimeError("This decorator was called to check input shapes but found no valid inputs.")
 
             check_variable_and_objective_shapes(
-                n_variables=self.n_variables,
+                n_variables=self.objective.n_variables,
                 n_objectives=self.n_objectives,
                 function_name=function.__name__,
                 class_name=self.__class__.__name__,
@@ -138,9 +138,11 @@ class BayesianOptimiser:
 
         if self.optimisation_mode == OptimisationMode.initial:
 
-            suggested_variables = self.initial_points[
+            suggested_variables_tensor = self.initial_points[
                     self.n_points_evaluated: self.n_points_evaluated + self.n_evaluations_per_step
-                ]
+                ].tensor
+
+            prediction = None
 
         elif self.optimisation_mode == OptimisationMode.bayesian:
 
@@ -148,35 +150,25 @@ class BayesianOptimiser:
                 verbose=self.settings.verbose
             )
 
-            suggested_variables = TensorWithNormalisationFlag(
-                tensor=suggested_variables_tensor,
-                normalised=self.return_normalised_data
-            )
+            if self.model_has_been_trained:
+
+                prediction = self.predictor.predict_values(
+                    variable_values=suggested_variables_tensor
+                )
+
+            else:
+
+                prediction = None
 
         else:
             raise RuntimeError
 
-        if self.model_has_been_trained:
-
-            prediction = self.predictor.predict_values(
-                variable_values=suggested_variables.tensor
-            )
-
-            # TODO: If we're saving this anyway, should we consider saving min and max too?
-
-            predicted_values = TensorWithNormalisationFlag(
-                tensor=prediction['mean'],
-                normalised=self.return_normalised_data
-            )
-
-        else:
-
-            predicted_values = None
 
         self.suggested_points = SuggestedPoints(
-            variable_values=suggested_variables,
-            predicted_objective_values=predicted_values,
-            generated_at_step=deepcopy(self.current_step)
+            variable_values=suggested_variables_tensor,
+            predicted_objective_values=prediction,
+            generated_at_step=deepcopy(self.current_step),
+            normalised= deepcopy(self.return_normalised_data)
         )
 
     def get_best_points(self) -> tuple[torch.Tensor, torch.Tensor, int] | tuple[None, None, None]:
@@ -215,7 +207,7 @@ class BayesianOptimiser:
 
         assert self.suggested_points is not None, "Suggested points must be created before using this function"
 
-        new_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values)
+        new_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values_flagged)
 
         objective_function_values = self.objective.run(new_variables_real_units.tensor)  # type: ignore[union-attr]
 
@@ -232,32 +224,32 @@ class BayesianOptimiser:
     @_check_input_dimensions
     def _add_new_points(
             self,
-            variable_values: TensorWithNormalisationFlag,
-            objective_values: TensorWithNormalisationFlag
+            variable_values_flagged: TensorWithNormalisationFlag,
+            objective_values_flagged: TensorWithNormalisationFlag
     ) -> None:
 
-        assert variable_values.normalised is False
-        assert objective_values.normalised is False
+        assert variable_values_flagged.normalised is False
+        assert objective_values_flagged.normalised is False
 
         # TODO: Write good error message
         #   - Could also move this check somewhere...?
         #   - Then again, maybe we want a more flexible way to handle this in the future...?
-        assert variable_values.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
-        assert objective_values.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
+        assert variable_values_flagged.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
+        assert objective_values_flagged.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
 
         if self.n_points_evaluated == 0:
 
-            self.evaluated_variables_real_units = variable_values.tensor.detach()
-            self.evaluated_objective_real_units = objective_values.tensor.detach()
+            self.evaluated_variables_real_units = variable_values_flagged.tensor.detach()
+            self.evaluated_objective_real_units = objective_values_flagged.tensor.detach()
 
         else:
 
             self.evaluated_variables_real_units = torch.cat(
-                tensors=[self.evaluated_variables_real_units, variable_values.tensor.detach()],
+                tensors=[self.evaluated_variables_real_units, variable_values_flagged.tensor.detach()],
                 dim=DataShape.index_points
             )
             self.evaluated_objective_real_units = torch.cat(
-                tensors=[self.evaluated_objective_real_units, objective_values.tensor.detach()],
+                tensors=[self.evaluated_objective_real_units, objective_values_flagged.tensor.detach()],
                 dim=DataShape.index_points
             )
 
@@ -305,11 +297,11 @@ class BayesianOptimiser:
         )
 
         self._add_new_points(
-            variable_values=TensorWithNormalisationFlag(
+            variable_values_flagged=TensorWithNormalisationFlag(
                 tensor=new_variable_values_tensor,
                 normalised=False
             ),
-            objective_values=TensorWithNormalisationFlag(
+            objective_values_flagged=TensorWithNormalisationFlag(
                 tensor=new_objective_values_tensor,
                 normalised=False
             )
@@ -323,7 +315,7 @@ class BayesianOptimiser:
 
         assert self.suggested_points is not None, "Must have made suggestions before saving them."
 
-        suggested_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values)
+        suggested_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values_flagged)
 
         suggested_variables_dict = format_output_for_objective(
             suggested_variables=suggested_variables_real_units.tensor,
@@ -418,15 +410,15 @@ class BayesianOptimiser:
     @_check_input_dimensions
     def _unnormalise_variables(
             self,
-            variable_values: TensorWithNormalisationFlag
+            variable_values_flagged: TensorWithNormalisationFlag
     ) -> TensorWithNormalisationFlag:
 
         assert self._normaliser_variables is not None, "Normaliser must be initialised to do this action"
 
-        if variable_values.normalised:
-            variables_real_units = self._normaliser_variables.inverse_transform(variable_values.tensor)
+        if variable_values_flagged.normalised:
+            variables_real_units = self._normaliser_variables.inverse_transform(variable_values_flagged.tensor)
         else:
-            variables_real_units = variable_values.tensor
+            variables_real_units = variable_values_flagged.tensor
 
         return TensorWithNormalisationFlag(
             tensor=variables_real_units,

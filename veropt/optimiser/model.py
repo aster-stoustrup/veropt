@@ -349,17 +349,17 @@ class TorchModelOptimiser:
 class AdamModelOptimiser(TorchModelOptimiser):
     def __init__(
             self,
-            **kwarfs: dict
+            **kwargs: dict
     ) -> None:
 
-        for key in kwarfs.keys():
+        for key in kwargs.keys():
             assert key in torch.optim.Adam.__init__.__code__.co_varnames, (
                 f"{key} is not an accepted argument for the torch optimiser 'Adam'."
             )
 
         super().__init__(
             optimiser_class=torch.optim.Adam,
-            optimiser_settings=kwarfs
+            optimiser_settings=kwargs
         )
 
 
