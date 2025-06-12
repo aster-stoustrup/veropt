@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 import json
 from typing import Any, List, Union, Optional, Dict
-import abc
+from abc import ABC, abstractmethod
 import os
 
 # TODO: Do we stick with TypeDict throughout or can we use BaseModel?
@@ -14,8 +14,8 @@ class SimulationResult(BaseModel):
     return_code: int
 
 
-class Simulation(abc.ABC):
-    @abc.abstractmethod
+class Simulation(ABC):
+    @abstractmethod
     def run(
             self,
             parameters: Dict[str,float]
@@ -27,7 +27,7 @@ class SimulationRunnerConfig(BaseModel):
     ...
 
 
-class SimulationRunner(abc.ABC):
+class SimulationRunner(ABC):
 
     def save_set_up_and_run(
             self,
@@ -63,7 +63,7 @@ class SimulationRunner(abc.ABC):
         with open(parameters_json, 'w') as fp:
             json.dump(parameters, fp)
 
-    @abc.abstractmethod
+    @abstractmethod
     def set_up_and_run(
             self,
             simulation_id: str,
