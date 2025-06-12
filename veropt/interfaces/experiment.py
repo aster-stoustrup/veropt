@@ -8,6 +8,7 @@ from veropt.interfaces.batch_manager import BatchManager, BatchManagerFactory, E
 from veropt.interfaces.result_processing import ResultProcessor
 from veropt.mock_optimiser import MockOptimiser, OptimiserObject
 from veropt.interfaces.experiment_utility import *
+import torch
 
 SR = TypeVar("SR", bound=SimulationRunner)
 ConfigType = TypeVar("ConfigType", bound=BaseModel)
@@ -27,6 +28,12 @@ ConfigType = TypeVar("ConfigType", bound=BaseModel)
 #       - How to access objective functions vals and coords in order to sanity check?
 #       - If possible, a log of what optimiser does per optimisation step
 
+suggested_points = {
+            'var_1': torch.tensor([0.4, 0.3, 0.7, -0.3]),
+            'var_2': torch.tensor([1.2, -1.4, 1.1, 0.2]),
+            'var_3': torch.tensor([0.2, -0.2, -0.1, 2.2])
+            }
+
 
 class Experiment:
     def __init__(
@@ -34,8 +41,9 @@ class Experiment:
         simulation_runner: SimulationRunner,
         result_processor: ResultProcessor,
         experiment_config: Union[str, ExperimentConfig],
-        state: Optional[Union[str, ExperimentalState]] = None,
-        batch_manager: Optional[BatchManager] = None
+        optimiser_config: Union[str, OptimiserConfig],
+        batch_manager: Optional[BatchManager] = None,
+        state: Optional[Union[str, ExperimentalState]] = None
     ) -> None:
         
         # TODO: This could be a part of the class task, ie. checking if input is a string
@@ -45,13 +53,17 @@ class Experiment:
         else:
             self.experiment_config = experiment_config
 
+        if isinstance(optimiser_config, str):
+            self.optimiser_config = OptimiserConfig.load_from_json(optimiser_config)
+        else:
+            self.optimiser_config = optimiser_config
+
         self.path_manager = PathManager(experiment_config)
-        self.experiment_directory = self.path_manager.experiment_directory
     
         if state is None:
             self.state = ExperimentalState(
                 experiment_name = self.experiment_config.experiment_name,
-                experiment_directory = self.experiment_directory,
+                experiment_directory = self.path_manager.experiment_directory,
                 points = {},
                 next_point = 0
             )
@@ -63,29 +75,26 @@ class Experiment:
             self.state = state
 
         self.simulation_runner = simulation_runner
-
+        self.batch_manager = batch_manager
         self.result_processor = result_processor
 
-        self.batch_manager = batch_manager
-
         self.experimental_set_up_initialised = False
-
-    def initialise_directory_structure(
-            self
-    ) -> None:
-        ...
 
     def initialise_optimiser(
             self
     ) -> None:
         ...
+        # assert self.n_evals_per_step < self.experiment_config.max_workers
 
     def initialise_batch_manager(
             self
     ) -> None:
         
         self.batch_manager_config = BatchManagerFactory.make_batch_manager_config(
-            experiment_mode=self.experiment_config.experiment_mode
+            experiment_mode=self.experiment_config.experiment_mode,
+            run_script_filename=self.experiment_config.run_script_filename,
+            run_script_root_directory=self.path_manager.run_script_root_directory,
+            experiment_directory=self.path_manager.experiment_directory
         )
         
         self.batch_manager = BatchManagerFactory.make_batch_manager(
@@ -103,8 +112,38 @@ class Experiment:
         assert isinstance(self.result_processor, ResultProcessor)
 
     def get_parameters_from_optimiser(
-        self
-    ) -> List[Dict[str,float]]:
+        self,
+        suggested_points: Dict[str, torch.Tensor]
+    ) -> Dict[int,dict]:
+        
+        # TODO: Is this really necessary?
+        assert suggested_points.keys() == self.experiment_config.parameter_names
+        
+        dict_of_parameters = {}
+        
+        for i in range(self.optimiser_config.n_evals_per_step):
+
+            # TODO: Important - torch.Tensor -> numpy outputs float32
+            #       If the param val gets converted to float64 anywhere, errors can occur
+            #       I could pass around the param values as strings...?     
+            parameters = {name: value.numpy()[i] for name, value in suggested_points.items()}
+
+            dict_of_parameters[self.state.next_point] = parameters
+
+            new_point = Point(
+                parameters=parameters,
+                state="Received parameters from core"
+            )
+
+            self.state.update(new_point)
+
+        self.state.save_to_json(self.path_manager.experimental_state_json)
+
+        return dict_of_parameters
+    
+    def save_objectives_to_state(
+            self
+    ) -> None:
         ...
 
     def send_objectives_to_optimiser(
@@ -133,7 +172,6 @@ class Experiment:
             self
     ) -> None:
         
-        self.initialise_directory_structure()
         self.initialise_optimiser()
         
         if self.batch_manager is None:
@@ -147,15 +185,18 @@ class Experiment:
             self
     ) -> None:
             
-            assert self.experimental_set_up_initialised == True
+        assert self.experimental_set_up_initialised == True
 
-            dict_of_parameters = self.get_parameters_from_optimiser()
-            results = self.batch_manager.run_batch(dict_of_parameters)
-            objectives = self.result_processor.process(results)
-            self._sanity_check(dict_of_parameters, results, objectives)
-            self.state.update(dict_of_parameters, results, objectives)
-            self.state.save_to_json(self.path)  # should saving to json be a part of state.update?
-            self.send_objectives_to_optimiser(objectives)
+        dict_of_parameters = self.get_parameters_from_optimiser(suggested_points=suggested_points)  # suggested_points are a placeholder here!!!
+        results = self.batch_manager.run_batch(
+            dict_of_parameters=dict_of_parameters,
+            experimental_state=self.state)
+        objectives = self.result_processor.process(results)
+
+        self._sanity_check(dict_of_parameters, results, objectives)
+
+        self.save_objectives_to_state(objectives)
+        self.send_objectives_to_optimiser(objectives)
 
     def run_optimisation_experiment(
             self
@@ -166,7 +207,7 @@ class Experiment:
             self.initialise_experimental_set_up()
         
         # run
-        for i in self.n_iterations:
+        for i in self.optimiser_config.n_iterations:
             self.run_optimisation_step()
 
     def restart_optimisation_experiment(
