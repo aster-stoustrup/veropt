@@ -1,4 +1,4 @@
-import abc
+from abc import ABC, abstractmethod
 from enum import Enum
 import json
 import os
@@ -8,18 +8,19 @@ from pydantic import BaseModel, Field
 from veropt.interfaces.simulation import SimulationRunnerConfig, SimulationResult, Simulation, SimulationRunner
 
 
-class EnvManager(abc.ABC):
+class EnvManager(ABC):
     def __init__(
             self,
             path_to_env: str,
             env_name: str,
             command: str
     ) -> None:
+        
         self.path_to_env = path_to_env
         self.env_name = env_name
         self.command = command
 
-    @abc.abstractmethod
+    @abstractmethod
     def run_in_env(
             self
     ) -> subprocess.CompletedProcess:
@@ -30,8 +31,10 @@ class Conda(EnvManager):
     def run_in_env(
             self
     ) -> subprocess.CompletedProcess:
+        
         # "path_to_env" is the path to the conda installation, not the environment
         full_command = f"source {self.path_to_env}/bin/activate {self.env_name} && {self.command}"
+
         # TODO: Understand the subprocess.run parameters "shell" and "executable"
         return subprocess.run(
             full_command,
@@ -46,7 +49,9 @@ class Venv(EnvManager):
     def run_in_env(
             self
     ) -> subprocess.CompletedProcess:
+        
         full_command = f"source {self.path_to_env}/bin/activate && {self.command}"
+
         return subprocess.run(
             full_command,
             shell=True,
@@ -64,6 +69,7 @@ class LocalSimulation(Simulation):
             run_script_directory: str,
             env_manager: EnvManager
     ) -> None:
+        
         self.id = simulation_id
         self.run_script_directory = run_script_directory
         self.env_manager = env_manager
@@ -73,13 +79,18 @@ class LocalSimulation(Simulation):
             self,
             parameters: Dict[str,float]
     ) -> SimulationResult:
+        
         result = self.env_manager.run_in_env()
-        stdout_file = f"{self.run_script_directory}/{self.id}.out"
-        stderr_file = f"{self.run_script_directory}/{self.id}.err"
+
+        stdout_file = os.path.join(self.run_script_directory, self.id, ".out")
+        stderr_file = os.path.join(self.run_script_directory, self.id, ".err")
+
         with open(stdout_file, "w") as f_out:
             f_out.write(result.stdout)
+
         with open(stderr_file, "w") as f_err:
             f_err.write(result.stderr)
+
         return SimulationResult(
             simulation_id=self.id,
             parameters=parameters,
@@ -90,8 +101,9 @@ class LocalSimulation(Simulation):
 
 
 class MockSimulationConfig(BaseModel):
-    cfg1: str
-    cfg2: str
+    stdout_file: str = "test_stdout.txt"
+    stderr_file: str = "test_stderr.txt"
+    return_code: int = 0
 
 
 class MockSimulationRunner(SimulationRunner):
@@ -109,13 +121,15 @@ class MockSimulationRunner(SimulationRunner):
             run_script_directory: Optional[str] = None,
             run_script_filename: Optional[str] = None
     ) -> SimulationResult:
+        
         print(f"Running test simulation with parameters: {parameters} and config: {self.config.model_dump()}")
+
         return SimulationResult(
             simulation_id=simulation_id,
             parameters=parameters,
-            stdout_file="test_stdout.txt",
-            stderr_file="test_stderr.txt",
-            return_code=0
+            stdout_file=self.config.stdout_file,
+            stderr_file=self.config.stderr_file,
+            return_code=self.config.return_code
         )
 
 
