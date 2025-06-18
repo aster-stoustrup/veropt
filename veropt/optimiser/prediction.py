@@ -5,7 +5,8 @@ from typing import Callable
 import decorator
 import torch
 
-from veropt.optimiser.acquisition import AcquisitionOptimiser, BotorchAcquisitionFunction
+from veropt.optimiser.acquisition import BotorchAcquisitionFunction
+from veropt.optimiser.acquisition_optimiser import AcquisitionOptimiser
 from veropt.optimiser.model import GPyTorchFullModel
 from veropt.optimiser.utility import DataShape, PredictionDict, check_variable_and_objective_shapes, \
     check_variable_objective_values_matching, \
@@ -87,7 +88,7 @@ class BotorchPredictor(Predictor):
             )
 
             self = args[0]
-            assert type(self) is BotorchPredictor
+            assert issubclass(type(self), BotorchPredictor)
 
             variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)
 
@@ -181,6 +182,6 @@ class BotorchPredictor(Predictor):
             new_bounds=new_bounds
         )
 
-        # TODO: Check if anything else need to happen here
-
-        raise NotImplementedError
+        self.acquisition_optimiser.update_bounds(
+            new_bounds=new_bounds
+        )

@@ -24,10 +24,16 @@ def test_get_best_points_simple() -> None:
 
     true_max_index = 1
 
-    best_variables, best_values, max_index = get_best_points(
+    best_point = get_best_points(
         variable_values=variable_values,
         objective_values=objective_values,
         weights=weights
+    )
+
+    assert best_point is not None
+
+    best_variables, best_values, max_index = (
+        best_point['variables'], best_point['objectives'], best_point['index']
     )
 
     assert best_variables is not None, "Something went wrong in this test. Check set-up."
@@ -56,11 +62,17 @@ def test_get_best_points_w_objectives_greater_than() -> None:
 
     true_max_index = 3  # Because we're requiring obj>1
 
-    best_variables, best_values, max_index = get_best_points(
+    best_points = get_best_points(
         variable_values=variable_values,
         objective_values=objective_values,
         weights=weights,
         objectives_greater_than=1.0
+    )
+
+    assert best_points is not None
+
+    best_variables, best_values, max_index = (
+        best_points['variables'], best_points['objectives'], best_points['index']
     )
 
     assert best_variables is not None, "Something went wrong in this test. Check set-up."
@@ -101,9 +113,13 @@ def test_get_pareto_optimal_points() -> None:
 
     true_indices = [1, 3, 4]
 
-    pareto_variables, pareto_values, pareto_indices = get_pareto_optimal_points(
+    pareto_optimal_points = get_pareto_optimal_points(
         variable_values=variable_values,
         objective_values=objective_values
+    )
+
+    pareto_variables, pareto_values, pareto_indices = (
+        pareto_optimal_points['variables'], pareto_optimal_points['objectives'], pareto_optimal_points['indices']
     )
 
     assert torch.equal(true_pareto_variables, pareto_variables)
@@ -143,11 +159,15 @@ def test_get_pareto_optimal_points_weights() -> None:
 
     true_indices = [1, 3, 4]
 
-    pareto_variables, pareto_values, pareto_indices = get_pareto_optimal_points(
+    pareto_optimal_points = get_pareto_optimal_points(
         variable_values=variable_values,
         objective_values=objective_values,
         weights=weights,
         sort_by_max_weighted_sum=True
+    )
+
+    pareto_variables, pareto_values, pareto_indices = (
+        pareto_optimal_points['variables'], pareto_optimal_points['objectives'], pareto_optimal_points['indices']
     )
 
     assert torch.equal(true_pareto_variables, pareto_variables)

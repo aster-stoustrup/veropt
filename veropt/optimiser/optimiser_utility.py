@@ -119,33 +119,37 @@ def _nested_list_of_floats_to_string(
     return formatted_list
 
 
+class BestPoints(TypedDict):
+    variables: torch.Tensor
+    objectives: torch.Tensor
+    index: int
+
+
 def get_best_points(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
         weights: torch.Tensor,
         objectives_greater_than: Optional[float | list[float]] = None,
         best_for_objecive_index: Optional[int] = None
-) -> tuple[torch.Tensor, torch.Tensor, int] | tuple[None, None, None]:
-
-    weights_tensor = torch.tensor(weights)
+) -> BestPoints | None:
 
     assert objectives_greater_than is None or best_for_objecive_index is None, "Specifying both options not supported"
 
     if objectives_greater_than is None and best_for_objecive_index is None:
 
-        max_index_tensor = (objective_values * weights_tensor).sum(dim=DataShape.index_dimensions).argmax()
+        max_index_tensor = (objective_values * weights).sum(dim=DataShape.index_dimensions).argmax()
         max_index = int(max_index_tensor)
 
     elif objectives_greater_than is not None:
 
         max_index_or_none = _get_points_greater_than(
             objective_values=objective_values,
-            weights=weights_tensor,
+            weights=weights,
             objectives_greater_than=objectives_greater_than
         )
 
         if max_index_or_none is None:
-            return None, None, None
+            return None
         else:
             max_index = max_index_or_none
 
@@ -159,7 +163,11 @@ def get_best_points(
     best_variables = variable_values[max_index]
     best_values = objective_values[max_index]
 
-    return best_variables, best_values, max_index
+    return {
+        'variables': best_variables,
+        'objectives': best_values,
+        'index': max_index
+    }
 
 
 def _get_points_greater_than(
@@ -194,12 +202,18 @@ def _get_points_greater_than(
     return max_index
 
 
+class ParetoOptimalPoints(TypedDict):
+    variables: torch.Tensor
+    objectives: torch.Tensor
+    indices: list[int]
+
+
 def get_pareto_optimal_points(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
         weights: Optional[torch.Tensor] = None,
         sort_by_max_weighted_sum: bool = False
-) -> tuple[torch.Tensor, torch.Tensor, list[int]]:
+) -> ParetoOptimalPoints:
 
     pareto_optimal_booleans = torch.ones(
         size=(objective_values.shape[DataShape.index_points],),
@@ -227,11 +241,11 @@ def get_pareto_optimal_points(
 
     pareto_optimal_indices = pareto_optimal_indices_tensor.tolist()
 
-    return (
-        variable_values[pareto_optimal_indices_tensor],
-        objective_values[pareto_optimal_indices_tensor],
-        pareto_optimal_indices
-    )
+    return {
+        'variables': variable_values[pareto_optimal_indices_tensor],
+        'objectives': objective_values[pareto_optimal_indices_tensor],
+        'indices': pareto_optimal_indices
+    }
 
 
 def format_input_from_objective(
@@ -266,10 +280,10 @@ def get_nadir_point(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
 ) -> torch.Tensor:
-    _, pareto_values, _ = get_pareto_optimal_points(
+    pareto_values = get_pareto_optimal_points(
         variable_values=variable_values,
         objective_values=objective_values
-    )
+    )['objectives']
 
     return pareto_values.min(dim=DataShape.index_points)[0]
 

@@ -1,8 +1,9 @@
 import pytest
 import torch
 
-from veropt.optimiser.acquisition import DualAnnealingOptimiser, QLogExpectedHyperVolumeImprovement, \
+from veropt.optimiser.acquisition import QLogExpectedHyperVolumeImprovement, \
     UpperConfidenceBound
+from veropt.optimiser.acquisition_optimiser import DistancePunishmentSequentialOptimiser, DualAnnealingOptimiser
 from veropt.optimiser.model import AdamModelOptimiser, GPyTorchFullModel, MaternSingleModel
 from veropt.optimiser.prediction import BotorchPredictor
 
@@ -30,6 +31,7 @@ def _build_matern_predictor_ucb(
         n_variables: int,
         n_objectives: int,
 ) -> BotorchPredictor:
+
     model = _build_matern_model(
         n_variables=n_variables,
         n_objectives=n_objectives
@@ -40,8 +42,11 @@ def _build_matern_predictor_ucb(
         n_objectives=n_objectives,
     )
 
-    acquisition_optimiser = DualAnnealingOptimiser(
-        bounds=bounds
+    acquisition_optimiser = DistancePunishmentSequentialOptimiser(
+        bounds=bounds,
+        single_step_optimiser=DualAnnealingOptimiser(
+            bounds=bounds
+        )
     )
 
     predictor = BotorchPredictor(
@@ -68,8 +73,11 @@ def _build_matern_predictor_qlogehvi(
         n_objectives=n_objectives,
     )
 
-    acquisition_optimiser = DualAnnealingOptimiser(
-        bounds=bounds
+    acquisition_optimiser = DistancePunishmentSequentialOptimiser(
+        bounds=bounds,
+        single_step_optimiser=DualAnnealingOptimiser(
+            bounds=bounds
+        )
     )
 
     predictor = BotorchPredictor(
