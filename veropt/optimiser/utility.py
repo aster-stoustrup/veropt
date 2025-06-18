@@ -134,7 +134,7 @@ def check_variable_objective_values_matching[T, **P](
         )
 
         error_message = (
-            "The number of points must match between variable values and objective_values. \n"
+            "The number of points must match between variable_values and objective_values. \n"
             f"Got shape [n_points = {variable_values.shape[0]}, n_variables = {variable_values.shape[1]}] "
             f"for variable_values "
             f"and shape [n_points = {objective_values.shape[0]}, n_objectives = {objective_values.shape[1]}] "
@@ -232,6 +232,9 @@ class TensorWithNormalisationFlag:
     ):
         self.tensor = tensor
         self.normalised = deepcopy(normalised)
+
+    def __repr__(self) -> str:
+        return f"TensorWithNormalisationFlag(normalised={self.normalised}, {self.tensor})"
 
     def __getitem__(
             self,
