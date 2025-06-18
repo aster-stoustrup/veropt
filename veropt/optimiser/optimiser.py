@@ -1,3 +1,4 @@
+import functools
 from copy import deepcopy
 from functools import cached_property
 from inspect import get_annotations
@@ -6,35 +7,30 @@ from typing import Callable, Optional, Union, Unpack
 import gpytorch.settings
 import torch
 
+from veropt.optimiser.initial_points import generate_initial_points_random
 from veropt.optimiser.normaliser import Normaliser
-from veropt.optimiser.objective import IntegratedObjective, InterfaceObjective, ObjectiveKind, determine_objective_type
+from veropt.optimiser.objective import CallableObjective, InterfaceObjective, ObjectiveKind, determine_objective_type
 from veropt.optimiser.optimiser_utility import (
-    DataShape, InitialPointsGenerationMode, OptimisationMode,
+    InitialPointsGenerationMode, OptimisationMode,
     OptimiserSettings, OptimiserSettingsInputDict, SuggestedPoints,
-    TensorWithNormalisationFlag, format_input_from_objective,
+    format_input_from_objective,
     format_output_for_objective, get_best_points, get_pareto_optimal_points,
     list_with_floats_to_string
 )
 from veropt.optimiser.prediction import Predictor
-from veropt.optimiser.utility import check_variable_and_objective_shapes, \
-    unpack_flagged_variables_objectives_from_kwargs
+from veropt.optimiser.utility import DataShape, TensorWithNormalisationFlag, check_variable_and_objective_shapes, \
+    enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs
 
 
-def generate_initial_points_random(
-        bounds: torch.Tensor,
-        n_initial_points: int,
-        n_variables: int
-) -> torch.Tensor:
-
-    return (bounds[1] - bounds[0]) * torch.rand(n_initial_points, n_variables) + bounds[0]
-
-
+# TODO: Consider what to do about uncertainty on obj func values
+#   - Subclassed optimiser?
 class BayesianOptimiser:
     def __init__(
             self,
             n_initial_points: int,
             n_bayesian_points: int,
-            objective: Union[IntegratedObjective, InterfaceObjective],
+            n_evaluations_per_step: int,
+            objective: Union[CallableObjective, InterfaceObjective],
             predictor: Predictor,
             normaliser_class: type[Normaliser],
             **kwargs: Unpack[OptimiserSettingsInputDict]
@@ -58,6 +54,7 @@ class BayesianOptimiser:
         self.settings = OptimiserSettings(
             n_initial_points=n_initial_points,
             n_bayesian_points=n_bayesian_points,
+            n_evaluations_per_step=n_evaluations_per_step,
             n_objectives=self.n_objectives,
             **kwargs
         )
@@ -76,7 +73,7 @@ class BayesianOptimiser:
                 [None] * (self.n_initial_points + self.n_bayesian_points)
         )
 
-        self._objective_type = determine_objective_type(
+        self.objective_type = determine_objective_type(
             objective=objective
         )
 
@@ -87,10 +84,16 @@ class BayesianOptimiser:
             function: Callable[P, T]
     ) -> Callable[P, T]:
 
+        @functools.wraps(function)
         def check_dimensions(
                 *args: P.args,
                 **kwargs: P.kwargs,
         ) -> T:
+
+            enforce_amount_of_positional_arguments(
+                received_args=args,
+                function=function
+            )
 
             self = args[0]
             assert type(self) is BayesianOptimiser
@@ -118,15 +121,18 @@ class BayesianOptimiser:
 
     def run_optimisation_step(self) -> None:
 
-        if self._objective_type == ObjectiveKind.integrated:
+        if self.objective_type == ObjectiveKind.callable:
 
             self.suggest_candidates()
 
             new_variables, new_values = self._evaluate_points()
 
-            self._add_new_points(new_variables, new_values)
+            self._add_new_points(
+                variable_values_flagged=new_variables,
+                objective_values_flagged=new_values
+            )
 
-        elif self._objective_type == ObjectiveKind.interface:
+        elif self.objective_type == ObjectiveKind.interface:
 
             self._load_latest_points()
 
@@ -201,15 +207,17 @@ class BayesianOptimiser:
 
     def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:
 
-        assert self._objective_type == ObjectiveKind.integrated, (
-            "The objective must be an 'IntegratedObjective' to be evaluated during optimisation."
+        assert self.objective_type == ObjectiveKind.callable, (
+            f"The objective must be an {CallableObjective.__name__} to be evaluated during optimisation."
         )
 
         assert self.suggested_points is not None, "Suggested points must be created before using this function"
 
-        new_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values_flagged)
+        new_variables_real_units = self._unnormalise_variables(
+            variable_values_flagged=self.suggested_points.variable_values_flagged
+        )
 
-        objective_function_values = self.objective.run(new_variables_real_units.tensor)  # type: ignore[union-attr]
+        objective_function_values = self.objective(new_variables_real_units.tensor)  # type: ignore[operator]
 
         self._reset_suggested_points()
 
@@ -224,6 +232,7 @@ class BayesianOptimiser:
     @_check_input_dimensions
     def _add_new_points(
             self,
+            *,
             variable_values_flagged: TensorWithNormalisationFlag,
             objective_values_flagged: TensorWithNormalisationFlag
     ) -> None:
@@ -234,6 +243,10 @@ class BayesianOptimiser:
         # TODO: Write good error message
         #   - Could also move this check somewhere...?
         #   - Then again, maybe we want a more flexible way to handle this in the future...?
+
+        # TODO: Remove check or make setting to turn off
+        #   - Consider if not checking this can make errors
+        #   - Current step might be the main issue?
         assert variable_values_flagged.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
         assert objective_values_flagged.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
 
@@ -282,8 +295,8 @@ class BayesianOptimiser:
 
     def _load_latest_points(self) -> None:
 
-        assert self._objective_type == ObjectiveKind.interface, (
-            "The objective must be an 'InterfaceObjective' to load points."
+        assert self.objective_type == ObjectiveKind.interface, (
+            f"The objective must be an {InterfaceObjective.__name__} to load points."
         )
 
         (new_variable_values, new_objective_values) = self.objective.load_evaluated_points()  # type: ignore[union-attr]
@@ -309,13 +322,15 @@ class BayesianOptimiser:
 
     def _save_candidates(self) -> None:
 
-        assert self._objective_type == ObjectiveKind.interface, (
+        assert self.objective_type == ObjectiveKind.interface, (
             "The objective must be an 'InterfaceObjective' to save candidates."
         )
 
         assert self.suggested_points is not None, "Must have made suggestions before saving them."
 
-        suggested_variables_real_units = self._unnormalise_variables(self.suggested_points.variable_values_flagged)
+        suggested_variables_real_units = self._unnormalise_variables(
+            variable_values_flagged=self.suggested_points.variable_values_flagged
+        )
 
         suggested_variables_dict = format_output_for_objective(
             suggested_variables=suggested_variables_real_units.tensor,
@@ -339,9 +354,6 @@ class BayesianOptimiser:
     def _set_up_settings(self) -> None:
 
         if self.settings.mask_nans:
-            raise NotImplementedError(
-                "Make a test to see if this works. Otherwise, might need to use as a context manager during training?"
-            )
             gpytorch.settings.observation_nan_policy('mask')
 
     def _generate_initial_points(self) -> torch.Tensor:
@@ -410,13 +422,16 @@ class BayesianOptimiser:
     @_check_input_dimensions
     def _unnormalise_variables(
             self,
+            *,
             variable_values_flagged: TensorWithNormalisationFlag
     ) -> TensorWithNormalisationFlag:
 
-        assert self._normaliser_variables is not None, "Normaliser must be initialised to do this action"
-
         if variable_values_flagged.normalised:
+
+            assert self._normaliser_variables is not None, "Normaliser must be initialised at this point"
+
             variables_real_units = self._normaliser_variables.inverse_transform(variable_values_flagged.tensor)
+
         else:
             variables_real_units = variable_values_flagged.tensor
 

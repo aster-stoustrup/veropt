@@ -1,16 +1,10 @@
-from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, TypedDict, Union
 
 import torch
 
-from veropt.optimiser.prediction import PredictionDict
-
-
-class DataShape:
-    index_points = 0
-    index_dimensions = 1
+from veropt.optimiser.utility import DataShape, PredictionDict, TensorWithNormalisationFlag
 
 
 class OptimisationMode(Enum):
@@ -30,7 +24,7 @@ class OptimiserSettings:
             n_initial_points: int,
             n_bayesian_points: int,
             n_objectives: int,
-            n_evaluations_per_step: int = 1,
+            n_evaluations_per_step: int,
             initial_points_generator: InitialPointsGenerationMode = InitialPointsGenerationMode.random,
             normalise: bool = True,
             verbose: bool = True,
@@ -42,7 +36,6 @@ class OptimiserSettings:
         self.n_initial_points = n_initial_points
         self.n_bayesian_points = n_bayesian_points
         self.n_objectives = n_objectives
-
         self.n_evaluations_per_step = n_evaluations_per_step
 
         self.initial_points_generator = initial_points_generator
@@ -64,7 +57,6 @@ class OptimiserSettings:
 
 
 class OptimiserSettingsInputDict(TypedDict, total=False):
-    n_evaluations_per_step: int
     objective_weights: list[float]
     normalise: bool
     n_points_before_fitting: int
@@ -72,26 +64,6 @@ class OptimiserSettingsInputDict(TypedDict, total=False):
     renormalise_each_step: bool
     initial_points_generator: InitialPointsGenerationMode
     mask_nans: bool
-
-
-class TensorWithNormalisationFlag:
-    def __init__(
-            self,
-            tensor: torch.Tensor,
-            normalised: bool
-    ):
-        self.tensor = tensor
-        self.normalised = deepcopy(normalised)
-
-    def __getitem__(
-            self,
-            item: Union[int, slice, tuple[Union[int, slice], ...]]  # type-hint should technically be as in torch.Tensor
-    ) -> 'TensorWithNormalisationFlag':
-
-        return TensorWithNormalisationFlag(
-            tensor=self.tensor[item],
-            normalised=self.normalised
-        )
 
 
 @dataclass

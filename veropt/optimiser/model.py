@@ -1,4 +1,5 @@
 import abc
+import functools
 import warnings
 from dataclasses import dataclass
 from enum import Enum
@@ -11,7 +12,7 @@ from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
 from veropt.optimiser.utility import check_variable_and_objective_shapes, check_variable_objective_values_matching, \
-    unpack_variables_objectives_from_kwargs
+    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
@@ -29,6 +30,7 @@ class SurrogateModel:
     @abc.abstractmethod
     def train_model(
             self,
+            *,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor
     ) -> None:
@@ -420,10 +422,16 @@ class GPyTorchFullModel(SurrogateModel):
             function: Callable[P, T]
     ) -> Callable[P, T]:
 
+        @functools.wraps(function)
         def check_dimensions(
                 *args: P.args,
                 **kwargs: P.kwargs,
         ) -> T:
+
+            enforce_amount_of_positional_arguments(
+                received_args=args,
+                function=function
+            )
 
             self = args[0]
             assert type(self) is GPyTorchFullModel
@@ -452,6 +460,7 @@ class GPyTorchFullModel(SurrogateModel):
     @_check_input_dimensions
     def __call__(
             self,
+            *,
             variable_values: torch.Tensor
     ) -> list[MultivariateNormal]:
 
@@ -476,6 +485,7 @@ class GPyTorchFullModel(SurrogateModel):
     @_check_input_dimensions
     def train_model(
             self,
+            *,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor
     ) -> None:
@@ -500,6 +510,7 @@ class GPyTorchFullModel(SurrogateModel):
     @_check_input_dimensions
     def initialise_model(
             self,
+            *,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor
     ) -> None:

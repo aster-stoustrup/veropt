@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from veropt.optimiser.normaliser import NormaliserZeroMeanUnitVariance
-from veropt.optimiser.optimiser_utility import DataShape
+from veropt.optimiser.utility import DataShape
 
 
 def test_standard_normaliser_transform() -> None:
@@ -86,7 +86,9 @@ def test_standard_normaliser_transform_input_output_shapes() -> None:
     assert normed_test_matrix.shape == test_matrix.shape
 
 
-# TODO: Implement
-#   - See version in 0.6.1 for inspiration
-# def test_normaliser_integration():
-#     assert False
+def test_normaliser_integration() -> None:
+
+    # TODO: Implement
+    #   - See version in 0.6.1 for inspiration
+
+    assert False

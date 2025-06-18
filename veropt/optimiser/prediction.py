@@ -1,20 +1,15 @@
 import abc
-from typing import Callable, TypedDict
+import functools
+from typing import Callable
 
+import decorator
 import torch
 
 from veropt.optimiser.acquisition import AcquisitionOptimiser, BotorchAcquisitionFunction
 from veropt.optimiser.model import GPyTorchFullModel
-from veropt.optimiser.optimiser_utility import DataShape
-from veropt.optimiser.utility import check_variable_and_objective_shapes, check_variable_objective_values_matching, \
-    unpack_variables_objectives_from_kwargs
-
-
-# TODO: If PEP 764 is accepted, convert this to inline
-class PredictionDict(TypedDict):
-    mean: torch.Tensor
-    lower: torch.Tensor
-    upper: torch.Tensor
+from veropt.optimiser.utility import DataShape, PredictionDict, check_variable_and_objective_shapes, \
+    check_variable_objective_values_matching, \
+    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 
 
 class Predictor:
@@ -80,10 +75,16 @@ class BotorchPredictor(Predictor):
             function: Callable[P, T]
     ) -> Callable[P, T]:
 
+        @functools.wraps(function)
         def check_dimensions(
                 *args: P.args,
                 **kwargs: P.kwargs,
         ) -> T:
+
+            enforce_amount_of_positional_arguments(
+                received_args=args,
+                function=function
+            )
 
             self = args[0]
             assert type(self) is BotorchPredictor

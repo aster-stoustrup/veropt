@@ -11,7 +11,6 @@ def _build_matern_model(
         n_variables: int,
         n_objectives: int,
 ) -> GPyTorchFullModel:
-
     model = GPyTorchFullModel(
         n_variables=n_variables,
         n_objectives=n_objectives,
@@ -31,7 +30,6 @@ def _build_matern_predictor_ucb(
         n_variables: int,
         n_objectives: int,
 ) -> BotorchPredictor:
-
     model = _build_matern_model(
         n_variables=n_variables,
         n_objectives=n_objectives
@@ -60,7 +58,6 @@ def _build_matern_predictor_qlogehvi(
         n_variables: int,
         n_objectives: int,
 ) -> BotorchPredictor:
-
     model = _build_matern_model(
         n_variables=n_variables,
         n_objectives=n_objectives
@@ -85,7 +82,6 @@ def _build_matern_predictor_qlogehvi(
 
 
 def test_botorch_predict_values_1_objective() -> None:
-
     bounds = torch.tensor([-10.0, 10.0])
 
     variable_1_array = torch.arange(
@@ -124,7 +120,6 @@ def test_botorch_predict_values_1_objective() -> None:
 
 
 def test_botorch_predict_values_2_objectives() -> None:
-
     bounds = torch.tensor([-10.0, 10.0])
 
     variable_1_array = torch.arange(
@@ -164,7 +159,6 @@ def test_botorch_predict_values_2_objectives() -> None:
 
 
 def test_botorch_predict_values_wrong_dimensions() -> None:
-
     bounds = torch.tensor([-10.0, 10.0])
 
     variable_values = torch.tensor([
@@ -204,7 +198,6 @@ def test_botorch_predict_values_wrong_dimensions() -> None:
 
 
 def test_botorch_predict_train_wrong_obj_dims() -> None:
-
     bounds = torch.tensor([-10.0, 10.0])
 
     variable_values = torch.tensor([
@@ -229,4 +222,33 @@ def test_botorch_predict_train_wrong_obj_dims() -> None:
         predictor.update_with_new_data(
             variable_values=variable_values,
             objective_values=objective_values,
+        )
+
+
+def test_botorch_update_with_new_data_fails_at_positional_args() -> None:
+
+    bounds = torch.tensor([-10.0, 10.0])
+
+    variable_values = torch.tensor([
+        [1.2, 3.2, 2.1, 5.1, -3.1, 5.4],
+        [2.1, -2.2, -3.4, 1.2, 0.2, 0.4]
+    ])
+    objective_values = torch.vstack([
+        torch.sin(variable_values[0]),
+        torch.sin(variable_values[1])
+    ])
+
+    variable_values = variable_values.T
+    objective_values = objective_values.T
+
+    predictor = _build_matern_predictor_qlogehvi(
+        bounds=bounds,
+        n_variables=2,
+        n_objectives=2,
+    )
+
+    with pytest.raises(TypeError):
+        predictor.update_with_new_data(  # type: ignore
+            variable_values,
+            objective_values,
         )

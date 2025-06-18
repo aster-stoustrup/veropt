@@ -1,4 +1,5 @@
 import abc
+import functools
 from enum import Enum
 from typing import Callable, Literal, Optional
 
@@ -13,7 +14,7 @@ from sklearn.mixture import GaussianMixture
 from veropt.optimiser.optimiser_utility import get_nadir_point
 from veropt.optimiser.utility import (
     check_variable_and_objective_shapes, check_variable_objective_values_matching,
-    unpack_variables_objectives_from_kwargs
+    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 )
 
 
@@ -28,10 +29,18 @@ from veropt.optimiser.utility import (
 def _check_input_dimensions[T, **P](
         function: Callable[P, T]
 ) -> Callable[P, T]:
+
+    @functools.wraps(function)
     def check_dimensions(
             *args: P.args,
             **kwargs: P.kwargs,
     ) -> T:
+
+        enforce_amount_of_positional_arguments(
+            received_args=args,
+            function=function
+        )
+
         self = args[0]
         assert type(self) is BotorchAcquisitionFunction
 
@@ -73,6 +82,7 @@ class AcquisitionFunction:
     @_check_input_dimensions
     def __call__(
             self,
+            *,
             variable_values: torch.Tensor
     ) -> torch.Tensor:
 
@@ -87,6 +97,7 @@ class BotorchAcquisitionFunction(AcquisitionFunction):
     @_check_input_dimensions
     def refresh(
             self,
+            *,
             model: botorch.models.model.Model,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor,
@@ -329,7 +340,9 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
         samples = np.zeros(n_acq_func_samples)
 
         for coord_ind in range(n_acq_func_samples):
-            sample = acquisition_function(random_coordinates[:, coord_ind:coord_ind+1, :])
+            sample = acquisition_function(
+                variable_values=random_coordinates[:, coord_ind:coord_ind+1, :]
+            )
             samples[coord_ind] = sample.detach().numpy()  # If this is not detached, it causes a memory leak o:)
 
         return samples

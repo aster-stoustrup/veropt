@@ -2,7 +2,7 @@ import abc
 
 import torch
 
-from veropt.optimiser.optimiser_utility import DataShape
+from veropt.optimiser.utility import DataShape
 
 
 class Normaliser:

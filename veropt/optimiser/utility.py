@@ -1,8 +1,10 @@
-from typing import Callable, Optional
+import functools
+import inspect
+from copy import deepcopy
+from typing import Callable, Optional, TypedDict, Union
 
+import decorator
 import torch
-
-from veropt.optimiser.optimiser_utility import DataShape, TensorWithNormalisationFlag
 
 
 def check_variable_values_shape(
@@ -72,14 +74,46 @@ def check_variable_and_objective_shapes(
         )
 
 
+def count_positional_arguments_in_signature(function: Callable) -> int:
+
+    signature = inspect.signature(function)
+
+    return len([
+        parameter for parameter in signature.parameters.values() if (
+                parameter.kind == inspect.Parameter.POSITIONAL_ONLY
+                or parameter.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+        )
+    ])
+
+
+def enforce_amount_of_positional_arguments[T, **P](
+        received_args: P.args,
+        function: Callable[P, T]
+) -> None:
+
+    n_positional_arguments_orginal_function = count_positional_arguments_in_signature(function)
+
+    if not n_positional_arguments_orginal_function == len(received_args):
+        raise TypeError(
+            f"{function.__name__}() takes {n_positional_arguments_orginal_function} positional argument "
+            f"but {len(received_args)} were given"
+        )
+
+
 def check_variable_objective_values_matching[T, **P](
         function: Callable[P, T],
 ) -> Callable[P, T]:
 
+    @functools.wraps(function)
     def check_shapes(
             *args: P.args,
             **kwargs: P.kwargs
     ) -> T:
+
+        enforce_amount_of_positional_arguments(
+            received_args=args,
+            function=function
+        )
 
         assert 'variable_values' in kwargs, "Tensor 'variable_values' must be specified to use this decorator"
         assert 'objective_values' in kwargs, "Tensor 'objective_values' must be specified to use this decorator"
@@ -118,6 +152,26 @@ def check_variable_objective_values_matching[T, **P](
     return check_shapes
 
 
+def check_incoming_objective_dimensions_fix_1d(
+        objective_values: torch.Tensor,
+        n_objectives: int,
+        function_name: str,
+        class_name: str,
+) -> torch.Tensor:
+    if n_objectives == 1:
+        if len(objective_values.shape) == 1:
+            objective_values = objective_values.unsqueeze(DataShape.index_dimensions)
+
+    check_objective_values_shape(
+        objective_values=objective_values,
+        n_objectives=n_objectives,
+        function_name=function_name,
+        class_name=class_name,
+    )
+
+    return objective_values
+
+
 def unpack_variables_objectives_from_kwargs(
         kwargs: dict
 ) -> tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
@@ -142,17 +196,49 @@ def unpack_flagged_variables_objectives_from_kwargs(
 ) -> tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
 
     if 'variable_values_flagged' in kwargs:
-        flagged_variable_values = kwargs['variable_values']
+        flagged_variable_values = kwargs['variable_values_flagged']
         assert type(flagged_variable_values) is TensorWithNormalisationFlag
         variable_values = flagged_variable_values.tensor
     else:
         variable_values = None
 
     if 'objective_values_flagged' in kwargs:
-        flagged_objective_values = kwargs['objective_values']
+        flagged_objective_values = kwargs['objective_values_flagged']
         assert type(flagged_objective_values) is TensorWithNormalisationFlag
         objective_values = flagged_objective_values.tensor
     else:
         objective_values = None
 
     return variable_values, objective_values
+
+
+# TODO: If PEP 764 is accepted, convert this to inline
+class PredictionDict(TypedDict):
+    mean: torch.Tensor
+    lower: torch.Tensor
+    upper: torch.Tensor
+
+
+class DataShape:
+    index_points = 0
+    index_dimensions = 1
+
+
+class TensorWithNormalisationFlag:
+    def __init__(
+            self,
+            tensor: torch.Tensor,
+            normalised: bool
+    ):
+        self.tensor = tensor
+        self.normalised = deepcopy(normalised)
+
+    def __getitem__(
+            self,
+            item: Union[int, slice, tuple[Union[int, slice], ...]]  # type-hint should technically be as in torch.Tensor
+    ) -> 'TensorWithNormalisationFlag':
+
+        return TensorWithNormalisationFlag(
+            tensor=self.tensor[item],
+            normalised=self.normalised
+        )

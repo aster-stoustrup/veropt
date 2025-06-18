@@ -4,22 +4,25 @@ from typing import Optional, Union
 
 import torch
 
+from veropt.optimiser.utility import check_incoming_objective_dimensions_fix_1d
+
 
 class Objective:
     def __init__(
             self,
-            bounds: torch.Tensor,
+            bounds: list[list[float]],
             n_variables: int,
             n_objectives: int,
             variable_names: Optional[list[str]] = None,
             objective_names: Optional[list[str]] = None
     ):
-        self.bounds = bounds
+        # TODO: Check dimensions of the bounds against n_vars
+        self.bounds = torch.tensor(bounds)
         self.n_variables = n_variables
         self.n_objectives = n_objectives
 
         # TODO: Consider dropping these defaults?
-        #   - maybe annoying for integrated objective...?
+        #   - maybe annoying for callable objective...?
         if variable_names is None:
             self.variable_names = [f"Variable {i}" for i in range(1, n_variables + 1)]
         else:
@@ -31,11 +34,27 @@ class Objective:
             self.objective_names = objective_names
 
 
-class IntegratedObjective(Objective):
+class CallableObjective(Objective):
     __metaclass__ = abc.ABCMeta
 
+    def __call__(self, parameter_values: torch.Tensor) -> torch.Tensor:
+
+        objective_values = self._run(
+            parameter_values=parameter_values
+        )
+
+        objective_values = check_incoming_objective_dimensions_fix_1d(
+            objective_values=objective_values,
+            n_objectives=self.n_objectives,
+            function_name='__call__',
+            class_name=self.__class__.__name__
+        )
+
+        return objective_values
+
+
     @abc.abstractmethod
-    def run(self, parameter_values: torch.Tensor) -> torch.Tensor:
+    def _run(self, parameter_values: torch.Tensor) -> torch.Tensor:
         pass
 
 
@@ -56,17 +75,19 @@ class InterfaceObjective(Objective):
 
 
 class ObjectiveKind(Enum):
-    integrated = 1
+    callable = 1
     interface = 2
 
 
 def determine_objective_type(
-        objective: Union[IntegratedObjective, InterfaceObjective]
+        objective: Union[CallableObjective, InterfaceObjective]
 ) -> ObjectiveKind:
 
-    if issubclass(type(objective), IntegratedObjective):
-        return ObjectiveKind.integrated
+    if issubclass(type(objective), CallableObjective):
+        return ObjectiveKind.callable
     elif issubclass(type(objective), InterfaceObjective):
         return ObjectiveKind.interface
     else:
-        raise ValueError("The objective must be a subclass of either IntegratedObjective or InterfaceObjective.")
+        raise ValueError(
+            f"The objective must be a subclass of either {CallableObjective.__name__} or {InterfaceObjective.__name__}."
+        )
