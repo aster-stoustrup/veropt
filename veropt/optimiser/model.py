@@ -433,7 +433,7 @@ class GPyTorchFullModel(SurrogateModel):
                 function=function
             )
 
-            self = args[0]
+            self: GPyTorchFullModel = args[0]  # type: ignore[assignment]
             assert issubclass(type(self), GPyTorchFullModel)
 
             variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)

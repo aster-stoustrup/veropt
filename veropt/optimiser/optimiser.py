@@ -101,7 +101,7 @@ class BayesianOptimiser:
                 function=function
             )
 
-            self = args[0]
+            self: BayesianOptimiser = args[0]  # type: ignore[assignment]
             assert issubclass(type(self), BayesianOptimiser)
 
             variable_values, objective_values = unpack_flagged_variables_objectives_from_kwargs(kwargs)
@@ -183,7 +183,7 @@ class BayesianOptimiser:
             normalised= deepcopy(self.return_normalised_data)
         )
 
-    def get_best_points(self) -> BestPoints | None:
+    def get_best_points(self) -> BestPoints:
 
         best_point = get_best_points(
             variable_values=self.evaluated_variable_values.tensor,
@@ -273,10 +273,6 @@ class BayesianOptimiser:
                 if self.settings.renormalise_each_step:
 
                     self._fit_normaliser()
-
-                else:
-
-                    self._update_normalised_values()
 
             self._train_model()
 
@@ -399,9 +395,15 @@ class BayesianOptimiser:
 
         self._update_normalised_values()
 
+        if self.settings.verbose:
+
+            best_value_string = list_with_floats_to_string(self.get_best_points()['objectives'].tolist())
+            print(f"Normalisation has been completed. Best values changed to: {best_value_string} \n")
+
     def _update_normalised_values(self) -> None:
 
         assert self._normaliser_variables is not None, "Normaliser must be initiated to update normalised values"
+        assert self._normaliser_objective_values is not None, "Normaliser must be initiated to update normalised values"
 
         self.initial_points_normalised = self._normaliser_variables.transform(
             tensor=self.initial_points_real_units
@@ -420,11 +422,6 @@ class BayesianOptimiser:
         )
 
         self.predictor.update_bounds(self.bounds.tensor)
-
-        if self.settings.verbose:
-
-            best_value_string = list_with_floats_to_string(self.get_best_points()['objectives'].tolist())
-            print(f"Normalisation has been completed. Best values changed to: {best_value_string}")
 
     @_check_input_dimensions
     def _unnormalise_variables(
