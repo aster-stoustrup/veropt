@@ -9,14 +9,17 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
+from veropt.optimiser.utility import DataShape
 
 
 class AcquisitionOptimiser:
     def __init__(
             self,
             bounds: torch.Tensor,
+            n_evaluations_per_step: int
     ) -> None:
         self.bounds = bounds
+        self.n_evaluations_per_step = n_evaluations_per_step
 
     def __call__(
             self,
@@ -56,6 +59,11 @@ class TorchNumpyWrapper:
 
     def __call__(self, x: np.ndarray) -> np.ndarray:
 
+        # TODO: Move somewhere prettier:
+        #   - And make more general etc etc
+        if len(x.shape) == 1:
+            x = x.reshape(1, len(x))
+
         output = self.function(torch.tensor(x))
 
         return output.detach().numpy()
@@ -66,12 +74,16 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
     def __init__(
             self,
             bounds: torch.Tensor,
-            max_iter: int = 1000
+            n_evaluations_per_step: int,
+        max_iter: int = 1000
     ):
         self.max_iter = max_iter
 
+        assert n_evaluations_per_step == 1, "This optimiser can only find one point at a time"
+
         super().__init__(
-            bounds=bounds
+            bounds=bounds,
+            n_evaluations_per_step=n_evaluations_per_step
         )
 
     def optimise(
@@ -104,6 +116,7 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
     def __init__(
             self,
             bounds: torch.Tensor,
+            n_evaluations_per_step: int,
             single_step_optimiser: AcquisitionOptimiser,
             alpha: float = 1.0,
             omega: float = 1.0,
@@ -125,7 +138,8 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
             raise ValueError(f"'refresh_setting' must be 'simple' or 'advanced', received: {refresh_setting}")
 
         super().__init__(
-            bounds=bounds
+            bounds=bounds,
+            n_evaluations_per_step=n_evaluations_per_step
         )
 
     def __repr__(self) -> str:
@@ -135,7 +149,43 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
             self,
             acquisition_function: AcquisitionFunction,
     ) -> torch.Tensor:
-        raise NotImplementedError
+
+        def distance_punishment_wrapper(
+                variable_values: torch.Tensor,
+                other_points_variables: list[torch.Tensor]
+        ) -> torch.Tensor:
+
+            acquistion_value = acquisition_function(
+                variable_values=variable_values
+            )
+
+            new_acq_func_val = self._add_dist_punishment(
+                point_variable_values=variable_values,
+                acquisition_value=acquistion_value,
+                other_points_variable_values=other_points_variables
+            )
+
+            return new_acq_func_val
+
+        # TODO: Make acquisition function class with the distance punishment added
+        #   - Satisfies type-hint
+        #   - Will be super useful for visualising acq func
+        #       - Consider visualisation ease when building
+
+        candidates: list[torch.Tensor] = []
+
+        for candidate_no in range(self.n_evaluations_per_step):
+
+            candidates.append(self.single_step_optimiser(
+                acquisition_function=lambda x: distance_punishment_wrapper(x, candidates)
+            ))
+
+            # TODO: Add verbosity flag here
+            print(f"Found point {candidate_no + 1} of {self.n_evaluations_per_step}.")
+
+        candidates_tensor = torch.stack(candidates, dim=DataShape.index_points)
+
+        return candidates_tensor
 
     def refresh(
             self,
@@ -160,6 +210,29 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
         super().update_bounds(
             new_bounds=new_bounds
         )
+
+    def _add_dist_punishment(
+            self,
+            point_variable_values: torch.Tensor,
+            acquisition_value: torch.Tensor,
+            other_points_variable_values: list[torch.Tensor]
+    ) -> torch.Tensor:
+
+        assert self.scaling is not None, "Scaling must have been calculated before adding the proximity punishment."
+
+        proximity_punish = torch.zeros(len(acquisition_value))
+        scaling = self.omega * self.scaling
+
+        for other_point_variables in other_points_variable_values:
+
+            proximity_punish += scaling * np.exp(
+                -(
+                        torch.sum((point_variable_values - other_point_variables) ** 2, dim=1)
+                        / (self.alpha ** 2)
+                )
+            )
+
+        return acquisition_value.detach() - proximity_punish
 
     def _sample_acq_func(
             self,

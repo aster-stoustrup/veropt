@@ -83,12 +83,12 @@ class BotorchPredictor(Predictor):
         ) -> T:
 
             enforce_amount_of_positional_arguments(
-                received_args=args,
-                function=function
+                function=function,
+                received_args=args
             )
 
+            assert issubclass(type(args[0]), BotorchPredictor)
             self: BotorchPredictor = args[0]  # type: ignore[assignment]
-            assert issubclass(type(self), BotorchPredictor)
 
             variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)
 

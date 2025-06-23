@@ -429,12 +429,12 @@ class GPyTorchFullModel(SurrogateModel):
         ) -> T:
 
             enforce_amount_of_positional_arguments(
-                received_args=args,
-                function=function
+                function=function,
+                received_args=args
             )
 
+            assert issubclass(type(args[0]), GPyTorchFullModel)
             self: GPyTorchFullModel = args[0]  # type: ignore[assignment]
-            assert issubclass(type(self), GPyTorchFullModel)
 
             variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)
 
@@ -575,7 +575,7 @@ class GPyTorchFullModel(SurrogateModel):
             if self.verbose:
                 print(
                     f"Training model... Iteration {iteration} (of a maximum {self.training_parameters.max_iter})"
-                    f" - Loss: {loss.item():.3f}",
+                    f" - MLL: {loss.item():.3f}",
                     end="\r"
                 )
 

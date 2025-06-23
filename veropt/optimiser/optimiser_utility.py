@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, TypedDict, Union
@@ -28,7 +29,7 @@ class OptimiserSettings:
             initial_points_generator: InitialPointsGenerationMode = InitialPointsGenerationMode.random,
             normalise: bool = True,
             verbose: bool = True,
-            renormalise_each_step: Optional[bool] = None,  # TODO: Write a preset for this somewhere
+            renormalise_each_step: Optional[bool] = None,
             mask_nans: bool = True,
             n_points_before_fitting: Optional[int] = None,
             objective_weights: Optional[list[float]] = None
@@ -42,8 +43,17 @@ class OptimiserSettings:
 
         self.normalise = normalise
         self.verbose = verbose
-        self.renormalise_each_step = renormalise_each_step
         self.mask_nans = mask_nans
+
+        if renormalise_each_step is None:
+
+            if n_objectives > 1:
+                self.renormalise_each_step = True
+            else:
+                self.renormalise_each_step = False
+
+        else:
+            self.renormalise_each_step = renormalise_each_step
 
         if n_points_before_fitting is None:
             self.n_points_before_fitting = self.n_initial_points - self.n_evaluations_per_step * 2
@@ -71,6 +81,7 @@ class SuggestedPoints:
     variable_values: torch.Tensor
     predicted_objective_values: Optional[PredictionDict]
     generated_at_step: int
+    generated_with_mode: OptimisationMode
     normalised: bool
 
     @property
@@ -80,10 +91,34 @@ class SuggestedPoints:
             normalised=self.normalised
         )
 
+    def copy(self) -> 'SuggestedPoints':
+
+        if self.predicted_objective_values is None:
+
+            predicted_values_cloned = None
+
+        else:
+            predicted_values_cloned = {
+                'mean': self.predicted_objective_values['mean'].detach().clone(),
+                'lower': self.predicted_objective_values['lower'].detach().clone(),
+                'upper': self.predicted_objective_values['upper'].detach().clone(),
+            }
+
+        return SuggestedPoints(
+            variable_values=self.variable_values.detach().clone(),
+            predicted_objective_values=predicted_values_cloned,
+            generated_at_step=deepcopy(self.generated_at_step),
+            generated_with_mode=deepcopy(self.generated_with_mode),
+            normalised=deepcopy(self.normalised),
+        )
+
 
 def list_with_floats_to_string(
         unformatted_list: Union[list[float], list[list[float]]]
 ) -> str:
+
+    if len(unformatted_list) == 0:
+        return "[]"
 
     if type(unformatted_list[0]) is list:
 
@@ -132,6 +167,13 @@ def get_best_points(
         objectives_greater_than: Optional[float | list[float]] = None,
         best_for_objecive_index: Optional[int] = None
 ) -> BestPoints | None:
+
+    if len(variable_values) == 0:
+        return {
+            'variables': torch.tensor([]),
+            'objectives': torch.tensor([]),
+            'index': -1,
+        }
 
     assert objectives_greater_than is None or best_for_objecive_index is None, "Specifying both options not supported"
 

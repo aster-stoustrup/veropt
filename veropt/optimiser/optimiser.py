@@ -75,15 +75,24 @@ class BayesianOptimiser:
         self.model_has_been_trained = False
 
         self.suggested_points: Optional[SuggestedPoints] = None
-        self.suggested_points_history: list[Optional[SuggestedPoints]] = (
-                [None] * (self.n_initial_points + self.n_bayesian_points)
-        )
+        self.suggested_points_history: list[Optional[SuggestedPoints]] = []
 
         self.objective_type = determine_objective_type(
             objective=objective
         )
 
         self._verify_set_up()
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"points: {self.n_points_evaluated} of {self.n_initial_points + self.n_bayesian_points}, "
+            f"mode: {self.optimisation_mode.name}, "
+            f"normalised: {'yes' if self.data_has_been_normalised else 'no'}, "
+            f"model trained: {'yes' if self.model_has_been_trained else 'no'}, "
+            f"best objective values: {list_with_floats_to_string(self.get_best_points()['objectives'].tolist())}"
+            f")"
+        )
 
     @staticmethod
     def _check_input_dimensions[T, **P](
@@ -97,12 +106,12 @@ class BayesianOptimiser:
         ) -> T:
 
             enforce_amount_of_positional_arguments(
-                received_args=args,
-                function=function
+                function=function,
+                received_args=args
             )
 
+            assert issubclass(type(args[0]), BayesianOptimiser)
             self: BayesianOptimiser = args[0]  # type: ignore[assignment]
-            assert issubclass(type(self), BayesianOptimiser)
 
             variable_values, objective_values = unpack_flagged_variables_objectives_from_kwargs(kwargs)
 
@@ -175,11 +184,11 @@ class BayesianOptimiser:
         else:
             raise RuntimeError
 
-
         self.suggested_points = SuggestedPoints(
             variable_values=suggested_variables_tensor,
             predicted_objective_values=prediction,
             generated_at_step=deepcopy(self.current_step),
+            generated_with_mode=deepcopy(self.optimisation_mode),
             normalised= deepcopy(self.return_normalised_data)
         )
 
@@ -335,6 +344,8 @@ class BayesianOptimiser:
             suggested_variables=suggested_variables_dict
         )
 
+        self._reset_suggested_points()
+
     def _verify_set_up(self) -> None:
 
         assert self.n_initial_points % self.n_evaluations_per_step == 0, (
@@ -365,7 +376,7 @@ class BayesianOptimiser:
             )
 
     def _reset_suggested_points(self) -> None:
-        self.suggested_points_history[self.current_step - 1] = deepcopy(self.suggested_points)
+        self.suggested_points_history.append(self.suggested_points.copy())
         self.suggested_points = None
 
     def _train_model(self) -> None:
@@ -634,8 +645,40 @@ class BayesianOptimiser:
 
 
 def bayesian_optimiser(
-
+        n_initial_points: int,
+        n_bayesian_points: int,
+        n_evaluations_per_step: int,
+        objective: Union[CallableObjective, InterfaceObjective],
+        predictor: Union[Predictor, str, None] = None,
+        normaliser_class: Union[type[Normaliser], str, None] = None,
+        **kwargs: Unpack[OptimiserSettingsInputDict]
 ) -> BayesianOptimiser:
+
+    # if issubclass(type(predictor), Predictor):
+    #     built_predictor = predictor
+    #
+    # else:
+    #
+    #     built_predictor = botorch_predictor(
+    #         something=predictor,
+    #     )
+    #
+    # normaliser_class = normaliser(
+    #
+    # )
+    #
+    #
+    # return BayesianOptimiser(
+    #     n_initial_points=n_initial_points,
+    #     n_bayesian_points=n_bayesian_points,
+    #     n_evaluations_per_step=n_evaluations_per_step,
+    #     objective=objective,
+    #     predictor=built_predictor,
+    #     normaliser_class=normaliser_class,
+    #     **kwargs
+    # )
+
+
     # TODO: Implement
     #   - Constructor for optimiser class
     raise NotImplementedError

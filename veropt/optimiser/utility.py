@@ -87,8 +87,8 @@ def count_positional_arguments_in_signature(function: Callable) -> int:
 
 
 def enforce_amount_of_positional_arguments[T, **P](
-        received_args: P.args,
-        function: Callable[P, T]
+        function: Callable[P, T],
+        received_args: P.args
 ) -> None:
 
     n_positional_arguments_orginal_function = count_positional_arguments_in_signature(function)
@@ -111,8 +111,8 @@ def check_variable_objective_values_matching[T, **P](
     ) -> T:
 
         enforce_amount_of_positional_arguments(
-            received_args=args,
-            function=function
+            function=function,
+            received_args=args
         )
 
         assert 'variable_values' in kwargs, "Tensor 'variable_values' must be specified to use this decorator"
@@ -234,7 +234,7 @@ class TensorWithNormalisationFlag:
         self.normalised = deepcopy(normalised)
 
     def __repr__(self) -> str:
-        return f"TensorWithNormalisationFlag(normalised={self.normalised}, {self.tensor})"
+        return f"TensorWithNormalisationFlag(normalised={self.normalised}, \n{self.tensor}\n)"
 
     def __getitem__(
             self,
@@ -245,3 +245,7 @@ class TensorWithNormalisationFlag:
             tensor=self.tensor[item],
             normalised=self.normalised
         )
+
+    @property
+    def shape(self) -> torch.Size:
+        return self.tensor.shape

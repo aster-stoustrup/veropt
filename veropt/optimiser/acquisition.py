@@ -32,12 +32,12 @@ def _check_input_dimensions[T, **P](
     ) -> T:
 
         enforce_amount_of_positional_arguments(
-            received_args=args,
-            function=function
+            function=function,
+            received_args=args
         )
 
-        self: BotorchAcquisitionFunction = args[0]  # type: ignore[assignment]
-        assert issubclass(type(self), BotorchAcquisitionFunction)
+        assert issubclass(type(args[0]), AcquisitionFunction)
+        self: AcquisitionFunction = args[0]  # type: ignore[assignment]
 
         variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)
 

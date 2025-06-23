@@ -18,6 +18,7 @@ def _build_matern_optimiser_ucb(
         bounds=objective.bounds,
         n_variables=objective.n_variables,
         n_objectives=objective.n_objectives,
+        n_evaluations_per_step=n_evaluations_per_step
     )
 
     return BayesianOptimiser(

@@ -1,3 +1,7 @@
+# TODO: Fix in project
+import torch
+torch.set_default_dtype(torch.float64)
+
 from tests.test_optimiser import _build_matern_optimiser_ucb
 from veropt.optimiser.practice_objectives import Hartmann
 
@@ -17,5 +21,5 @@ optimiser = _build_matern_optimiser_ucb(
     objective=objective
 )
 
-for i in range (4):
-    optimiser.run_optimisation_step()
+# for i in range (5):
+#     optimiser.run_optimisation_step()

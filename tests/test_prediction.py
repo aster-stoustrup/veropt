@@ -30,6 +30,7 @@ def _build_matern_predictor_ucb(
         bounds: torch.Tensor,
         n_variables: int,
         n_objectives: int,
+        n_evaluations_per_step: int
 ) -> BotorchPredictor:
 
     model = _build_matern_model(
@@ -44,9 +45,11 @@ def _build_matern_predictor_ucb(
 
     acquisition_optimiser = DistancePunishmentSequentialOptimiser(
         bounds=bounds,
+        n_evaluations_per_step=n_evaluations_per_step,
         single_step_optimiser=DualAnnealingOptimiser(
-            bounds=bounds
-        )
+            bounds=bounds,
+            n_evaluations_per_step=1
+        ),
     )
 
     predictor = BotorchPredictor(
@@ -62,6 +65,7 @@ def _build_matern_predictor_qlogehvi(
         bounds: torch.Tensor,
         n_variables: int,
         n_objectives: int,
+        n_evaluations_per_step: int
 ) -> BotorchPredictor:
     model = _build_matern_model(
         n_variables=n_variables,
@@ -75,9 +79,11 @@ def _build_matern_predictor_qlogehvi(
 
     acquisition_optimiser = DistancePunishmentSequentialOptimiser(
         bounds=bounds,
+        n_evaluations_per_step=n_evaluations_per_step,
         single_step_optimiser=DualAnnealingOptimiser(
-            bounds=bounds
-        )
+            bounds=bounds,
+            n_evaluations_per_step=1
+        ),
     )
 
     predictor = BotorchPredictor(
@@ -109,6 +115,7 @@ def test_botorch_predict_values_1_objective() -> None:
         bounds=bounds,
         n_variables=1,
         n_objectives=1,
+        n_evaluations_per_step=4
     )
 
     predictor.update_with_new_data(
@@ -152,6 +159,7 @@ def test_botorch_predict_values_2_objectives() -> None:
         bounds=bounds,
         n_variables=2,
         n_objectives=2,
+        n_evaluations_per_step=4
     )
 
     predictor.update_with_new_data(
@@ -185,6 +193,7 @@ def test_botorch_predict_values_wrong_dimensions() -> None:
         bounds=bounds,
         n_variables=2,
         n_objectives=2,
+        n_evaluations_per_step=4
     )
 
     predictor.update_with_new_data(
@@ -224,6 +233,7 @@ def test_botorch_predict_train_wrong_obj_dims() -> None:
         bounds=bounds,
         n_variables=2,
         n_objectives=2,
+        n_evaluations_per_step=4
     )
 
     with pytest.raises(ValueError):
@@ -253,6 +263,7 @@ def test_botorch_update_with_new_data_fails_at_positional_args() -> None:
         bounds=bounds,
         n_variables=2,
         n_objectives=2,
+        n_evaluations_per_step=4
     )
 
     with pytest.raises(TypeError):
