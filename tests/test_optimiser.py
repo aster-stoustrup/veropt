@@ -1,6 +1,6 @@
 import torch
 
-from veropt.optimiser.normaliser import NormaliserZeroMeanUnitVariance
+from veropt.optimiser.normalisation import NormaliserZeroMeanUnitVariance
 from veropt.optimiser.objective import CallableObjective
 from veropt.optimiser.practice_objectives import Hartmann
 from .test_prediction import _build_matern_predictor_qlogehvi, _build_matern_predictor_ucb

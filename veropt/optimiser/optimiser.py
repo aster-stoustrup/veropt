@@ -1,6 +1,5 @@
 import functools
 from copy import deepcopy
-from functools import cached_property
 from inspect import get_annotations
 from typing import Callable, Optional, Union, Unpack
 
@@ -8,7 +7,7 @@ import gpytorch.settings
 import torch
 
 from veropt.optimiser.initial_points import generate_initial_points_random
-from veropt.optimiser.normaliser import Normaliser
+from veropt.optimiser.normalisation import Normaliser
 from veropt.optimiser.objective import CallableObjective, InterfaceObjective, ObjectiveKind, determine_objective_type
 from veropt.optimiser.optimiser_utility import (
     BestPoints, InitialPointsGenerationMode, OptimisationMode,
@@ -22,8 +21,7 @@ from veropt.optimiser.utility import DataShape, TensorWithNormalisationFlag, che
     enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs
 
 
-# TODO: Consider what to do about uncertainty on obj func values
-#   - Subclassed optimiser?
+# TODO: Fix torch/np conflict over float size
 class BayesianOptimiser:
     def __init__(
             self,
@@ -110,8 +108,8 @@ class BayesianOptimiser:
                 received_args=args
             )
 
-            assert issubclass(type(args[0]), BayesianOptimiser)
-            self: BayesianOptimiser = args[0]  # type: ignore[assignment]
+            assert isinstance(args[0], BayesianOptimiser)
+            self: BayesianOptimiser = args[0]
 
             variable_values, objective_values = unpack_flagged_variables_objectives_from_kwargs(kwargs)
 
@@ -376,6 +374,9 @@ class BayesianOptimiser:
             )
 
     def _reset_suggested_points(self) -> None:
+
+        if self.suggested_points is None: raise RuntimeError()
+
         self.suggested_points_history.append(self.suggested_points.copy())
         self.suggested_points = None
 
@@ -642,43 +643,3 @@ class BayesianOptimiser:
             self.initial_points_normalised = self._normaliser_variables.transform(
                 tensor=self._initial_points_real_units
             )
-
-
-def bayesian_optimiser(
-        n_initial_points: int,
-        n_bayesian_points: int,
-        n_evaluations_per_step: int,
-        objective: Union[CallableObjective, InterfaceObjective],
-        predictor: Union[Predictor, str, None] = None,
-        normaliser_class: Union[type[Normaliser], str, None] = None,
-        **kwargs: Unpack[OptimiserSettingsInputDict]
-) -> BayesianOptimiser:
-
-    # if issubclass(type(predictor), Predictor):
-    #     built_predictor = predictor
-    #
-    # else:
-    #
-    #     built_predictor = botorch_predictor(
-    #         something=predictor,
-    #     )
-    #
-    # normaliser_class = normaliser(
-    #
-    # )
-    #
-    #
-    # return BayesianOptimiser(
-    #     n_initial_points=n_initial_points,
-    #     n_bayesian_points=n_bayesian_points,
-    #     n_evaluations_per_step=n_evaluations_per_step,
-    #     objective=objective,
-    #     predictor=built_predictor,
-    #     normaliser_class=normaliser_class,
-    #     **kwargs
-    # )
-
-
-    # TODO: Implement
-    #   - Constructor for optimiser class
-    raise NotImplementedError

@@ -36,8 +36,8 @@ def _check_input_dimensions[T, **P](
             received_args=args
         )
 
-        assert issubclass(type(args[0]), AcquisitionFunction)
-        self: AcquisitionFunction = args[0]  # type: ignore[assignment]
+        assert isinstance(args[0], AcquisitionFunction)
+        self: AcquisitionFunction = args[0]
 
         variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)
 

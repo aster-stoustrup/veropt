@@ -111,7 +111,7 @@ class RefreshSetting(Enum):
     advanced = 1
 
 
-class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
+class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
 
     def __init__(
             self,
@@ -150,7 +150,7 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
             acquisition_function: AcquisitionFunction,
     ) -> torch.Tensor:
 
-        def distance_punishment_wrapper(
+        def proximity_punishment_wrapper(
                 variable_values: torch.Tensor,
                 other_points_variables: list[torch.Tensor]
         ) -> torch.Tensor:
@@ -159,7 +159,7 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
                 variable_values=variable_values
             )
 
-            new_acq_func_val = self._add_dist_punishment(
+            new_acq_func_val = self._add_proximity_punishment(
                 point_variable_values=variable_values,
                 acquisition_value=acquistion_value,
                 other_points_variable_values=other_points_variables
@@ -167,7 +167,7 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
 
             return new_acq_func_val
 
-        # TODO: Make acquisition function class with the distance punishment added
+        # TODO: Make acquisition function class with the proximity punishment added
         #   - Satisfies type-hint
         #   - Will be super useful for visualising acq func
         #       - Consider visualisation ease when building
@@ -177,7 +177,7 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
         for candidate_no in range(self.n_evaluations_per_step):
 
             candidates.append(self.single_step_optimiser(
-                acquisition_function=lambda x: distance_punishment_wrapper(x, candidates)
+                acquisition_function=lambda x: proximity_punishment_wrapper(x, candidates)
             ))
 
             # TODO: Add verbosity flag here
@@ -211,7 +211,7 @@ class DistancePunishmentSequentialOptimiser(AcquisitionOptimiser):
             new_bounds=new_bounds
         )
 
-    def _add_dist_punishment(
+    def _add_proximity_punishment(
             self,
             point_variable_values: torch.Tensor,
             acquisition_value: torch.Tensor,

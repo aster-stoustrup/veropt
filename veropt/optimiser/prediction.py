@@ -2,7 +2,6 @@ import abc
 import functools
 from typing import Callable
 
-import decorator
 import torch
 
 from veropt.optimiser.acquisition import BotorchAcquisitionFunction
@@ -87,8 +86,8 @@ class BotorchPredictor(Predictor):
                 received_args=args
             )
 
-            assert issubclass(type(args[0]), BotorchPredictor)
-            self: BotorchPredictor = args[0]  # type: ignore[assignment]
+            assert isinstance(args[0], BotorchPredictor)
+            self: BotorchPredictor = args[0]
 
             variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)
 

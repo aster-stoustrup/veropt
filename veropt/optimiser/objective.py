@@ -83,9 +83,9 @@ def determine_objective_type(
         objective: Union[CallableObjective, InterfaceObjective]
 ) -> ObjectiveKind:
 
-    if issubclass(type(objective), CallableObjective):
+    if isinstance(objective, CallableObjective):
         return ObjectiveKind.callable
-    elif issubclass(type(objective), InterfaceObjective):
+    elif isinstance(objective, InterfaceObjective):
         return ObjectiveKind.interface
     else:
         raise ValueError(

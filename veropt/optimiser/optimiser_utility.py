@@ -95,7 +95,7 @@ class SuggestedPoints:
 
         if self.predicted_objective_values is None:
 
-            predicted_values_cloned = None
+            predicted_values_cloned: Optional[PredictionDict] = None
 
         else:
             predicted_values_cloned = {

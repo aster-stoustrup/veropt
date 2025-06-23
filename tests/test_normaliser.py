@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from veropt.optimiser.normaliser import NormaliserZeroMeanUnitVariance
+from veropt.optimiser.normalisation import NormaliserZeroMeanUnitVariance
 from veropt.optimiser.utility import DataShape
 
 

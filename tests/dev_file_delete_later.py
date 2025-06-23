@@ -1,5 +1,8 @@
 # TODO: Fix in project
 import torch
+
+from veropt.optimiser import bayesian_optimiser
+
 torch.set_default_dtype(torch.float64)
 
 from tests.test_optimiser import _build_matern_optimiser_ucb
@@ -14,11 +17,19 @@ objective = Hartmann(
     n_variables=6
 )
 
-optimiser = _build_matern_optimiser_ucb(
+# optimiser = _build_matern_optimiser_ucb(
+#     n_initial_points=n_initial_points,
+#     n_bayesian_points=n_bayesian_points,
+#     n_evaluations_per_step=n_evalations_per_step,
+#     objective=objective
+# )
+
+# TODO: Make tests for various calls to this!
+optimiser = bayesian_optimiser(
     n_initial_points=n_initial_points,
     n_bayesian_points=n_bayesian_points,
     n_evaluations_per_step=n_evalations_per_step,
-    objective=objective
+    objective=objective,
 )
 
 # for i in range (5):

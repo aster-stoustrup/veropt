@@ -433,8 +433,8 @@ class GPyTorchFullModel(SurrogateModel):
                 received_args=args
             )
 
-            assert issubclass(type(args[0]), GPyTorchFullModel)
-            self: GPyTorchFullModel = args[0]  # type: ignore[assignment]
+            assert isinstance(args[0], GPyTorchFullModel)
+            self: GPyTorchFullModel = args[0]
 
             variable_values, objective_values = unpack_variables_objectives_from_kwargs(kwargs)
 
@@ -642,6 +642,3 @@ class GPyTorchFullModel(SurrogateModel):
             return True
         else:
             return False
-
-
-# TODO: Implement default model (pre-sets)

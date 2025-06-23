@@ -3,7 +3,7 @@ import torch
 
 from veropt.optimiser.acquisition import QLogExpectedHyperVolumeImprovement, \
     UpperConfidenceBound
-from veropt.optimiser.acquisition_optimiser import DistancePunishmentSequentialOptimiser, DualAnnealingOptimiser
+from veropt.optimiser.acquisition_optimiser import ProximityPunishmentSequentialOptimiser, DualAnnealingOptimiser
 from veropt.optimiser.model import AdamModelOptimiser, GPyTorchFullModel, MaternSingleModel
 from veropt.optimiser.prediction import BotorchPredictor
 
@@ -43,7 +43,7 @@ def _build_matern_predictor_ucb(
         n_objectives=n_objectives,
     )
 
-    acquisition_optimiser = DistancePunishmentSequentialOptimiser(
+    acquisition_optimiser = ProximityPunishmentSequentialOptimiser(
         bounds=bounds,
         n_evaluations_per_step=n_evaluations_per_step,
         single_step_optimiser=DualAnnealingOptimiser(
@@ -77,7 +77,7 @@ def _build_matern_predictor_qlogehvi(
         n_objectives=n_objectives,
     )
 
-    acquisition_optimiser = DistancePunishmentSequentialOptimiser(
+    acquisition_optimiser = ProximityPunishmentSequentialOptimiser(
         bounds=bounds,
         n_evaluations_per_step=n_evaluations_per_step,
         single_step_optimiser=DualAnnealingOptimiser(
