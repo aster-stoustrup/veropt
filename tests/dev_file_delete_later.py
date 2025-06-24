@@ -2,6 +2,7 @@
 import torch
 
 from veropt.optimiser import bayesian_optimiser
+from veropt.optimiser.constructors import gpytorch_model
 
 torch.set_default_dtype(torch.float64)
 
@@ -24,13 +25,55 @@ objective = Hartmann(
 #     objective=objective
 # )
 
-# TODO: Make tests for various calls to this!
+# TODO: Make tests for various calls to this and sub-functions
+#   - Probably especially really smart to see if it fails in all the right ways
+#       - I.e. what if I call it with prox punish settings but allow=False
+#       - And do we get told the options for anything if we e.g. misspell
+# optimiser = bayesian_optimiser(
+#     n_initial_points=n_initial_points,
+#     n_bayesian_points=n_bayesian_points,
+#     n_evaluations_per_step=n_evalations_per_step,
+#     objective=objective,
+# )
+
+
 optimiser = bayesian_optimiser(
     n_initial_points=n_initial_points,
     n_bayesian_points=n_bayesian_points,
     n_evaluations_per_step=n_evalations_per_step,
     objective=objective,
+    model={
+        'kernels': 'matern',
+        'kernel_settings': {
+            'lengthscale_upper_bound': 5.0
+        },
+        'training_settings': {
+            'max_iter': 15_000
+        }
+    },
+    acquisition_function={
+        'function': 'ucb',
+        'parameters': {
+            'beta': 3.0
+        }
+    },
+    acquisition_optimiser={
+        'optimiser': 'dual_annealing'
+    },
+    renormalise_each_step=False
 )
+
+# model = gpytorch_model(
+#     n_variables=4,
+#     n_objectives=2,
+#     kernels='matern',
+#     kernel_settings={
+#         'lengthscale_upper_bound': 5.0,
+#     },
+#     training_settings={
+#         'max_iter': 5_000
+#     }
+# )
 
 # for i in range (5):
 #     optimiser.run_optimisation_step()

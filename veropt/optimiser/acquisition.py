@@ -1,6 +1,6 @@
 import abc
 import functools
-from typing import Callable, Optional
+from typing import Callable, Optional, TypedDict
 
 import botorch
 import torch
@@ -165,6 +165,11 @@ class QLogExpectedHyperVolumeImprovement(BotorchAcquisitionFunction):
             ref_point=nadir_point,
             partitioning=partitioning
         )
+
+
+# For typing in the constructors
+class UpperConfidenceBoundOptions(TypedDict):
+    beta: float
 
 
 class UpperConfidenceBound(BotorchAcquisitionFunction):

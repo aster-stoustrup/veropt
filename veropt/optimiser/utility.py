@@ -88,7 +88,7 @@ def count_positional_arguments_in_signature(function: Callable) -> int:
 
 def enforce_amount_of_positional_arguments[T, **P](
         function: Callable[P, T],
-        received_args: P.args
+        received_args: P.args  # type: ignore  # PEP 612 is boring about this, it's fun and I wanna do it
 ) -> None:
 
     n_positional_arguments_orginal_function = count_positional_arguments_in_signature(function)
@@ -236,7 +236,7 @@ class TensorWithNormalisationFlag:
     def __repr__(self) -> str:
         return f"TensorWithNormalisationFlag(normalised={self.normalised}, \n{self.tensor}\n)"
 
-    def __getitem__(
+    def __getitem__(  # type: ignore[explicit-any]  # mypy is seeing things apparently
             self,
             item: Union[int, slice, tuple[Union[int, slice], ...]]  # type-hint should technically be as in torch.Tensor
     ) -> 'TensorWithNormalisationFlag':

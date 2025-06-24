@@ -1,6 +1,6 @@
 import abc
 from enum import Enum
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal, Optional, TypedDict
 
 import numpy as np
 import scipy
@@ -13,6 +13,9 @@ from veropt.optimiser.utility import DataShape
 
 
 class AcquisitionOptimiser:
+
+    maximum_evaluations_per_step: Optional[int]
+
     def __init__(
             self,
             bounds: torch.Tensor,
@@ -20,6 +23,12 @@ class AcquisitionOptimiser:
     ) -> None:
         self.bounds = bounds
         self.n_evaluations_per_step = n_evaluations_per_step
+
+        if self.maximum_evaluations_per_step is not None:
+            assert n_evaluations_per_step == self.maximum_evaluations_per_step, (
+                f"This optimiser can only find {self.maximum_evaluations_per_step} point(s) at a time "
+                f"but received a setting of {n_evaluations_per_step} evaluations per step."
+            )
 
     def __call__(
             self,
@@ -69,17 +78,21 @@ class TorchNumpyWrapper:
         return output.detach().numpy()
 
 
+class DualAnnealingSettings(TypedDict):
+    max_iter: int
+
+
 class DualAnnealingOptimiser(AcquisitionOptimiser):
+
+    maximum_evaluations_per_step = 1
 
     def __init__(
             self,
             bounds: torch.Tensor,
             n_evaluations_per_step: int,
-        max_iter: int = 1000
+            max_iter: int = 1000
     ):
         self.max_iter = max_iter
-
-        assert n_evaluations_per_step == 1, "This optimiser can only find one point at a time"
 
         super().__init__(
             bounds=bounds,
@@ -92,7 +105,7 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
     ) -> torch.Tensor:
 
         wrapped_acquisition_function = TorchNumpyWrapper(
-            function=acquisition_function
+            function=acquisition_function  # type: ignore  # mypy insanity because of the '*' in __call__
         )
 
         optimisation_result = scipy.optimize.dual_annealing(
@@ -111,7 +124,15 @@ class RefreshSetting(Enum):
     advanced = 1
 
 
+class ProximityPunishSettings(TypedDict):
+    alpha: float
+    omega: float
+    refresh_setting: Literal['simple', 'advanced']
+
+
 class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
+
+    maximum_evaluations_per_step = None
 
     def __init__(
             self,

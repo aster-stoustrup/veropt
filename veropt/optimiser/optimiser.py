@@ -5,6 +5,7 @@ from typing import Callable, Optional, Union, Unpack
 
 import gpytorch.settings
 import torch
+torch.set_default_dtype(torch.float64)
 
 from veropt.optimiser.initial_points import generate_initial_points_random
 from veropt.optimiser.normalisation import Normaliser
@@ -22,6 +23,7 @@ from veropt.optimiser.utility import DataShape, TensorWithNormalisationFlag, che
 
 
 # TODO: Fix torch/np conflict over float size
+#   - Put the torch default setting into this file, should we have it more places?
 class BayesianOptimiser:
     def __init__(
             self,
@@ -300,7 +302,7 @@ class BayesianOptimiser:
             f"The objective must be an {InterfaceObjective.__name__} to load points."
         )
 
-        (new_variable_values, new_objective_values) = self.objective.load_evaluated_points()  # type: ignore[union-attr]
+        new_variable_values, new_objective_values = self.objective.load_evaluated_points()  # type: ignore[union-attr]
 
         new_variable_values_tensor, new_objective_values_tensor = format_input_from_objective(
             new_variable_values=new_variable_values,
@@ -338,7 +340,7 @@ class BayesianOptimiser:
             variable_names=self.objective.variable_names
         )
 
-        self.objective.save_candidates(  # type: ignore[union-attr]
+        self.objective.save_candidates(  # type: ignore[union-attr]  # objective type is checked above
             suggested_variables=suggested_variables_dict
         )
 

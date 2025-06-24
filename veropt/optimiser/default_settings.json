@@ -1,5 +1,11 @@
 {
   "model": {
-    "kernel": "matern"
-  }
+    "kernel": "matern",
+    "optimiser": "adam"
+  },
+  "acquisition": {
+    "multi-objective": "qlogehvi",
+    "single-objective": "ucb"
+  },
+  "acquisition_optimiser": "dual_annealing"
 }

@@ -524,13 +524,14 @@ class GPyTorchFullModel(SurrogateModel):
 
         for model in self._model_list:
             assert model.model_with_data is not None, "Model initialisation seems to have failed"
+            assert model.model_with_data.likelihood is not None, "Model initialisation seems to have failed"
 
         # TODO: Might need to look into more options here
         #   - Currently seems to be assuming independent models. Maybe need to add an option for this?
         #       - Probably would need a different class (GPyTorchIndependentModels vs the opposite)
         #       - Botorch has some options for this
         self._model = botorch.models.ModelListGP(
-            *[model.model_with_data for model in self._model_list]  # type: ignore
+            *[model.model_with_data for model in self._model_list]  # type: ignore  # (type is checked above)
         )
         self._likelihood = gpytorch.likelihoods.LikelihoodList(
             *[model.model_with_data.likelihood for model in self._model_list]  # type: ignore[union-attr]
@@ -561,8 +562,7 @@ class GPyTorchFullModel(SurrogateModel):
             output = self._model(*self._model.train_inputs)
 
             previous_loss = loss
-            # Ignoring mypy here because gpytorch seems to be missing type-hints
-            loss = -self._marginal_log_likelihood(  # type: ignore
+            loss = -self._marginal_log_likelihood(  # type: ignore  # gpytorch seems to be missing type-hints
                 output,
                 self._model.train_targets
             )

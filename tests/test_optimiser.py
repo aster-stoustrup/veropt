@@ -48,7 +48,7 @@ def test_run_optimisation_step() -> None:
         objective=objective
     )
 
-    for i in range (4):
+    for i in range (5):
         optimiser.run_optimisation_step()
 
     # TODO: Mostly wanna see if this runs
