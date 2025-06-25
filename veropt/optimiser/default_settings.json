@@ -7,5 +7,6 @@
     "multi-objective": "qlogehvi",
     "single-objective": "ucb"
   },
-  "acquisition_optimiser": "dual_annealing"
+  "acquisition_optimiser": "dual_annealing",
+  "normaliser": "zero_mean_unit_variance"
 }

@@ -1,4 +1,6 @@
-from typing import Any, Literal, Mapping, Optional, TypedDict, Union, Unpack, get_args
+import json
+from importlib import resources
+from typing import Any, Literal, Mapping, Optional, TypedDict, Union, Unpack, get_args, overload
 
 import torch
 
@@ -17,20 +19,50 @@ from veropt.optimiser.prediction import BotorchPredictor
 
 
 SingleKernelOptions = Literal['matern']
-KernelOptions = Union[SingleKernelOptions, list[SingleKernelOptions]]
 KernelOptimiserOptions = Literal['adam']
+
 AcquisitionOptions = Literal['qlogehvi', 'ucb']
 AcquisitionOptimiserOptions = Literal['dual_annealing']
+
 NormaliserChoice = Literal['zero_mean_unit_variance']
+
+
+KernelInputDict = MaternParametersInputDict  # To be expanded when more kernels are added
+AcquisitionSettings = UpperConfidenceBoundOptions  # expand with more options when adding acq_funcs
+AcquisitionOptimiserSettings = DualAnnealingSettings  # expand when adding more options
+
+
+class ProblemInformation(TypedDict):
+    n_variables: int
+    n_objectives: int
+    n_evaluations_per_step: int
+    bounds: list[list[float]]
+
+
+class GPytorchModelChoice(TypedDict, total=False):
+    kernels: Union[SingleKernelOptions, list[SingleKernelOptions], list[GPyTorchSingleModel], None]
+    kernel_settings: Optional['KernelInputDict']
+    kernel_optimiser: Optional[KernelOptimiserOptions]
+    training_settings: Optional[GPyTorchTrainingParametersInputDict]
+
+
+class AcquisitionChoice(TypedDict, total=False):
+    function: Optional[AcquisitionOptions]
+    parameters: Optional[AcquisitionSettings]
+
+
+class AcquisitionOptimiserChoice(TypedDict, total=False):
+    optimiser: Optional[AcquisitionOptimiserOptions]
+    optimiser_settings: Optional[AcquisitionOptimiserSettings]
+    allow_proximity_punishment: bool
+    proximity_punish_settings: Optional[ProximityPunishSettings]
+
 
 # TODO: Go through naming and make consistent, good choices
 
 # TODO: Consider making a function that can give valid arguments to the user?
 #   - Like something that prints out an overview of options
 #   - Should probably live in some documentation somewhere actually...?
-
-# TODO: Put defaults in json and load them when in some neat way
-#   - Maybe make a test to ensure file is found and loaded across installations/platforms
 
 
 def bayesian_optimiser(
@@ -84,13 +116,6 @@ def bayesian_optimiser(
     )
 
 
-class ProblemInformation(TypedDict):
-    n_variables: int
-    n_objectives: int
-    n_evaluations_per_step: int
-    bounds: list[list[float]]
-
-
 def botorch_predictor(
         problem_information: ProblemInformation,
         model: Optional[Union[GPyTorchFullModel, 'GPytorchModelChoice']] = None,
@@ -103,6 +128,13 @@ def botorch_predictor(
         built_model = model
 
     else:
+
+        if model is not None:
+            _validate_typed_dict(
+                typed_dict=model,
+                expected_typed_dict_class=GPytorchModelChoice,
+                object_name='gpytorch_model'
+            )
 
         built_model = gpytorch_model(
             n_variables=problem_information['n_variables'],
@@ -125,7 +157,7 @@ def botorch_predictor(
         built_acquisition_optimiser = acquisition_optimiser
 
     else:
-        built_acquisition_optimiser = build_acquisition_optimiser(
+        built_acquisition_optimiser = acquisition_optimiser_with_proximity_punishment(
             bounds=problem_information['bounds'],
             n_evaluations_per_step=problem_information['n_evaluations_per_step'],
             **acquisition_optimiser or {}
@@ -138,17 +170,10 @@ def botorch_predictor(
     )
 
 
-class GPytorchModelChoice(TypedDict, total=False):
-    kernels: Union[KernelOptions, list[GPyTorchSingleModel], None]
-    kernel_settings: Optional['KernelInputDict']
-    kernel_optimiser: Optional[KernelOptimiserOptions]
-    training_settings: Optional[GPyTorchTrainingParametersInputDict]
-
-
 def gpytorch_model(
         n_variables: int,
         n_objectives: int,
-        kernels: Union[KernelOptions, list[GPyTorchSingleModel], None] = None,
+        kernels: Union[SingleKernelOptions, list[SingleKernelOptions], list[GPyTorchSingleModel], None] = None,
         kernel_settings: Union['KernelInputDict', list['KernelInputDict'], None] = None,
         kernel_optimiser: Optional[KernelOptimiserOptions] = None,
         training_settings: Optional[GPyTorchTrainingParametersInputDict] = None,
@@ -177,7 +202,7 @@ def gpytorch_model(
 def gpytorch_single_model_list(
         n_variables: int,
         n_objectives: int,
-        kernels: Union[KernelOptions, list[GPyTorchSingleModel], None] = None,
+        kernels: Union[SingleKernelOptions, list[SingleKernelOptions], list[GPyTorchSingleModel], None] = None,
         kernel_settings: Union['KernelInputDict', list['KernelInputDict'], None] = None
 ) -> list[GPyTorchSingleModel]:
 
@@ -244,33 +269,18 @@ def gpytorch_single_model_list(
 
     elif kernels is None:
 
-        single_model_list = gpytorch_single_model_list(
-            kernels='matern',
-            n_variables=n_variables,
-            n_objectives=n_objectives,
-        )
+        assert kernel_settings is None, "Cannot accept kernel settings without a specified kernel."
+
+        single_model_list = []
+        for objective_no in range(n_objectives):
+            single_model_list.append(gpytorch_single_model(
+                n_variables=n_variables
+            ))
 
     else:
         raise ValueError(wrong_kernel_input_message)
 
     return single_model_list
-
-
-KernelInputDict = Union[MaternParametersInputDict]  # To be expanded when more kernels are added
-TypedDictHint = Mapping[str, Any]  # type:ignore[explicit-any]
-
-
-def _validate_typed_dict(
-        typed_dict: TypedDictHint,
-        expected_typed_dict_class: type,
-        object_name: str
-) -> None:
-    expected_keys = list(expected_typed_dict_class.__annotations__.keys())
-
-    for key in typed_dict.keys():
-        assert key in expected_keys, (
-            f"Option '{key}' not recognised for '{object_name}'. Expected options: {expected_keys}."
-        )
 
 
 def gpytorch_single_model(
@@ -296,15 +306,17 @@ def gpytorch_single_model(
 
     elif kernel is None:
 
+        defaults = _load_defaults()
+
         return gpytorch_single_model(
             n_variables=n_variables,
-            kernel='matern',
+            kernel=defaults['model']['kernel'],
             settings=settings
         )
 
     else:
         raise NotImplementedError(
-            f"Kernel '{kernel}' not recognised. Implemented kernels are: {get_args(KernelOptions)}"
+            f"Kernel '{kernel}' not recognised. Implemented kernels are: {get_args(SingleKernelOptions)}"
         )
 
 
@@ -316,18 +328,15 @@ def torch_model_optimiser(
         return AdamModelOptimiser()
 
     elif kernel_optimiser is None:
-        return torch_model_optimiser(kernel_optimiser='adam')
+
+        defaults = _load_defaults()
+
+        return torch_model_optimiser(
+            kernel_optimiser=defaults['model']['optimiser']
+        )
 
     else:
         raise NotImplementedError(f"Kernel optimiser {kernel_optimiser} not implemented")
-
-
-AcquisitionSettings = UpperConfidenceBoundOptions  # expand with more options when adding acq_funcs
-
-
-class AcquisitionChoice(TypedDict, total=False):
-    function: Optional[AcquisitionOptions]
-    parameters: Optional[AcquisitionSettings]
 
 
 def botorch_acquisition_function(
@@ -338,7 +347,28 @@ def botorch_acquisition_function(
 ) -> BotorchAcquisitionFunction:
 
     if function  is None:
-        raise NotImplementedError()
+
+        defaults = _load_defaults()
+
+        if n_objectives > 1:
+
+            return botorch_acquisition_function(
+                n_variables=n_variables,
+                n_objectives=n_objectives,
+                function=defaults['acquisition']['multi_objective']
+            )
+
+        elif n_objectives == 1:
+
+
+            return botorch_acquisition_function(
+                n_variables=n_variables,
+                n_objectives=n_objectives,
+                function=defaults['acquisition']['single_objective']
+            )
+
+        else:
+            raise ValueError("'n_objectives' must be a positive integer above 0.")
 
     elif function == 'qlogehvi':
 
@@ -366,25 +396,15 @@ def botorch_acquisition_function(
         )
 
     else:
-        raise ValueError(f"acquisition_choice must be None or {get_args(AcquisitionChoice)}")
+        raise ValueError(f"acquisition_choice must be None or {get_args(AcquisitionOptions)}")
 
 
-AcquisitionOptimiserSettings = DualAnnealingSettings  # expand when adding more options
-
-
-class AcquisitionOptimiserChoice(TypedDict, total=False):
-    optimiser: Optional[AcquisitionOptimiserOptions]
-    optimiser_settings: Optional[AcquisitionOptimiserSettings]
-    allow_proximity_punish: bool
-    proximity_punish_settings: Optional[ProximityPunishSettings]
-
-
-def build_acquisition_optimiser(
+def acquisition_optimiser_with_proximity_punishment(
         bounds: list[list[float]],
         n_evaluations_per_step: int,
         optimiser: Optional[AcquisitionOptimiserOptions] = None,
         optimiser_settings: Optional[AcquisitionOptimiserSettings] = None,
-        allow_proximity_punish: bool = True,
+        allow_proximity_punishment: bool = True,
         proximity_punish_settings: Optional[ProximityPunishSettings] = None
 ) -> AcquisitionOptimiser:
 
@@ -396,7 +416,23 @@ def build_acquisition_optimiser(
 
     if optimiser is None:
 
-        raise NotImplementedError("coming asap")
+        assert optimiser_settings is None, (
+            "Can't accept settings for acquisition function optimiser without a specified optimiser."
+        )
+
+        # Could support this in the future
+        assert allow_proximity_punishment is True, (
+            "Must allow proximity punishment if using default optimiser."
+        )
+
+        defaults = _load_defaults()
+
+        return acquisition_optimiser_with_proximity_punishment(
+            bounds=bounds,
+            n_evaluations_per_step=n_evaluations_per_step,
+            optimiser=defaults['acquisition_optimiser'],
+            proximity_punish_settings=proximity_punish_settings
+        )
 
     elif optimiser == 'dual_annealing':
 
@@ -415,7 +451,7 @@ def build_acquisition_optimiser(
                 **optimiser_settings or {}
             )
 
-        elif n_evaluations_per_step > 1 and allow_proximity_punish:
+        elif n_evaluations_per_step > 1 and allow_proximity_punishment is True:
 
             if optimiser_settings is not None:
                 _validate_typed_dict(
@@ -444,10 +480,10 @@ def build_acquisition_optimiser(
                 **proximity_punish_settings or {}
             )
 
-        elif n_evaluations_per_step > 1 and allow_proximity_punish is False:
+        elif n_evaluations_per_step > 1 and allow_proximity_punishment is False:
 
             raise ValueError(
-                "Acquisition Optimiser 'Dual Annealing' can only find one point per step."
+                f"Acquisition Optimiser '{optimiser}' can only find one point per step."
                 "Either allow using proximity punish or choose a different acquisition function optimiser."
             )
 
@@ -463,7 +499,34 @@ def build_normaliser(
         return NormaliserZeroMeanUnitVariance
 
     elif normaliser_choice is None:
-        return NormaliserZeroMeanUnitVariance
+
+        defaults = _load_defaults()
+
+        return build_normaliser(
+            normaliser_choice=defaults['normaliser']
+        )
 
     else:
         raise ValueError(f"Unknown normaliser type: {normaliser_choice}")
+
+
+def _validate_typed_dict(  # type: ignore[explicit-any]
+        typed_dict: Mapping[str, Any],
+        expected_typed_dict_class: type,
+        object_name: str
+) -> None:
+    expected_keys = list(expected_typed_dict_class.__annotations__.keys())
+
+    for key in typed_dict.keys():
+        assert key in expected_keys, (
+            f"Option '{key}' not recognised for '{object_name}'. Expected options: {expected_keys}."
+        )
+
+
+def _load_defaults() -> dict:
+
+    with resources.open_text(
+            'veropt',
+            'optimiser/default_settings.json'
+    ) as defaults_file:
+        return json.load(defaults_file)
