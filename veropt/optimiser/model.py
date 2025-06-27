@@ -73,6 +73,7 @@ class GPyTorchSingleModel:
             likelihood: gpytorch.likelihoods.GaussianLikelihood,
             mean_module: gpytorch.means.Mean,
             kernel: gpytorch.kernels.Kernel,
+            settings = None
     ) -> None:
 
         self.likelihood = likelihood
@@ -82,6 +83,16 @@ class GPyTorchSingleModel:
         self.model_with_data: GPyTorchDataModel | None = None
 
         self.trained_parameters: list[dict[str, Iterator[torch.nn.Parameter]]] = [{}]
+
+        self.settings = settings
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"trained: {'yes' if self.model_with_data else 'no'}, "
+            f"settings: {self.settings}"
+            f")"
+        )
 
     def initialise_model_with_data(
             self,
@@ -213,15 +224,13 @@ class MaternSingleModel(GPyTorchSingleModel):
             batch_shape=torch.Size([])
         )
 
-        self.settings = MaternParameters(
-            **kwargs
-        )
-
         super().__init__(
             likelihood=likelihood,
             mean_module=mean_module,
-            kernel=kernel
-        )
+            kernel=kernel,
+            settings=MaternParameters(
+            **kwargs
+        ))
 
     def _set_up_trained_parameters(self) -> None:
 
@@ -374,7 +383,6 @@ class GPyTorchTrainingParametersInputDict(TypedDict, total=False):
     learning_rate: float
     loss_change_to_stop: float
     max_iter: int
-    init_max_iter: int
 
 
 @dataclass
@@ -382,7 +390,6 @@ class GPyTorchTrainingParameters:
     learning_rate: float = 0.1
     loss_change_to_stop: float = 1e-6  # TODO: Find optimal value for this?
     max_iter: int = 10_000
-    init_max_iter: int = 10000
 
 
 class GPyTorchFullModel(SurrogateModel):
@@ -456,6 +463,30 @@ class GPyTorchFullModel(SurrogateModel):
             )
 
         return check_dimensions
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}({[model.__class__.__name__ for model in self._model_list]})"
+        )
+
+    def __str__(self) -> str:
+
+        return (
+            f"{self.__class__.__name__}("
+            f"\n{''.join([f"{model} \n" for model in self._model_list])}"
+            f"settings: {self.training_parameters}\n"
+            f")"
+        )
+
+    def __getitem__(self, model_no: int) -> GPyTorchSingleModel:
+
+        if model_no > len(self._model_list) - 1:
+            raise IndexError()
+
+        return self._model_list[model_no]
+
+    def __len__(self) -> int:
+        return len(self._model_list)
 
     @_check_input_dimensions
     def __call__(

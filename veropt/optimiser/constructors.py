@@ -60,6 +60,9 @@ class AcquisitionOptimiserChoice(TypedDict, total=False):
 
 # TODO: Go through naming and make consistent, good choices
 
+# TODO: Might want to clean this up a little
+#   - E.g. might wanna separate input checking and functionality
+
 # TODO: Consider making a function that can give valid arguments to the user?
 #   - Like something that prints out an overview of options
 #   - Should probably live in some documentation somewhere actually...?
@@ -199,6 +202,42 @@ def gpytorch_model(
     )
 
 
+@overload
+def gpytorch_single_model_list(
+        n_variables: int,
+        n_objectives: int,
+        kernels: list[GPyTorchSingleModel] = ...,
+        kernel_settings: None = ...
+) -> list[GPyTorchSingleModel]: ...
+
+
+@overload
+def gpytorch_single_model_list(
+        n_variables: int,
+        n_objectives: int,
+        kernels: 'SingleKernelOptions' = ...,
+        kernel_settings: Union['KernelInputDict', None] = ...
+) -> list[GPyTorchSingleModel]: ...
+
+
+@overload
+def gpytorch_single_model_list(
+        n_variables: int,
+        n_objectives: int,
+        kernels: list['SingleKernelOptions'] = ...,
+        kernel_settings: Union[list['KernelInputDict'], None] = ...
+) -> list[GPyTorchSingleModel]: ...
+
+
+@overload
+def gpytorch_single_model_list(
+        n_variables: int,
+        n_objectives: int,
+        kernels: None = ...,
+        kernel_settings: None = ...
+) -> list[GPyTorchSingleModel]: ...
+
+
 def gpytorch_single_model_list(
         n_variables: int,
         n_objectives: int,
@@ -321,7 +360,7 @@ def gpytorch_single_model(
 
 
 def torch_model_optimiser(
-        kernel_optimiser: Optional[KernelOptimiserOptions],
+        kernel_optimiser: Optional[KernelOptimiserOptions] = None,
 ) -> TorchModelOptimiser:
 
     if kernel_optimiser == 'adam':
@@ -413,6 +452,11 @@ def acquisition_optimiser_with_proximity_punishment(
     #   - Still need a specific place to build the single step opt
     #     but then let it be eaten by prox punish if needed+allowed
     #   - Probably need an extra function to make this nice?
+
+    if allow_proximity_punishment is False:
+        assert proximity_punish_settings is None, (
+            "Can't receive settings for proximity punishment if it's disabled"
+        )
 
     if optimiser is None:
 
