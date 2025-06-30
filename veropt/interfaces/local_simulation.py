@@ -101,9 +101,10 @@ class LocalSimulation(Simulation):
 
 
 class MockSimulationConfig(BaseModel):
-    stdout_file: str = "test_stdout.txt"
-    stderr_file: str = "test_stderr.txt"
-    return_code: int = 0
+    stdout_file: List[str] = ["test_stdout.txt"]
+    stderr_file: List[str] = ["test_stderr.txt"]
+    return_code: List[int] = [0]
+    return_list: bool = False
 
 
 class MockSimulationRunner(SimulationRunner):
@@ -120,17 +121,36 @@ class MockSimulationRunner(SimulationRunner):
             parameters: Dict[str,float],
             run_script_directory: Optional[str] = None,
             run_script_filename: Optional[str] = None
-    ) -> SimulationResult:
+    ) -> Union[SimulationResult,List[SimulationResult]]:
         
         print(f"Running test simulation with parameters: {parameters} and config: {self.config.model_dump()}")
 
-        return SimulationResult(
-            simulation_id=simulation_id,
-            parameters=parameters,
-            stdout_file=self.config.stdout_file,
-            stderr_file=self.config.stderr_file,
-            return_code=self.config.return_code
-        )
+        if self.config.return_list:
+
+            stdout_files = self.config.stdout_file
+            stderr_files = self.config.stderr_file
+            return_codes = self.config.return_code
+
+            zipped_lists = zip(stdout_files, stderr_files, return_codes)
+
+            results = [SimulationResult(
+                simulation_id=simulation_id,
+                parameters=parameters,
+                stdout_file=out_file,
+                stderr_file=err_file,
+                return_code=return_code
+            ) for out_file, err_file, return_code in zipped_lists]
+
+            return results
+
+        else: 
+            return SimulationResult(
+                simulation_id=simulation_id,
+                parameters=parameters,
+                stdout_file=self.config.stdout_file[0],
+                stderr_file=self.config.stderr_file[0],
+                return_code=self.config.return_code[0]
+            )
 
 
 class LocalVerosConfig(BaseModel):
@@ -173,6 +193,7 @@ class LocalVerosRunner(SimulationRunner):
             data = file.readlines()
 
         # TODO: This is not robust. Need to figure out how to handle the indentation.
+        #       Regular expression match /\w+settings\.([a-zA-Z0-9_]+)\w*=/, for all matches look up key and set value; gather all keys in file, complement with assigned keys, add new lines.
         # TODO: How to introduce new parameters that are not already in the setup file?
         # TODO: Check if the parameters are already overwritten in the setup file.
         for i, line in enumerate(data):
