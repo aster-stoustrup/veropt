@@ -2,9 +2,9 @@ from abc import ABC, abstractmethod
 from enum import StrEnum
 import os
 import shutil
-from typing import TypeVar, Generic, List, Dict, Literal, Union, Tuple
+from typing import TypeVar, Generic, List, Dict, Literal, Union, Tuple, Optional
 from pydantic import BaseModel
-from veropt.interfaces.simulation import SimulationResult, SimulationRunner
+from veropt.interfaces.simulation import SimulationResult, SimulationRunner, SimulationResultsDict
 from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
 
 
@@ -20,17 +20,14 @@ class ExperimentMode(StrEnum):
 
 def create_directory(
         path: str,
-        name: str
 ) -> None:
-    
-    full_path = os.path.join(path, name)
 
-    if not os.path.exists(full_path):
-        os.makedirs(full_path, exist_ok=True)
-        print(f"Created directory: {full_path}")
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+        print(f"Created directory: {path}")
 
     else:
-        print(f"Directory already exists: {full_path}")
+        print(f"Directory already exists: {path}")
 
 
 def copy_files(
@@ -69,7 +66,7 @@ class BatchManager(ABC, Generic[SR]):
             self,
             dict_of_parameters: Dict[int,dict],
             experimental_state: ExperimentalState
-    ) -> Union[Dict[int,list], Dict[int,SimulationResult]]:
+    ) -> SimulationResultsDict:
         ...
 
 
@@ -79,7 +76,7 @@ class BatchManagerFactory:
         experiment_mode: str,
         run_script_filename: str,
         run_script_root_directory: str
-    ) -> ConfigType:
+    ) -> BaseModel:
         
         if experiment_mode == ExperimentMode.LOCAL:
 
@@ -133,6 +130,7 @@ class BatchManagerFactory:
 class LocalBatchManagerConfig(BaseModel):
     run_script_filename: str
     run_script_root_directory: str
+    output_filename: str
 
 
 # TODO: should latest_point be read from the directory structure?
@@ -149,10 +147,13 @@ class LocalBatchManager(BatchManager):
             self,
             dict_of_parameters: Dict[int,dict],
             experimental_state: ExperimentalState
-    ) -> Union[Dict[int,list], Dict[int,SimulationResult]]:
+    ) -> SimulationResultsDict:
         
         results = {}
 
+        # TODO: This is fine for now but could be done better; however it is important to check
+        #       - If use Process manager instead of for loop, does Simulation structure have to change?
+        #       - Support for running simulation on GPUs!!!
         for i, parameters in dict_of_parameters.items():
 
             simulation_id = PathManager.make_simulation_id(i=i)
@@ -174,12 +175,17 @@ class LocalBatchManager(BatchManager):
                 parameters=parameters,
                 run_script_directory=result_directory,
                 run_script_filename=self.config.run_script_filename)
-            
-            # TODO: How to assert that list entries are SimulationResults?
-            assert isinstance(result, (SimulationResult, list))
+            experimental_state.points[i].state = "Simulation finished"
 
-            experimental_state.points[i].state.result = result
+            experimental_state.points[i].result = result
+            experimental_state.points[i].output_file = os.path.join(
+                result_directory,
+                self.config.output_filename
+            )
+
             results[i] = result
+
+            experimental_state.save_to_json(experimental_state.save_path)
 
         return results
 
@@ -189,10 +195,19 @@ class LocalSlurmBatchManagerConfig(BaseModel):
 
 
 class LocalSlurmBatchManager(BatchManager):
+    def __init__(
+            self,
+            simulation_runner: SR,
+            config: LocalSlurmBatchManagerConfig
+    ) -> None:
+        self.simulation_runner = simulation_runner
+        self.config = config
+
     def run_batch(
             self,
-            dict_of_parameters: Dict[int,dict]
-    ) -> List[SimulationResult]:
+            dict_of_parameters: Dict[int,dict],
+            experimental_state: ExperimentalState
+    ) -> SimulationResultsDict:
         # TODO: Implement
         raise NotImplementedError
     
@@ -202,9 +217,18 @@ class RemoteSlurmBatchManagerConfig(BaseModel):
     
 
 class RemoteSlurmBatchManager(BatchManager):
+    def __init__(
+            self,
+            simulation_runner: SR,
+            config: RemoteSlurmBatchManagerConfig
+    ) -> None:
+        self.simulation_runner = simulation_runner
+        self.config = config
+
     def run_batch(
             self,
-            dict_of_parameters: Dict[int,dict]
-    ) -> List[SimulationResult]:
+            dict_of_parameters: Dict[int,dict],
+            experimental_state: ExperimentalState
+    ) -> SimulationResultsDict:
         # TODO: Implement
         raise NotImplementedError
