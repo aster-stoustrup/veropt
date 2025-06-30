@@ -1,0 +1,10 @@
+{
+    "env_manager": "conda",
+    "env_name": "veros",
+    "path_to_env": "/Users/martamrozowska/miniforge3",
+    "veros_path": "veros",
+    "backend": "numpy",
+    "device": "cpu",
+    "float_type": "float64",
+    "keep_old_params": 1
+}

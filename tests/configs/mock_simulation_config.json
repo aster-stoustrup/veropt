@@ -1,0 +1,6 @@
+{
+    "stdout_file": ["successful_test_stdout.txt", "negative_test_stdout.txt", "positive_test_stdout.txt"],
+    "stderr_file": ["successful_test_stderr.txt", "negative_test_stdout.txt", "positive_test_stdout.txt"],
+    "return_code": [0, -1, 1],
+    "return_list": 1
+}
