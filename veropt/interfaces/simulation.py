@@ -11,7 +11,11 @@ class SimulationResult(BaseModel):
     parameters: Dict[str,float]
     stdout_file: str
     stderr_file: str
-    return_code: int
+    return_code: Optional[int] = None  # Maybe needs to be optional to comply with slurm simulation
+    output_file: Optional[str] = None
+
+
+SimulationResultsDict = Dict[int,Union[SimulationResult,List[SimulationResult]]]
 
 
 class Simulation(ABC):
@@ -51,6 +55,10 @@ class SimulationRunner(ABC):
             run_script_directory=run_script_directory,
             run_script_filename=run_script_filename
         )
+
+        if isinstance(result, list): 
+            for r in result: assert isinstance(r, SimulationResult)
+        else: assert isinstance(result, SimulationResult)
 
         return result
 
