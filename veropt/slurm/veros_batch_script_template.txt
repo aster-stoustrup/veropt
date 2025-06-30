@@ -1,0 +1,42 @@
+#!/bin/bash -l
+#SBATCH -p {self.partition_name}
+#SBATCH -A ocean
+#SBATCH --job-name={setup_name}
+#SBATCH --time=23:59:59
+#SBATCH --constraint={self.constraint}
+#SBATCH --nodes=1
+#SBATCH --ntasks={self.n_cores}
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=0
+##SBATCH --threads-per-core=1
+##SBATCH --exclusive
+#SBATCH --output={setup_name}.out
+
+if [ X"$SLURM_STEP_ID" = "X" -a X"$SLURM_PROCID" = "X"0 ]
+then
+    echo "SLURM_JOB_ID = $SLURM_JOB_ID"
+fi
+
+export OMP_NUM_THREADS=2
+
+command="ml list"
+search_string="miniconda/python3.11"
+
+if $command | grep -q "$search_string"; then
+    echo "Miniconda has already been loaded"
+else
+    echo "miniconda has not been loaded yet; loading --->"
+    ml load miniconda/python3.11
+fi
+
+#conda init bash
+#source $HOME/.bashrc
+if [ "$CONDA_DEFAULT_ENV" = "veropt" ]; then
+    conda deactivate
+fi
+
+conda activate veros_jax_cpu
+
+veros resubmit -i {setup_name} -n {self.ncycles} -l {self.cycle_length} \
+-c 'mpiexec -n {self.n_cores} -- veros run {setup_name}.py -b {self.backend} -n {self.n_cores_nx} {self.n_cores_ny} --float-type {self.float_type}' \
+--callback 'sbatch veros_batch.sh'
