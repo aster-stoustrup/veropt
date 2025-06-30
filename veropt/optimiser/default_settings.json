@@ -4,8 +4,8 @@
     "optimiser": "adam"
   },
   "acquisition": {
-    "multi-objective": "qlogehvi",
-    "single-objective": "ucb"
+    "multi_objective": "qlogehvi",
+    "single_objective": "ucb"
   },
   "acquisition_optimiser": "dual_annealing",
   "normaliser": "zero_mean_unit_variance"

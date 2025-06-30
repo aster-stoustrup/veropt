@@ -1,3 +1,4 @@
+import abc
 
 
 # TODO: Implement
@@ -8,3 +9,12 @@
 # TODO:
 #   - Make method that writes json for all save-able classes?!
 #       - I guess we'd like to collect it all into one json though?
+
+
+class SavableClass:
+    __metaclass__ = abc.ABCMeta
+
+    @abc.abstractmethod
+    def gather_dicts_to_save(self) -> dict:
+        pass
+

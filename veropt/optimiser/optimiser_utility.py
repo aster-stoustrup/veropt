@@ -5,6 +5,7 @@ from typing import Optional, TypedDict, Union
 
 import torch
 
+from veropt.optimiser.optimiser_saver import SavableClass
 from veropt.optimiser.utility import DataShape, PredictionDict, TensorWithNormalisationFlag
 
 
@@ -18,7 +19,7 @@ class InitialPointsGenerationMode(Enum):
 
 
 # TODO: Write a test to make sure the arguments of this and the dict are the same? (except n_init, n_bayes, n_objs)
-class OptimiserSettings:
+class OptimiserSettings(SavableClass):
 
     def __init__(
             self,
@@ -64,6 +65,14 @@ class OptimiserSettings:
             self.objective_weights = torch.ones(self.n_objectives) / self.n_objectives
         else:
             self.objective_weights = torch.tensor(objective_weights)
+
+    def gather_dicts_to_save(self) -> dict:
+
+        save_dict = self.__dict__
+        save_dict['initial_points_generator'] = self.initial_points_generator.name
+        save_dict['objective_weights'] = self.objective_weights.tolist()
+
+        return save_dict
 
 
 class OptimiserSettingsInputDict(TypedDict, total=False):

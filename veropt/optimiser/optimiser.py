@@ -5,6 +5,9 @@ from typing import Callable, Optional, Union, Unpack
 
 import gpytorch.settings
 import torch
+
+from veropt.optimiser.optimiser_saver import SavableClass
+
 torch.set_default_dtype(torch.float64)
 
 from veropt.optimiser.initial_points import generate_initial_points_random
@@ -24,7 +27,7 @@ from veropt.optimiser.utility import DataShape, TensorWithNormalisationFlag, che
 
 # TODO: Fix torch/np conflict over float size
 #   - Put the torch default setting into this file, should we have it more places?
-class BayesianOptimiser:
+class BayesianOptimiser(SavableClass):
     def __init__(
             self,
             n_initial_points: int,
@@ -91,6 +94,18 @@ class BayesianOptimiser:
             f"normalised: {'yes' if self.data_has_been_normalised else 'no'}, "
             f"model trained: {'yes' if self.model_has_been_trained else 'no'}, "
             f"best objective values: {list_with_floats_to_string(self.get_best_points()['objectives'].tolist())}"
+            f")"
+        )
+
+    def __str__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(\n"
+            f"points: {self.n_points_evaluated} of {self.n_initial_points + self.n_bayesian_points}, \n"
+            f"mode: {self.optimisation_mode.name}, \n"
+            f"normalised: {'yes' if self.data_has_been_normalised else 'no'}, \n"
+            f"model trained: {'yes' if self.model_has_been_trained else 'no'}, \n"
+            f"best objective values: {list_with_floats_to_string(self.get_best_points()['objectives'].tolist())}\n"
+            f"{str(self.predictor)}"
             f")"
         )
 
@@ -213,6 +228,17 @@ class BayesianOptimiser:
         )
 
         return pareto_optimal_points
+
+    def gather_dicts_to_save(self) -> dict:
+
+        dicts_from_predictor = self.predictor.gather_dicts_to_save()
+
+        settings = self.settings.gather_dicts_to_save()
+
+        return {
+            'predictor': dicts_from_predictor,
+            'settings': settings
+        }
 
     def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:
 

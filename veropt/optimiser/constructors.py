@@ -322,6 +322,17 @@ def gpytorch_single_model_list(
     return single_model_list
 
 
+# TODO: Consider location, maybe move to models?
+matern_dict = {
+    'class': MaternSingleModel,
+    'settings': MaternParametersInputDict
+}
+
+# TODO: Consider if we can let a user give one of these...?!
+#   - might fix saving issue :))))
+kernel_collections = [matern_dict]
+
+
 def gpytorch_single_model(
         n_variables: int,
         kernel: Optional[SingleKernelOptions] = None,
@@ -330,21 +341,7 @@ def gpytorch_single_model(
 
     settings = settings or {}
 
-    if kernel == 'matern':
-
-        _validate_typed_dict(
-            typed_dict=settings,
-            expected_typed_dict_class=MaternParametersInputDict,
-            object_name=kernel,
-        )
-
-        return MaternSingleModel(
-            n_variables=n_variables,
-            **settings
-        )
-
-    elif kernel is None:
-
+    if kernel is None:
         defaults = _load_defaults()
 
         return gpytorch_single_model(
@@ -353,10 +350,25 @@ def gpytorch_single_model(
             settings=settings
         )
 
-    else:
-        raise NotImplementedError(
-            f"Kernel '{kernel}' not recognised. Implemented kernels are: {get_args(SingleKernelOptions)}"
-        )
+    for kernel_dict in kernel_collections:
+
+        if kernel == kernel_dict["class"].name:
+
+            _validate_typed_dict(
+                typed_dict=settings,
+                expected_typed_dict_class=kernel_dict['settings'],
+                object_name=kernel,
+            )
+
+            return kernel_dict['class'](
+                n_variables=n_variables,
+                **settings
+            )
+
+   # Shouldn't reach this point if kernel is recognised
+    raise NotImplementedError(
+        f"Kernel '{kernel}' not recognised. Implemented kernels are: {get_args(SingleKernelOptions)}"
+    )
 
 
 def torch_model_optimiser(

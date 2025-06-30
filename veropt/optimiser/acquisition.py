@@ -6,6 +6,7 @@ import botorch
 import torch
 from botorch.utils.multi_objective.box_decompositions.non_dominated import FastNondominatedPartitioning
 
+from veropt.optimiser.optimiser_saver import SavableClass
 from veropt.optimiser.optimiser_utility import get_nadir_point
 from veropt.optimiser.utility import (
     check_variable_and_objective_shapes, check_variable_objective_values_matching,
@@ -63,6 +64,8 @@ def _check_input_dimensions[T, **P](
 
 class AcquisitionFunction:
 
+    name: Optional[str] = None
+
     def __init__(
             self,
             n_variables: int,
@@ -100,7 +103,7 @@ class AcquisitionFunction:
         return self.function(variable_values)
 
 
-class BotorchAcquisitionFunction(AcquisitionFunction):
+class BotorchAcquisitionFunction(AcquisitionFunction, SavableClass):
 
     @check_variable_objective_values_matching
     @_check_input_dimensions
@@ -119,6 +122,12 @@ class BotorchAcquisitionFunction(AcquisitionFunction):
             objective_values=objective_values,
         )
 
+    def gather_dicts_to_save(self) -> dict:
+
+        # TODO: Make this
+
+        raise NotImplementedError
+
     @abc.abstractmethod
     def _refresh(
             self,
@@ -130,6 +139,8 @@ class BotorchAcquisitionFunction(AcquisitionFunction):
 
 
 class QLogExpectedHyperVolumeImprovement(BotorchAcquisitionFunction):
+
+    name = 'qlogehvi'
 
     def __init__(
             self,
@@ -173,6 +184,8 @@ class UpperConfidenceBoundOptions(TypedDict):
 
 
 class UpperConfidenceBound(BotorchAcquisitionFunction):
+
+    name = 'ucb'
 
     def __init__(
             self,

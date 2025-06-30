@@ -9,11 +9,14 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
+from veropt.optimiser.optimiser_saver import SavableClass
 from veropt.optimiser.utility import DataShape
 
 
-class AcquisitionOptimiser:
+class AcquisitionOptimiser(SavableClass):
+    __metaclass__ = abc.ABCMeta
 
+    name: Optional[str] = None
     maximum_evaluations_per_step: Optional[int]
 
     def __init__(
@@ -84,6 +87,7 @@ class DualAnnealingSettings(TypedDict):
 
 class DualAnnealingOptimiser(AcquisitionOptimiser):
 
+    name = 'dual_annealing'
     maximum_evaluations_per_step = 1
 
     def __init__(
@@ -118,6 +122,9 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
 
         return candidates
 
+    def gather_dicts_to_save(self) -> dict:
+        raise NotImplementedError()
+
 
 class RefreshSetting(Enum):
     simple = 0
@@ -132,6 +139,7 @@ class ProximityPunishSettings(TypedDict):
 
 class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
 
+    name = 'proximity_punishment'
     maximum_evaluations_per_step = None
 
     def __init__(
@@ -338,3 +346,6 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
         top_cluster_ind = best_fitter.means_.argmax()
 
         self.scaling = 2 * float(np.sqrt(best_fitter.covariances_[top_cluster_ind]))
+
+    def gather_dicts_to_save(self) -> dict:
+        raise NotImplementedError()

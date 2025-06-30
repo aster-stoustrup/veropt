@@ -11,6 +11,7 @@ import torch
 from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
+from veropt.optimiser.optimiser_saver import SavableClass
 from veropt.optimiser.utility import check_variable_and_objective_shapes, check_variable_objective_values_matching, \
     enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 
@@ -66,7 +67,9 @@ class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorc
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
-class GPyTorchSingleModel:
+class GPyTorchSingleModel(SavableClass):
+
+    name: Optional[str] = None
 
     def __init__(
             self,
@@ -107,6 +110,14 @@ class GPyTorchSingleModel:
             mean_module=self.mean_module,
             kernel=self.kernel
         )
+
+    def gather_dicts_to_save(self) -> dict:
+
+        if self.model_with_data is not None:
+            return self.model_with_data.state_dict()
+
+        else:
+            return {}
 
     def set_constraint(
             self,
@@ -211,6 +222,9 @@ class MaternParameters:
 
 
 class MaternSingleModel(GPyTorchSingleModel):
+
+    name = 'matern'
+
     def __init__(
             self,
             n_variables: int,
@@ -336,6 +350,9 @@ class MaternSingleModel(GPyTorchSingleModel):
 
 
 class TorchModelOptimiser:
+
+    name: Optional[str] = None
+
     def __init__(
             self,
             optimiser_class: type[torch.optim.Optimizer],
@@ -358,6 +375,9 @@ class TorchModelOptimiser:
 
 
 class AdamModelOptimiser(TorchModelOptimiser):
+
+    name = 'adam'
+
     def __init__(
             self,
             **kwargs: dict
@@ -392,7 +412,7 @@ class GPyTorchTrainingParameters:
     max_iter: int = 10_000
 
 
-class GPyTorchFullModel(SurrogateModel):
+class GPyTorchFullModel(SurrogateModel, SavableClass):
 
     def __init__(
             self,
@@ -573,6 +593,22 @@ class GPyTorchFullModel(SurrogateModel):
         assert self._model is not None, "Model must be initiated to use this function"
 
         return self._model
+
+    def gather_dicts_to_save(self) -> dict:
+
+        # TODO: Put model names in here somewhere?
+
+        state_dicts: dict[str, dict] = {}
+
+        for model_no, model in enumerate(self._model_list):
+            state_dicts[f'model_{model_no}'] = model.gather_dicts_to_save()
+
+        settings = self.training_parameters.__dict__  # Consider doing something nicer here?
+
+        return {
+            'state_dicts': state_dicts,
+            'settings': settings,
+        }
 
     def _train_backwards(self) -> None:
 

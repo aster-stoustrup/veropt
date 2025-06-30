@@ -7,12 +7,13 @@ import torch
 from veropt.optimiser.acquisition import BotorchAcquisitionFunction
 from veropt.optimiser.acquisition_optimiser import AcquisitionOptimiser
 from veropt.optimiser.model import GPyTorchFullModel
+from veropt.optimiser.optimiser_saver import SavableClass
 from veropt.optimiser.utility import DataShape, PredictionDict, check_variable_and_objective_shapes, \
     check_variable_objective_values_matching, \
     enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 
 
-class Predictor:
+class Predictor(SavableClass):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
@@ -69,6 +70,15 @@ class BotorchPredictor(Predictor):
         self.acquisition_optimiser = acquisition_optimiser
 
         super().__init__()
+
+    def __str__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(\n"
+            f"model: {str(self.model)},\n"
+            f"acquisition function: {str(self.acquisition_function)},\n"
+            f"acquisition optimiser: {str(self.acquisition_optimiser)},\n"
+            f")"
+        )
 
     @staticmethod
     def _check_input_dimensions[T, **P](
@@ -184,3 +194,10 @@ class BotorchPredictor(Predictor):
         self.acquisition_optimiser.update_bounds(
             new_bounds=new_bounds
         )
+
+    def gather_dicts_to_save(self) -> dict:
+        return {
+            'model': self.model.gather_dicts_to_save(),
+            'acquisition_function': self.acquisition_function.gather_dicts_to_save(),
+            'acquisition_optimiser': self.acquisition_optimiser.gather_dicts_to_save()
+        }
