@@ -5,9 +5,10 @@ import json
 import os
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner
 from veropt.interfaces.batch_manager import BatchManager, BatchManagerFactory, ExperimentMode
-from veropt.interfaces.result_processing import ResultProcessor
-from veropt.mock_optimiser import MockOptimiser, OptimiserObject
+from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
+from veropt.interfaces.mock_optimiser import MockOptimiser, OptimiserObject
 from veropt.interfaces.experiment_utility import *
+
 import torch
 
 SR = TypeVar("SR", bound=SimulationRunner)
@@ -20,6 +21,7 @@ ConfigType = TypeVar("ConfigType", bound=BaseModel)
 # TODO: Aster, how to ensure that the objectives passed on to the optimiser
 #       are in the correct order?    
 # TODO: Should the console output be saved when experiment is finished or stopped?
+#       - save optimizer object with experiment
 # TODO: Aster, here is the list of what experiment wants from the optimiser:
 #       - At minimum, what info do I have to pass to the optimiser to initialise it?
 #       - Default hyperparameter options for default models
@@ -58,19 +60,18 @@ class Experiment:
         else:
             self.optimiser_config = optimiser_config
 
-        self.path_manager = PathManager(experiment_config)
+        self.path_manager = PathManager(self.experiment_config)
     
         if state is None:
             self.state = ExperimentalState(
                 experiment_name = self.experiment_config.experiment_name,
                 experiment_directory = self.path_manager.experiment_directory,
+                save_path = self.path_manager.experimental_state_json,
                 points = {},
                 next_point = 0
             )
-
         elif isinstance(state, str):
             self.state = ExperimentalState.load_from_json(state)
-
         else: 
             self.state = state
 
@@ -93,8 +94,7 @@ class Experiment:
         self.batch_manager_config = BatchManagerFactory.make_batch_manager_config(
             experiment_mode=self.experiment_config.experiment_mode,
             run_script_filename=self.experiment_config.run_script_filename,
-            run_script_root_directory=self.path_manager.run_script_root_directory,
-            experiment_directory=self.path_manager.experiment_directory
+            run_script_root_directory=self.path_manager.run_script_root_directory
         )
         
         self.batch_manager = BatchManagerFactory.make_batch_manager(
@@ -137,7 +137,7 @@ class Experiment:
 
             self.state.update(new_point)
 
-        self.state.save_to_json(self.path_manager.experimental_state_json)
+        self.state.save_to_json(self.state.save_path)
 
         return dict_of_parameters
     
@@ -148,7 +148,7 @@ class Experiment:
 
     def send_objectives_to_optimiser(
             self,
-            objectives: List[float]
+            objectives: ObjectivesDict
     ) -> None:
     # TODO: Is running an opt step correct to do here?
     #       Or should VerOpt automatically run an opt step when receiving objectives
@@ -191,7 +191,7 @@ class Experiment:
         results = self.batch_manager.run_batch(
             dict_of_parameters=dict_of_parameters,
             experimental_state=self.state)
-        objectives = self.result_processor.process(results)
+        objectives = self.result_processor.process(results=results)
 
         self._sanity_check(dict_of_parameters, results, objectives)
 
@@ -207,7 +207,7 @@ class Experiment:
             self.initialise_experimental_set_up()
         
         # run
-        for i in self.optimiser_config.n_iterations:
+        for i in range(self.optimiser_config.n_iterations):
             self.run_optimisation_step()
 
     def restart_optimisation_experiment(

@@ -1,4 +1,3 @@
-from pathlib import Path
 from pydantic import BaseModel
 from typing import Dict, Union, Optional, List, Self
 import os
@@ -7,7 +6,7 @@ from veropt.interfaces.simulation import SimulationResult
 
 class Point(BaseModel):
     parameters: Dict[str, float]
-    state: Optional[str] = None
+    state: str
     job_id: Optional[int] = None
     output_file: Optional[str] = None
     result: Optional[Union[SimulationResult,List[SimulationResult]]] = None
@@ -54,6 +53,7 @@ class OptimiserConfig(Config):
 class ExperimentalState(Config):
     experiment_name: str
     experiment_directory: str
+    save_path: str
     points: Dict[int, Point] = {}
     next_point: int = 0
 
@@ -91,7 +91,7 @@ class PathManager:
 
     def make_experiment_directory_path(
             self
-    ) -> Path:
+    ) -> str:
     
         if self.experiment_config.experiment_directory_name is not None:
             return os.path.join(
@@ -107,7 +107,7 @@ class PathManager:
         
     def make_run_script_root_directory_path(
             self,
-    ) -> Path:
+    ) -> str:
         
         if self.experiment_config.run_script_root_directory is not None:
             return self.experiment_config.run_script_root_directory
@@ -127,7 +127,7 @@ class PathManager:
     
     def make_experimental_state_json(
             self
-    ) -> Path:
+    ) -> str:
         
         return os.path.join(
             self.experiment_directory,
