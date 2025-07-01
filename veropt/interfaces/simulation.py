@@ -15,7 +15,7 @@ class SimulationResult(BaseModel):
     output_file: Optional[str] = None
 
 
-SimulationResultsDict = Dict[int,Union[SimulationResult,List[SimulationResult]]]
+SimulationResultsDict = Dict[int, Union[SimulationResult, List[SimulationResult]]]
 
 
 class Simulation(ABC):
@@ -66,7 +66,7 @@ class SimulationRunner(ABC):
             self,
             parameters: Dict[str,float],
             parameters_json: str
-            ) -> None:
+    ) -> None:
 
         with open(parameters_json, 'w') as fp:
             json.dump(parameters, fp)
