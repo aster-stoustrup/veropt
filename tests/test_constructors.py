@@ -48,4 +48,4 @@ def test_gpytorch_model() -> None:
         assert (model._model_list[obj_no].__class__.__name__
                 == model_from_constructors._model_list[obj_no].__class__.__name__)
 
-    assert model.training_parameters == model_from_constructors.training_parameters
+    assert model.training_settings == model_from_constructors.training_settings

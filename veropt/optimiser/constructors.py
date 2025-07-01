@@ -5,9 +5,9 @@ from typing import Any, Literal, Mapping, Optional, TypedDict, Union, Unpack, ge
 import torch
 
 from veropt.optimiser.acquisition import BotorchAcquisitionFunction, QLogExpectedHyperVolumeImprovement, \
-    UpperConfidenceBound, UpperConfidenceBoundOptions
-from veropt.optimiser.acquisition_optimiser import AcquisitionOptimiser, DualAnnealingOptimiser, DualAnnealingSettings, \
-    ProximityPunishSettings, ProximityPunishmentSequentialOptimiser
+    UpperConfidenceBound, UpperConfidenceBoundOptionsInputDict
+from veropt.optimiser.acquisition_optimiser import AcquisitionOptimiser, DualAnnealingOptimiser, DualAnnealingSettingsInputDict, \
+    ProximityPunishSettingsInputDict, ProximityPunishmentSequentialOptimiser
 from veropt.optimiser.model import AdamModelOptimiser, GPyTorchFullModel, GPyTorchSingleModel, \
     GPyTorchTrainingParametersInputDict, MaternParametersInputDict, MaternSingleModel, \
     TorchModelOptimiser
@@ -28,8 +28,8 @@ NormaliserChoice = Literal['zero_mean_unit_variance']
 
 
 KernelInputDict = MaternParametersInputDict  # To be expanded when more kernels are added
-AcquisitionSettings = UpperConfidenceBoundOptions  # expand with more options when adding acq_funcs
-AcquisitionOptimiserSettings = DualAnnealingSettings  # expand when adding more options
+AcquisitionSettings = UpperConfidenceBoundOptionsInputDict  # expand with more options when adding acq_funcs
+AcquisitionOptimiserSettings = DualAnnealingSettingsInputDict  # expand when adding more options
 
 
 class ProblemInformation(TypedDict):
@@ -55,7 +55,7 @@ class AcquisitionOptimiserChoice(TypedDict, total=False):
     optimiser: Optional[AcquisitionOptimiserOptions]
     optimiser_settings: Optional[AcquisitionOptimiserSettings]
     allow_proximity_punishment: bool
-    proximity_punish_settings: Optional[ProximityPunishSettings]
+    proximity_punish_settings: Optional[ProximityPunishSettingsInputDict]
 
 
 # TODO: Go through naming and make consistent, good choices
@@ -322,15 +322,19 @@ def gpytorch_single_model_list(
     return single_model_list
 
 
+class KernelDict(TypedDict):
+    kernel_class: type[GPyTorchSingleModel]
+    settings: type
+
 # TODO: Consider location, maybe move to models?
 matern_dict = {
-    'class': MaternSingleModel,
+    'kernel_class': MaternSingleModel,
     'settings': MaternParametersInputDict
 }
 
 # TODO: Consider if we can let a user give one of these...?!
 #   - might fix saving issue :))))
-kernel_collections = [matern_dict]
+kernel_collections: list[KernelDict] = [matern_dict]
 
 
 def gpytorch_single_model(
@@ -352,7 +356,7 @@ def gpytorch_single_model(
 
     for kernel_dict in kernel_collections:
 
-        if kernel == kernel_dict["class"].name:
+        if kernel == kernel_dict["kernel_class"].name:
 
             _validate_typed_dict(
                 typed_dict=settings,
@@ -360,7 +364,10 @@ def gpytorch_single_model(
                 object_name=kernel,
             )
 
-            return kernel_dict['class'](
+            # TODO: Fix this
+            #   - this init is specific to matern
+            #   - should maybe just make a subclass that assumes this init
+            return kernel_dict['kernel_class'](
                 n_variables=n_variables,
                 **settings
             )
@@ -456,7 +463,7 @@ def acquisition_optimiser_with_proximity_punishment(
         optimiser: Optional[AcquisitionOptimiserOptions] = None,
         optimiser_settings: Optional[AcquisitionOptimiserSettings] = None,
         allow_proximity_punishment: bool = True,
-        proximity_punish_settings: Optional[ProximityPunishSettings] = None
+        proximity_punish_settings: Optional[ProximityPunishSettingsInputDict] = None
 ) -> AcquisitionOptimiser:
 
     # TODO: Need to build a more general version of this where we grab the acq opt class and check allows
@@ -497,7 +504,7 @@ def acquisition_optimiser_with_proximity_punishment(
             if optimiser_settings is not None:
                 _validate_typed_dict(
                     typed_dict=optimiser_settings,
-                    expected_typed_dict_class=DualAnnealingSettings,
+                    expected_typed_dict_class=DualAnnealingSettingsInputDict,
                     object_name=optimiser
                 )
 
@@ -512,7 +519,7 @@ def acquisition_optimiser_with_proximity_punishment(
             if optimiser_settings is not None:
                 _validate_typed_dict(
                     typed_dict=optimiser_settings,
-                    expected_typed_dict_class=DualAnnealingSettings,
+                    expected_typed_dict_class=DualAnnealingSettingsInputDict,
                     object_name=optimiser
                 )
 
@@ -525,7 +532,7 @@ def acquisition_optimiser_with_proximity_punishment(
             if proximity_punish_settings is not None:
                 _validate_typed_dict(
                     typed_dict=proximity_punish_settings,
-                    expected_typed_dict_class=ProximityPunishSettings,
+                    expected_typed_dict_class=ProximityPunishSettingsInputDict,
                     object_name='proximity_punish'
                 )
 

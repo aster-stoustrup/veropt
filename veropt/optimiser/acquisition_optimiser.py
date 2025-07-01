@@ -1,6 +1,7 @@
 import abc
+from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Literal, Optional, TypedDict
+from typing import Any, Callable, Literal, Optional, TypedDict, Unpack
 
 import numpy as np
 import scipy
@@ -9,14 +10,14 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
-from veropt.optimiser.optimiser_saver import SavableClass
+from veropt.optimiser.optimiser_saver import SavableClass, SavableDataClass
 from veropt.optimiser.utility import DataShape
 
 
 class AcquisitionOptimiser(SavableClass):
     __metaclass__ = abc.ABCMeta
 
-    name: Optional[str] = None
+    name: str
     maximum_evaluations_per_step: Optional[int]
 
     def __init__(
@@ -24,6 +25,7 @@ class AcquisitionOptimiser(SavableClass):
             bounds: torch.Tensor,
             n_evaluations_per_step: int
     ) -> None:
+
         self.bounds = bounds
         self.n_evaluations_per_step = n_evaluations_per_step
 
@@ -32,6 +34,12 @@ class AcquisitionOptimiser(SavableClass):
                 f"This optimiser can only find {self.maximum_evaluations_per_step} point(s) at a time "
                 f"but received a setting of {n_evaluations_per_step} evaluations per step."
             )
+
+        self.settings: Any  # type: ignore[explicit-any]  # Defined in subclass >:(
+
+        assert 'name' in self.__class__.__dict__, (
+            f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
+        )
 
     def __call__(
             self,
@@ -61,6 +69,12 @@ class AcquisitionOptimiser(SavableClass):
     ) -> torch.Tensor:
         pass
 
+    def gather_dicts_to_save(self) -> dict:
+        return {
+            'name': self.name,
+            'settings': self.settings.gather_dicts_to_save()
+        }
+
 
 class TorchNumpyWrapper:
     def __init__(
@@ -81,8 +95,13 @@ class TorchNumpyWrapper:
         return output.detach().numpy()
 
 
-class DualAnnealingSettings(TypedDict):
+class DualAnnealingSettingsInputDict(TypedDict, total=False):
     max_iter: int
+
+
+@dataclass
+class DualAnnealingSettings(SavableDataClass):
+    max_iter: int = 1_000
 
 
 class DualAnnealingOptimiser(AcquisitionOptimiser):
@@ -94,9 +113,11 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
             self,
             bounds: torch.Tensor,
             n_evaluations_per_step: int,
-            max_iter: int = 1000
+            **settings: Unpack[DualAnnealingSettingsInputDict]
     ):
-        self.max_iter = max_iter
+        self.settings = DualAnnealingSettings(
+            **settings
+        )
 
         super().__init__(
             bounds=bounds,
@@ -115,26 +136,25 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
         optimisation_result = scipy.optimize.dual_annealing(
             func=wrapped_acquisition_function,
             bounds=self.bounds.T,
-            maxiter=self.max_iter
+            maxiter=self.settings.max_iter
         )
 
         candidates = torch.tensor(optimisation_result.x)
 
         return candidates
 
-    def gather_dicts_to_save(self) -> dict:
-        raise NotImplementedError()
 
-
-class RefreshSetting(Enum):
-    simple = 0
-    advanced = 1
-
-
-class ProximityPunishSettings(TypedDict):
+class ProximityPunishSettingsInputDict(TypedDict, total=False):
     alpha: float
     omega: float
     refresh_setting: Literal['simple', 'advanced']
+
+
+@dataclass
+class ProximityPunishSettings(SavableDataClass):
+    alpha: float = 0.7
+    omega: float = 1.0
+    refresh_setting: Literal['simple', 'advanced'] = 'advanced'
 
 
 class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
@@ -147,24 +167,16 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             bounds: torch.Tensor,
             n_evaluations_per_step: int,
             single_step_optimiser: AcquisitionOptimiser,
-            alpha: float = 1.0,
-            omega: float = 1.0,
-            refresh_setting: Literal['simple', 'advanced'] = 'advanced'
+            **settings: Unpack[ProximityPunishSettingsInputDict]
     ):
 
         self.single_step_optimiser = single_step_optimiser
 
-        self.alpha = alpha
-        self.omega = omega
+        self.settings = ProximityPunishSettings(
+            **settings
+        )
 
         self.scaling: Optional[float] = None
-
-        if refresh_setting == 'simple':
-            self.refresh_setting = RefreshSetting.simple
-        elif refresh_setting == 'advanced':
-            self.refresh_setting = RefreshSetting.advanced
-        else:
-            raise ValueError(f"'refresh_setting' must be 'simple' or 'advanced', received: {refresh_setting}")
 
         super().__init__(
             bounds=bounds,
@@ -221,10 +233,10 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             acquisition_function: AcquisitionFunction,
     ) -> None:
 
-        if self.refresh_setting == RefreshSetting.simple:
+        if self.settings.refresh_setting == 'simple':
             self._refresh_scaling_simple(acquisition_function=acquisition_function)
 
-        elif self.refresh_setting == RefreshSetting.advanced:
+        elif self.settings.refresh_setting == 'advanced':
             self._refresh_scaling_advanced(acquisition_function=acquisition_function)
 
     def update_bounds(
@@ -250,14 +262,14 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
         assert self.scaling is not None, "Scaling must have been calculated before adding the proximity punishment."
 
         proximity_punish = torch.zeros(len(acquisition_value))
-        scaling = self.omega * self.scaling
+        scaling = self.settings.omega * self.scaling
 
         for other_point_variables in other_points_variable_values:
 
             proximity_punish += scaling * np.exp(
                 -(
                         torch.sum((point_variable_values - other_point_variables) ** 2, dim=1)
-                        / (self.alpha ** 2)
+                        / (self.settings.alpha ** 2)
                 )
             )
 
@@ -347,5 +359,10 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
 
         self.scaling = 2 * float(np.sqrt(best_fitter.covariances_[top_cluster_ind]))
 
+
     def gather_dicts_to_save(self) -> dict:
-        raise NotImplementedError()
+        return {
+            'name': self.name,
+            'settings': self.settings.gather_dicts_to_save(),
+            'single_step_optimiser': self.single_step_optimiser.gather_dicts_to_save()
+        }

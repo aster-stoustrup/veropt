@@ -3,7 +3,7 @@ import functools
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Iterator, Optional, TypedDict, Union, Unpack
+from typing import Any, Callable, Iterator, Optional, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
@@ -11,9 +11,9 @@ import torch
 from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
-from veropt.optimiser.optimiser_saver import SavableClass
+from veropt.optimiser.optimiser_saver import SavableClass, SavableDataClass
 from veropt.optimiser.utility import check_variable_and_objective_shapes, check_variable_objective_values_matching, \
-    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
+    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs, SavableSettings
 
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
@@ -68,26 +68,29 @@ class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorc
 
 
 class GPyTorchSingleModel(SavableClass):
+    __metaclass__ = abc.ABCMeta
 
-    name: Optional[str] = None
+    name: str
 
     def __init__(
             self,
-            likelihood: gpytorch.likelihoods.GaussianLikelihood,
-            mean_module: gpytorch.means.Mean,
-            kernel: gpytorch.kernels.Kernel,
-            settings = None
+            n_variables: int,
+            **settings: Union[float, int, str, bool]
     ) -> None:
 
-        self.likelihood = likelihood
-        self.mean_module = mean_module
-        self.kernel = kernel
+        self.likelihood: gpytorch.likelihoods.GaussianLikelihood
+        self.mean_module: gpytorch.means.Mean
+        self.kernel: gpytorch.kernels.Kernel
 
-        self.model_with_data: GPyTorchDataModel | None = None
+        self.settings: Any  # type: ignore[explicit-any]  # Dataclass defined in subclass >:( >:)
+
+        self.model_with_data: Optional[GPyTorchDataModel] = None
 
         self.trained_parameters: list[dict[str, Iterator[torch.nn.Parameter]]] = [{}]
 
-        self.settings = settings
+        assert 'name' in self.__class__.__dict__, (
+            f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
+        )
 
     def __repr__(self) -> str:
         return (
@@ -114,10 +117,16 @@ class GPyTorchSingleModel(SavableClass):
     def gather_dicts_to_save(self) -> dict:
 
         if self.model_with_data is not None:
-            return self.model_with_data.state_dict()
+            state_dict = self.model_with_data.state_dict()
 
         else:
-            return {}
+            state_dict = {}
+
+        return {
+            'name': self.name,
+            'state_dict': state_dict,
+            'settings': self.settings.gather_dicts_to_save()
+        }
 
     def set_constraint(
             self,
@@ -213,7 +222,7 @@ class MaternParametersInputDict(TypedDict, total=False):
 
 
 @dataclass
-class MaternParameters:
+class MaternParameters(SavableDataClass):
     lengthscale_lower_bound: float = 0.1
     lengthscale_upper_bound: float = 2.0
     noise: float = 1e-8
@@ -228,23 +237,24 @@ class MaternSingleModel(GPyTorchSingleModel):
     def __init__(
             self,
             n_variables: int,
-            **kwargs: Unpack[MaternParametersInputDict]
+            **settings: Unpack[MaternParametersInputDict]
     ) -> None:
 
-        likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        mean_module = gpytorch.means.ConstantMean()
-        kernel = gpytorch.kernels.MaternKernel(
+        self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        self.mean_module = gpytorch.means.ConstantMean()
+        self.kernel = gpytorch.kernels.MaternKernel(
             ard_num_dims=n_variables,
             batch_shape=torch.Size([])
         )
 
+        self.settings = MaternParameters(
+            **settings
+        )
+
         super().__init__(
-            likelihood=likelihood,
-            mean_module=mean_module,
-            kernel=kernel,
-            settings=MaternParameters(
-            **kwargs
-        ))
+            n_variables=n_variables,
+            **settings
+        )
 
     def _set_up_trained_parameters(self) -> None:
 
@@ -406,7 +416,7 @@ class GPyTorchTrainingParametersInputDict(TypedDict, total=False):
 
 
 @dataclass
-class GPyTorchTrainingParameters:
+class GPyTorchTrainingParameters(SavableDataClass):
     learning_rate: float = 0.1
     loss_change_to_stop: float = 1e-6  # TODO: Find optimal value for this?
     max_iter: int = 10_000
@@ -424,7 +434,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             **kwargs: Unpack[GPyTorchTrainingParametersInputDict]
     ) -> None:
 
-        self.training_parameters = GPyTorchTrainingParameters(
+        self.training_settings = GPyTorchTrainingParameters(
             **kwargs
         )
 
@@ -485,6 +495,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         return check_dimensions
 
     def __repr__(self) -> str:
+
         return (
             f"{self.__class__.__name__}({[model.__class__.__name__ for model in self._model_list]})"
         )
@@ -494,7 +505,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         return (
             f"{self.__class__.__name__}("
             f"\n{''.join([f"{model} \n" for model in self._model_list])}"
-            f"settings: {self.training_parameters}\n"
+            f"settings: {self.training_settings}\n"
             f")"
         )
 
@@ -596,17 +607,15 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
     def gather_dicts_to_save(self) -> dict:
 
-        # TODO: Put model names in here somewhere?
-
-        state_dicts: dict[str, dict] = {}
+        model_dicts: dict[str, dict] = {}
 
         for model_no, model in enumerate(self._model_list):
-            state_dicts[f'model_{model_no}'] = model.gather_dicts_to_save()
+            model_dicts[f'model_{model_no}'] = model.gather_dicts_to_save()
 
-        settings = self.training_parameters.__dict__  # Consider doing something nicer here?
+        settings = self.training_settings.gather_dicts_to_save()
 
         return {
-            'state_dicts': state_dicts,
+            'model_dicts': model_dicts,
             'settings': settings,
         }
 
@@ -619,10 +628,10 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
         loss_difference = torch.tensor(1e5)  # initial values
         loss = torch.tensor(1e20)  # TODO: Find a way to make sure this number is always big enough
-        assert self.training_parameters.loss_change_to_stop < loss_difference
+        assert self.training_settings.loss_change_to_stop < loss_difference
         iteration = 1
 
-        while bool(loss_difference > self.training_parameters.loss_change_to_stop):
+        while bool(loss_difference > self.training_settings.loss_change_to_stop):
 
             self._model_optimiser.optimiser.zero_grad()
 
@@ -641,13 +650,13 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
             if self.verbose:
                 print(
-                    f"Training model... Iteration {iteration} (of a maximum {self.training_parameters.max_iter})"
+                    f"Training model... Iteration {iteration} (of a maximum {self.training_settings.max_iter})"
                     f" - MLL: {loss.item():.3f}",
                     end="\r"
                 )
 
             iteration += 1
-            if iteration > self.training_parameters.max_iter:
+            if iteration > self.training_settings.max_iter:
                 warnings.warn("Stopped training due to maximum iterations reached.")
                 break
 

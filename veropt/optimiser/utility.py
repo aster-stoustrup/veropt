@@ -1,10 +1,12 @@
 import functools
 import inspect
 from copy import deepcopy
-from typing import Callable, Optional, TypedDict, Union
+from typing import Callable, Optional, TypeVar, TypedDict, Union
 
 import decorator
 import torch
+
+from veropt.optimiser.optimiser_saver import SavableDataClass
 
 
 def check_variable_values_shape(
@@ -249,3 +251,6 @@ class TensorWithNormalisationFlag:
     @property
     def shape(self) -> torch.Size:
         return self.tensor.shape
+
+
+SavableSettings = TypeVar('SavableSettings', bound=SavableDataClass)

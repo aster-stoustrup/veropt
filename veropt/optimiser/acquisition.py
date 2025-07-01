@@ -1,12 +1,13 @@
 import abc
 import functools
-from typing import Callable, Optional, TypedDict
+from dataclasses import dataclass
+from typing import Any, Callable, Optional, TypedDict, Unpack
 
 import botorch
 import torch
 from botorch.utils.multi_objective.box_decompositions.non_dominated import FastNondominatedPartitioning
 
-from veropt.optimiser.optimiser_saver import SavableClass
+from veropt.optimiser.optimiser_saver import SavableClass, SavableDataClass
 from veropt.optimiser.optimiser_utility import get_nadir_point
 from veropt.optimiser.utility import (
     check_variable_and_objective_shapes, check_variable_objective_values_matching,
@@ -62,9 +63,10 @@ def _check_input_dimensions[T, **P](
     return check_dimensions
 
 
-class AcquisitionFunction:
+class AcquisitionFunction(SavableClass):
+    __metaclass__ = abc.ABCMeta
 
-    name: Optional[str] = None
+    name: str
 
     def __init__(
             self,
@@ -78,6 +80,11 @@ class AcquisitionFunction:
 
         self.multi_objective = multi_objective
 
+        self.function: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
+
+        if 'settings' not in self.__dict__:
+            self.settings: Optional[Any] = None  # type: ignore[explicit-any]  # Dataclass defined in subclass >:(
+
         if self.multi_objective:
             assert self.n_objectives > 1, (
                 f"This acquisition function ({self.__class__.__name__}) is meant for multi-objective problems but "
@@ -89,7 +96,9 @@ class AcquisitionFunction:
                 f"received {self.n_objectives} objectives."
             )
 
-        self.function: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
+        assert 'name' in self.__class__.__dict__, (
+            f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
+        )
 
     @_check_input_dimensions
     def __call__(
@@ -102,8 +111,21 @@ class AcquisitionFunction:
 
         return self.function(variable_values)
 
+    def gather_dicts_to_save(self) -> dict:
 
-class BotorchAcquisitionFunction(AcquisitionFunction, SavableClass):
+        if self.settings is not None:
+            settings_dict = self.settings.gather_dicts_to_save()
+        else:
+            settings_dict = {}
+
+        return {
+            'name': self.name,
+            'settings': settings_dict
+        }
+
+
+class BotorchAcquisitionFunction(AcquisitionFunction):
+    __metaclass__ = abc.ABCMeta
 
     @check_variable_objective_values_matching
     @_check_input_dimensions
@@ -121,12 +143,6 @@ class BotorchAcquisitionFunction(AcquisitionFunction, SavableClass):
             variable_values=variable_values,
             objective_values=objective_values,
         )
-
-    def gather_dicts_to_save(self) -> dict:
-
-        # TODO: Make this
-
-        raise NotImplementedError
 
     @abc.abstractmethod
     def _refresh(
@@ -179,8 +195,13 @@ class QLogExpectedHyperVolumeImprovement(BotorchAcquisitionFunction):
 
 
 # For typing in the constructors
-class UpperConfidenceBoundOptions(TypedDict):
+class UpperConfidenceBoundOptionsInputDict(TypedDict, total=False):
     beta: float
+
+
+@dataclass
+class UpperConfidenceBoundOptions(SavableDataClass):
+    beta: float = 3.0
 
 
 class UpperConfidenceBound(BotorchAcquisitionFunction):
@@ -191,10 +212,12 @@ class UpperConfidenceBound(BotorchAcquisitionFunction):
             self,
             n_variables: int,
             n_objectives: int,
-            beta: float = 3.0
+            **settings: Unpack[UpperConfidenceBoundOptionsInputDict]
     ):
 
-        self.beta = beta
+        self.settings = UpperConfidenceBoundOptions(
+            **settings
+        )
 
         super().__init__(
             n_variables=n_variables,
@@ -211,5 +234,5 @@ class UpperConfidenceBound(BotorchAcquisitionFunction):
 
         self.function = botorch.acquisition.analytic.UpperConfidenceBound(
             model=model,
-            beta=self.beta
+            beta=self.settings.beta
         )

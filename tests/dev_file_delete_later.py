@@ -33,7 +33,17 @@ optimiser = bayesian_optimiser(
     n_initial_points=n_initial_points,
     n_bayesian_points=n_bayesian_points,
     n_evaluations_per_step=n_evalations_per_step,
-    objective=objective,
+    objective=objective
+)
+
+from veropt.optimiser.optimiser_saver import save_to_json
+
+optimiser.run_optimisation_step()
+optimiser.run_optimisation_step()
+
+save_to_json(
+    object_to_save=optimiser,
+    file_name='test'
 )
 
 
