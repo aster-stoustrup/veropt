@@ -1,5 +1,5 @@
 from veropt.interfaces.local_simulation import LocalVerosRunner, LocalVerosConfig
-from pydantic import BaseModel 
+import xarray as xr
 
 # conda_env = Conda(
 #     path_to_env="/Users/martamrozowska/miniforge3",
@@ -15,23 +15,16 @@ parameters = {
     "c_k": 0.05,
     "c_eps": 1.0
 }
-local_config = LocalVerosConfig(
-    env_manager= "conda",
-    env_name= "veros",
-    path_to_env= "/Users/martamrozowska/miniforge3",
-    veros_path= "veros",
-    backend="numpy",
-    device= "cpu",
-    float_type= "float64",
-    keep_old_params=True,
-)
+local_config = LocalVerosConfig.load('configs/local_veros_config.json')
 
-simulation_runner = LocalVerosRunner(
-    config=local_config
-)
+simulation_runner = LocalVerosRunner(config=local_config)
 result = simulation_runner.save_set_up_and_run(
-    simulation_id="point=0", 
+    simulation_id="point=0",
     parameters=parameters,
     run_script_directory="/Users/martamrozowska/Desktop/veros/acc",
-    run_script_filename="acc")
+    run_script_filename="acc",
+    output_filename="acc.averages")
 print("Output dict:", result.model_dump())
+
+ds = xr.open_dataset(result.output_file)
+print(ds)
