@@ -4,8 +4,11 @@ import json
 import os
 import subprocess
 from typing import Optional, Unpack, Union, TypedDict, Literal, Dict, List
-from pydantic import BaseModel, Field
 from veropt.interfaces.simulation import SimulationRunnerConfig, SimulationResult, Simulation, SimulationRunner
+from veropt.interfaces.utility import Config
+
+import torch
+from pydantic import BaseModel
 
 
 class EnvManager(ABC):
@@ -67,23 +70,25 @@ class LocalSimulation(Simulation):
             self,
             simulation_id: str,
             run_script_directory: str,
-            env_manager: EnvManager
+            env_manager: EnvManager,
+            output_file: str
     ) -> None:
         
         self.id = simulation_id
         self.run_script_directory = run_script_directory
         self.env_manager = env_manager
+        self.output_file = output_file
     
     # TODO: Should there be an option to supress output files?
     def run(
             self,
-            parameters: Dict[str,float]
+            parameters: Dict[str, float]
     ) -> SimulationResult:
         
         result = self.env_manager.run_in_env()
 
-        stdout_file = os.path.join(self.run_script_directory, self.id, ".out")
-        stderr_file = os.path.join(self.run_script_directory, self.id, ".err")
+        stdout_file = os.path.join(self.run_script_directory, f"{self.id}.out")
+        stderr_file = os.path.join(self.run_script_directory, f"{self.id}.err")
 
         with open(stdout_file, "w") as f_out:
             f_out.write(result.stdout)
@@ -96,14 +101,16 @@ class LocalSimulation(Simulation):
             parameters=parameters,
             stdout_file=stdout_file,
             stderr_file=stderr_file,
-            return_code=result.returncode
+            return_code=result.returncode,
+            output_file=self.output_file
         )
 
 
-class MockSimulationConfig(BaseModel):
+class MockSimulationConfig(Config):
     stdout_file: List[str] = ["test_stdout.txt"]
     stderr_file: List[str] = ["test_stderr.txt"]
     return_code: List[int] = [0]
+    output_file: List[str] = ["test_output.nc"]
     return_list: bool = False
 
 
@@ -118,10 +125,11 @@ class MockSimulationRunner(SimulationRunner):
     def set_up_and_run(
             self,
             simulation_id: str,
-            parameters: Dict[str,float],
-            run_script_directory: Optional[str] = None,
-            run_script_filename: Optional[str] = None
-    ) -> Union[SimulationResult,List[SimulationResult]]:
+            parameters: Dict[str, float],
+            run_script_directory: str = "",
+            run_script_filename: str = "",
+            output_filename: str = ""
+    ) -> Union[SimulationResult, List[SimulationResult]]:
         
         print(f"Running test simulation with parameters: {parameters} and config: {self.config.model_dump()}")
 
@@ -130,16 +138,18 @@ class MockSimulationRunner(SimulationRunner):
             stdout_files = self.config.stdout_file
             stderr_files = self.config.stderr_file
             return_codes = self.config.return_code
+            output_files = self.config.output_file
 
-            zipped_lists = zip(stdout_files, stderr_files, return_codes)
+            zipped_lists = zip(stdout_files, stderr_files, return_codes, output_files)
 
             results = [SimulationResult(
                 simulation_id=simulation_id,
                 parameters=parameters,
                 stdout_file=out_file,
                 stderr_file=err_file,
+                output_file=output_file,  # Assuming output_file is the same as stdout_file for mock
                 return_code=return_code
-            ) for out_file, err_file, return_code in zipped_lists]
+            ) for out_file, err_file, return_code, output_file in zipped_lists]
 
             return results
 
@@ -149,11 +159,12 @@ class MockSimulationRunner(SimulationRunner):
                 parameters=parameters,
                 stdout_file=self.config.stdout_file[0],
                 stderr_file=self.config.stderr_file[0],
+                output_file=self.config.output_file[0],
                 return_code=self.config.return_code[0]
             )
 
 
-class LocalVerosConfig(BaseModel):
+class LocalVerosConfig(Config):
     env_manager: Literal["conda", "venv"]
     env_name: str
     path_to_env: str
@@ -187,7 +198,7 @@ class LocalVerosRunner(SimulationRunner):
     def _edit_run_script(
             self,
             run_script: str,
-            parameters: Dict[str,float]
+            parameters: Dict[str, float]
     ) -> None:
         with open(run_script, 'r') as file:
             data = file.readlines()
@@ -210,11 +221,13 @@ class LocalVerosRunner(SimulationRunner):
     def set_up_and_run(
             self,
             simulation_id: str,
-            parameters: Dict[str,float],
+            parameters: Dict[str, float],
             run_script_directory: str,
-            run_script_filename: str
+            run_script_filename: str,
+            output_filename: str
     ) -> SimulationResult:
         run_script = os.path.join(run_script_directory, f"{run_script_filename}.py")
+        output_file = os.path.join(run_script_directory, f"{output_filename}.nc")
         self._edit_run_script(run_script, parameters) if not self.config.keep_old_params else None
         command = self._make_command(run_script, run_script_directory) if self.config.command is None else self.config.command
 
@@ -234,6 +247,10 @@ class LocalVerosRunner(SimulationRunner):
         simulation = LocalSimulation(
             simulation_id=simulation_id,
             run_script_directory=run_script_directory, 
-            env_manager=env_manager)
+            env_manager=env_manager,
+            output_file=output_file
+            )
+
         result = simulation.run(parameters=parameters)
+
         return result

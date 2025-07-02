@@ -1,18 +1,19 @@
-from pydantic import BaseModel
 import json
-from typing import Any, List, Union, Optional, Dict
+from typing import List, Union, Optional, Dict, TypedDict
 from abc import ABC, abstractmethod
 import os
 
-# TODO: Do we stick with TypeDict throughout or can we use BaseModel?
-# TODO: Should SimulationResult contain outfile location?
+import torch
+from pydantic import BaseModel
+
+
 class SimulationResult(BaseModel):
     simulation_id: str
-    parameters: Dict[str,float]
+    parameters: Dict[str, float]
     stdout_file: str
     stderr_file: str
-    return_code: Optional[int] = None  # Maybe needs to be optional to comply with slurm simulation
-    output_file: Optional[str] = None
+    output_file: str
+    return_code: Optional[int] = None
 
 
 SimulationResultsDict = Dict[int, Union[SimulationResult, List[SimulationResult]]]
@@ -22,12 +23,12 @@ class Simulation(ABC):
     @abstractmethod
     def run(
             self,
-            parameters: Dict[str,float]
+            parameters: Dict[str, float]
     ) -> SimulationResult:
         ...
 
 
-class SimulationRunnerConfig(BaseModel):
+class SimulationRunnerConfig:
     ...
 
 
@@ -36,9 +37,10 @@ class SimulationRunner(ABC):
     def save_set_up_and_run(
             self,
             simulation_id: str,
-            parameters: Dict[str,float],
+            parameters: Dict[str, float],
             run_script_directory: str,
-            run_script_filename: str
+            run_script_filename: str,
+            output_filename: str
     ) -> Union[SimulationResult, List[SimulationResult]]:
 
         parameters_json_filename = f"{simulation_id}_parameters.json"
@@ -53,7 +55,8 @@ class SimulationRunner(ABC):
             simulation_id=simulation_id,
             parameters=parameters,
             run_script_directory=run_script_directory,
-            run_script_filename=run_script_filename
+            run_script_filename=run_script_filename,
+            output_filename=output_filename
         )
 
         if isinstance(result, list): 
@@ -64,7 +67,7 @@ class SimulationRunner(ABC):
 
     def _save_parameters(
             self,
-            parameters: Dict[str,float],
+            parameters: Dict[str, float],
             parameters_json: str
     ) -> None:
 
@@ -75,8 +78,9 @@ class SimulationRunner(ABC):
     def set_up_and_run(
             self,
             simulation_id: str,
-            parameters: Dict[str,float],
+            parameters: Dict[str, float],
             run_script_directory: str,
-            run_script_filename: str
+            run_script_filename: str,
+            output_filename: str
     ) -> Union[SimulationResult, List[SimulationResult]]:
         ...

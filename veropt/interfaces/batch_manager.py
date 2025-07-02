@@ -6,10 +6,11 @@ from typing import TypeVar, Generic, List, Dict, Literal, Union, Tuple, Optional
 from pydantic import BaseModel
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner, SimulationResultsDict
 from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
+from veropt.interfaces.utility import Config
 
 
 SR = TypeVar("SR", bound=SimulationRunner)
-ConfigType = TypeVar("ConfigType", bound=BaseModel)
+ConfigType = TypeVar("ConfigType", bound=Config)
 
 
 class ExperimentMode(StrEnum):
@@ -31,10 +32,10 @@ def create_directory(
 
 
 def copy_files(
-        source_directory: str, 
+        source_directory: str,
         destination_directory: str
 ) -> None:
-    
+
     if not os.path.exists(destination_directory):
         os.makedirs(destination_directory, exist_ok=True)
 
@@ -64,7 +65,7 @@ class BatchManager(ABC, Generic[SR]):
     @abstractmethod
     def run_batch(
             self,
-            dict_of_parameters: Dict[int,dict],
+            dict_of_parameters: Dict[int, dict],
             experimental_state: ExperimentalState
     ) -> SimulationResultsDict:
         ...
@@ -76,15 +77,15 @@ class BatchManagerFactory:
         experiment_mode: str,
         run_script_filename: str,
         run_script_root_directory: str
-    ) -> BaseModel:
-        
+    ) -> ConfigType:
+
         if experiment_mode == ExperimentMode.LOCAL:
 
             return LocalBatchManagerConfig(
                 run_script_filename=run_script_filename,
                 run_script_root_directory=run_script_root_directory,
             )
-        
+
         else:
             raise NotImplementedError
 
@@ -94,7 +95,7 @@ class BatchManagerFactory:
         simulation_runner: SR,
         config: ConfigType
     ) -> BatchManager:
-        
+
         if experiment_mode == ExperimentMode.LOCAL:
 
             assert isinstance(config, LocalBatchManagerConfig)
@@ -103,21 +104,21 @@ class BatchManagerFactory:
                 simulation_runner=simulation_runner,
                 config=config
             )
-        
+
         elif experiment_mode == ExperimentMode.LOCAL_SLURM:
 
             assert isinstance(config, LocalSlurmBatchManagerConfig)
 
-            return LocalSlurmBatchManager(             
+            return LocalSlurmBatchManager(
                 simulation_runner=simulation_runner,
                 config=config
             )
-        
+
         elif experiment_mode == ExperimentMode.REMOTE_SLURM:
 
             assert isinstance(config, RemoteSlurmBatchManagerConfig)
 
-            return RemoteSlurmBatchManager(             
+            return RemoteSlurmBatchManager(
                 simulation_runner=simulation_runner,
                 config=config
             )
@@ -127,7 +128,7 @@ class BatchManagerFactory:
             raise ValueError(f"Unsupported mode: {experiment_mode!r}")
 
 
-class LocalBatchManagerConfig(BaseModel):
+class LocalBatchManagerConfig(Config):
     run_script_filename: str
     run_script_root_directory: str
     output_filename: str
@@ -145,10 +146,10 @@ class LocalBatchManager(BatchManager):
 
     def run_batch(
             self,
-            dict_of_parameters: Dict[int,dict],
+            dict_of_parameters: Dict[int, dict],
             experimental_state: ExperimentalState
     ) -> SimulationResultsDict:
-        
+
         results = {}
 
         # TODO: This is fine for now but could be done better; however it is important to check
@@ -168,29 +169,26 @@ class LocalBatchManager(BatchManager):
                 source_directory=self.config.run_script_root_directory,
                 destination_directory=result_directory
             )
-            
+
             experimental_state.points[i].state = "Simulation started"
             result = self.simulation_runner.save_set_up_and_run(
                 simulation_id=simulation_id,
                 parameters=parameters,
                 run_script_directory=result_directory,
-                run_script_filename=self.config.run_script_filename)
+                run_script_filename=self.config.run_script_filename,
+                output_filename=self.config.output_filename)
             experimental_state.points[i].state = "Simulation finished"
 
             experimental_state.points[i].result = result
-            experimental_state.points[i].output_file = os.path.join(
-                result_directory,
-                self.config.output_filename
-            )
 
             results[i] = result
 
-            experimental_state.save_to_json(experimental_state.save_path)
+            experimental_state.save_to_json(experimental_state.state_json)
 
         return results
 
 
-class LocalSlurmBatchManagerConfig(BaseModel):
+class LocalSlurmBatchManagerConfig(Config):
     ...
 
 
@@ -205,16 +203,16 @@ class LocalSlurmBatchManager(BatchManager):
 
     def run_batch(
             self,
-            dict_of_parameters: Dict[int,dict],
+            dict_of_parameters: Dict[int, dict],
             experimental_state: ExperimentalState
     ) -> SimulationResultsDict:
         # TODO: Implement
         raise NotImplementedError
-    
 
-class RemoteSlurmBatchManagerConfig(BaseModel):
+
+class RemoteSlurmBatchManagerConfig(Config):
     ...
-    
+
 
 class RemoteSlurmBatchManager(BatchManager):
     def __init__(
@@ -227,7 +225,7 @@ class RemoteSlurmBatchManager(BatchManager):
 
     def run_batch(
             self,
-            dict_of_parameters: Dict[int,dict],
+            dict_of_parameters: Dict[int, dict],
             experimental_state: ExperimentalState
     ) -> SimulationResultsDict:
         # TODO: Implement
