@@ -3,7 +3,7 @@ from typing import Dict, Union, List
 from veropt.interfaces.simulation import SimulationResultsDict
 
 
-ObjectivesDict = Dict[int,Union[float,List[float]]]
+ObjectivesDict = Dict[int, Union[float, List[float]]]
 
 
 class ResultProcessor(ABC):
