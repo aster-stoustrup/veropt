@@ -1,4 +1,3 @@
-from pydantic import BaseModel, Field
 from typing import Any, Dict, List, TypeVar, Optional, Literal, Union
 import time
 import json
@@ -6,13 +5,20 @@ import os
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner
 from veropt.interfaces.batch_manager import BatchManager, BatchManagerFactory, ExperimentMode
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
-from veropt.interfaces.mock_optimiser import MockOptimiser, OptimiserObject
 from veropt.interfaces.experiment_utility import *
+from veropt.interfaces.utility import Config
+
+from veropt.optimiser.optimiser import BayesianOptimiser
+from veropt.optimiser.objective import InterfaceObjective
+from veropt.optimiser.constructors import bayesian_optimiser
 
 import torch
+from pydantic import BaseModel
+
 
 SR = TypeVar("SR", bound=SimulationRunner)
-ConfigType = TypeVar("ConfigType", bound=BaseModel)
+ConfigType = TypeVar("ConfigType", bound=Config)
+
 
 # TODO: Aster, how to handle nan inputs? 
 # TODO: Aster, do we implement an option to minimise or maximise in the experiment 
@@ -30,11 +36,40 @@ ConfigType = TypeVar("ConfigType", bound=BaseModel)
 #       - How to access objective functions vals and coords in order to sanity check?
 #       - If possible, a log of what optimiser does per optimisation step
 
-suggested_points = {
-            'var_1': torch.tensor([0.4, 0.3, 0.7, -0.3]),
-            'var_2': torch.tensor([1.2, -1.4, 1.1, 0.2]),
-            'var_3': torch.tensor([0.2, -0.2, -0.1, 2.2])
-            }
+
+# TODO: This class could actually take in veropt core structure of the candidates and evaluated points
+#       transform + save them, and then load them back in the same structure.
+#       Consider if the json files should be temporary.
+class ExperimentObjective(InterfaceObjective):
+    def __init__(
+            self,
+            suggested_parameters_json: str,
+            evaluated_points_json: str
+    ) -> None:
+
+        self.suggested_parameters_json = suggested_parameters_json
+        self.evaluated_points_json = evaluated_points_json
+
+    def save_candidates(
+            self,
+            suggested_variables: dict[str, torch.Tensor],
+    ) -> None:
+
+        with open(self.suggested_parameters_json, 'w') as f:
+            json.dump(suggested_variables, f)
+
+    def load_evaluated_points(self) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+
+        # TODO: This structure is wrong, jsyk
+        # TODO: Need to initialise the json files as empty so the first opt step passes empty dicts
+
+        with open(self.evaluated_points_json, 'r') as f:
+            data = json.load(f)
+
+        suggested_variables = {k: torch.tensor(v) for k, v in data['suggested_variables'].items()}
+        evaluated_objectives = {k: torch.tensor(v) for k, v in data['evaluated_objectives'].items()}
+
+        return suggested_variables, evaluated_objectives
 
 
 class Experiment:
@@ -47,56 +82,53 @@ class Experiment:
         batch_manager: Optional[BatchManager] = None,
         state: Optional[Union[str, ExperimentalState]] = None
     ) -> None:
-        
-        # TODO: This could be a part of the class task, ie. checking if input is a string
-        #       or ExperimentConfig instance, and loads accordingly
-        if isinstance(experiment_config, str):
-            self.experiment_config = ExperimentConfig.load_from_json(experiment_config)
-        else:
-            self.experiment_config = experiment_config
 
-        if isinstance(optimiser_config, str):
-            self.optimiser_config = OptimiserConfig.load_from_json(optimiser_config)
-        else:
-            self.optimiser_config = optimiser_config
+        self.experiment_config = ExperimentConfig.load(experiment_config)
+        self.optimiser_config = OptimiserConfig.load(optimiser_config)
 
         self.path_manager = PathManager(self.experiment_config)
-    
-        if state is None:
-            self.state = ExperimentalState(
-                experiment_name = self.experiment_config.experiment_name,
-                experiment_directory = self.path_manager.experiment_directory,
-                save_path = self.path_manager.experimental_state_json,
-                points = {},
-                next_point = 0
-            )
-        elif isinstance(state, str):
-            self.state = ExperimentalState.load_from_json(state)
-        else: 
-            self.state = state
+
+        self.state = ExperimentalState.load(state) if state is not None else ExperimentalState.make_fresh_state(
+            experiment_name=self.experiment_config.experiment_name,
+            experiment_directory=self.path_manager.experiment_directory,
+            state_json=self.path_manager.experimental_state_json
+        )
 
         self.simulation_runner = simulation_runner
         self.batch_manager = batch_manager
         self.result_processor = result_processor
 
-        self.experimental_set_up_initialised = False
+        self.initialise_experimental_set_up()
 
-    def initialise_optimiser(
-            self
-    ) -> None:
-        ...
-        # assert self.n_evals_per_step < self.experiment_config.max_workers
+    def initialise_optimiser(self) -> None:
+        self.n_parameters = len(self.experiment_config.parameter_names)
+        self.n_objectives = len(self.experiment_config.objective_names)
 
-    def initialise_batch_manager(
-            self
-    ) -> None:
-        
+        objective = ExperimentObjective(
+            bounds=self.experiment_config.parameter_bounds,
+            n_variables=self.n_parameters,
+            n_objectives=self.n_objectives,
+            variable_names=self.experiment_config.parameter_names,
+            objective_names=self.experiment_config.objective_names,
+            suggested_parameters_json=self.path_manager.suggested_parameters_json,
+            evaluated_points_json=self.path_manager.evaluated_points_json
+        )
+
+        self.optimiser = bayesian_optimiser(
+            n_initial_points=self.optimiser_config.n_initial_points,
+            n_bayesian_points=self.optimiser_config.n_bayesian_points,
+            n_evals_per_step=self.optimiser_config.n_evals_per_step,
+            objective=objective
+        )
+
+    def initialise_batch_manager(self) -> None:
+
         self.batch_manager_config = BatchManagerFactory.make_batch_manager_config(
             experiment_mode=self.experiment_config.experiment_mode,
             run_script_filename=self.experiment_config.run_script_filename,
             run_script_root_directory=self.path_manager.run_script_root_directory
         )
-        
+
         self.batch_manager = BatchManagerFactory.make_batch_manager(
             experiment_mode=self.experiment_config.experiment_mode,
             simulation_runner=self.simulation_runner,
@@ -104,23 +136,24 @@ class Experiment:
         )
 
     # TODO: is this redundant?
-    def _check_initialisation(
-            self
-    ) -> None:
+    def _check_initialisation(self) -> None:
+
         assert isinstance(self.simulation_runner, SimulationRunner)
         assert isinstance(self.batch_manager, BatchManager)
         assert isinstance(self.result_processor, ResultProcessor)
 
-    def get_parameters_from_optimiser(
-        self,
-        suggested_points: Dict[str, torch.Tensor]
-    ) -> Dict[int,dict]:
+    def get_parameters_from_optimiser(self) -> Dict[int, dict]:
         
-        # TODO: Is this really necessary?
+        # TODO: NAMING!!! Is it points, candidates, variables, parameters?
+        # TODO: Should this be try with open except?
+        with open(self.path_manager.suggested_parameters_json, 'r') as f:
+            suggested_points = json.load(f)
+
+        # TODO: Is this really necessary and does it work?
         assert suggested_points.keys() == self.experiment_config.parameter_names
-        
+
         dict_of_parameters = {}
-        
+
         for i in range(self.optimiser_config.n_evals_per_step):
 
             # TODO: Important - torch.Tensor -> numpy outputs float32
@@ -137,13 +170,11 @@ class Experiment:
 
             self.state.update(new_point)
 
-        self.state.save_to_json(self.state.save_path)
+        self.state.save_to_json(self.state.state_json)
 
         return dict_of_parameters
-    
-    def save_objectives_to_state(
-            self
-    ) -> None:
+
+    def save_objectives_to_state(self) -> None:
         ...
 
     def send_objectives_to_optimiser(
@@ -157,7 +188,7 @@ class Experiment:
 
     def _sanity_check(
             self,
-            list_of_parameters: List[Dict[str,float]],
+            list_of_parameters: List[Dict[str, float]],
             results: List[SimulationResult],
             objectives: List[float]
     ) -> None:
@@ -168,9 +199,7 @@ class Experiment:
         """
         ...
 
-    def initialise_experimental_set_up(
-            self
-    ) -> None:
+    def initialise_experimental_set_up(self) -> None:
         
         self.initialise_optimiser()
         
@@ -178,16 +207,13 @@ class Experiment:
             self.initialise_batch_manager()
 
         self._check_initialisation()
-
-        self.experimental_set_up_initialised = True
         
-    def run_optimisation_step(
-            self
-    ) -> None:
-            
-        assert self.experimental_set_up_initialised == True
+    def run_experiment_step(self) -> None:
 
-        dict_of_parameters = self.get_parameters_from_optimiser(suggested_points=suggested_points)  # suggested_points are a placeholder here!!!
+        # TODO: Naming here is poor
+        # TODO: Aster, how to evaluate the initial points?
+        self.optimiser.run_optimisation_step()
+        dict_of_parameters = self.get_parameters_from_optimiser()
         results = self.batch_manager.run_batch(
             dict_of_parameters=dict_of_parameters,
             experimental_state=self.state)
@@ -198,19 +224,14 @@ class Experiment:
         self.save_objectives_to_state(objectives)
         self.send_objectives_to_optimiser(objectives)
 
-    def run_optimisation_experiment(
-            self
-    ) -> None:
-        
-        # initialisation
-        if not self.experimental_set_up_initialised:
-            self.initialise_experimental_set_up()
-        
-        # run
-        for i in range(self.optimiser_config.n_iterations):
-            self.run_optimisation_step()
+    def run_experiment(self) -> None:
 
-    def restart_optimisation_experiment(
-            self
-    ) -> None:
-        ...
+        n_iterations = (self.optimiser.n_initial_points + self.optimiser.n_bayesian_points) \
+                        // self.optimiser.n_evals_per_step
+
+        for i in range(n_iterations):
+            self.run_experiment_step()
+
+    def restart_experiment(self) -> None:
+
+        raise NotImplementedError("Restarting an experiment is not implemented yet.")
