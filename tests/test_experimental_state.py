@@ -1,15 +1,13 @@
 from veropt.interfaces.experiment_utility import ExperimentalState, Point
 
 point_0 = Point(
-    parameters={'c_k' : 0.1, 'c_eps' : 0.01},
-    state="",
-    objective_value=-10.0
+    parameters={'c_k': 0.1, 'c_eps': 0.01},
+    state=""
 )
 
 point_1 = Point(
-    parameters={'c_k' : 0.02, 'c_eps' : 0.1},
-    state="",
-    objective_value=-20.0
+    parameters={'c_k': 0.02, 'c_eps': 0.1},
+    state=""
 )
 
 state = ExperimentalState.make_fresh_state(

@@ -5,21 +5,20 @@ from veropt.interfaces.utility import Config
 
 from pydantic import BaseModel
 
-import torch
-
 
 class Point(BaseModel):
-    parameters: Dict[str, float]
+    parameters: dict[str, float]
     state: str
     job_id: Optional[int] = None
     result: Optional[Union[SimulationResult, List[SimulationResult]]] = None
-    processing_method: Optional[str] = None
-    objective_value: Optional[Union[float, List[float]]] = None
-    
+    processing_method: Optional[Union[str, List[str]]] = None
+    objective_value: Optional[dict[str, float]] = None
+
 
 class OptimiserConfig(Config):
-    n_evals_per_step: int
-    n_iterations: int
+    n_initial_points: int
+    n_bayesian_points: int
+    n_evaluations_per_step: int
 
 
 # TODO: Should include timestamps?
@@ -27,14 +26,14 @@ class ExperimentalState(Config):
     experiment_name: str
     experiment_directory: str
     state_json: str
-    points: Dict[int, Point] = {}
+    points: dict[int, Point] = {}
     next_point: int = 0
 
     def update(
-        self, 
+        self,
         new_point: Point
     ) -> None:
-        
+
         self.points[self.next_point] = new_point
         self.next_point += 1
 
@@ -44,10 +43,10 @@ class ExperimentalState(Config):
         experiment_name: str,
         experiment_directory: str,
         state_json: str,
-        points: Dict[int, Point] = {},
+        points: dict[int, Point] = {},
         next_point: int = 0
     ) -> Self:
-        
+
         return cls(
             experiment_name=experiment_name,
             experiment_directory=experiment_directory,
@@ -60,7 +59,7 @@ class ExperimentalState(Config):
 class ExperimentConfig(Config):
     experiment_name: str
     parameter_names: List[str]
-    parameter_bounds: Dict[str, List[float]]
+    parameter_bounds: dict[str, list[float]]
     objective_names: List[str]
     path_to_experiment: str
     experiment_mode: str
@@ -75,7 +74,7 @@ class PathManager:
             self,
             experiment_config: ExperimentConfig
     ) -> None:
-        
+
         self.experiment_config = experiment_config
         self.experiment_directory = self.make_experiment_directory_path()
         self.run_script_root_directory = self.make_run_script_root_directory_path()
@@ -86,60 +85,59 @@ class PathManager:
     def make_experiment_directory_path(
             self
     ) -> str:
-    
+
         if self.experiment_config.experiment_directory_name is not None:
             return os.path.join(
                 self.experiment_config.path_to_experiment,
                 self.experiment_config.experiment_directory_name
                 )
-            
+
         else:
             return os.path.join(
                 self.experiment_config.path_to_experiment,
                 self.experiment_config.experiment_name
                 )
-        
+
     def make_run_script_root_directory_path(
             self,
     ) -> str:
-        
+
         if self.experiment_config.run_script_root_directory is not None:
             return self.experiment_config.run_script_root_directory
-        
+
         else:
             return os.path.join(
                 self.experiment_directory,
                 f"{self.experiment_config.experiment_name}_setup"  # better name?
             )
-        
+
     @staticmethod
     def make_simulation_id(
             i: int,
     ) -> str:
-        
+
         return f"point={i}"
-    
+
     def make_experimental_state_json(
             self
     ) -> str:
-        
+
         return os.path.join(
             self.experiment_directory,
             "results",
             f"{self.experiment_config.experiment_name}_experimental_state.json"
         )
-    
+
     def make_suggested_parameters_json(self) -> str:
         return os.path.join(
             self.experiment_directory,
             "results",
             f"{self.experiment_config.experiment_name}_candidates.json"
         )
-    
+
     def make_evaluated_points_json(self) -> str:
         return os.path.join(
             self.experiment_directory,
             "results",
             f"{self.experiment_config.experiment_name}_evaluated_points.json"
         )
-

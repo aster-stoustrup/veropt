@@ -10,7 +10,7 @@ from veropt.interfaces.utility import Config
 
 
 SR = TypeVar("SR", bound=SimulationRunner)
-ConfigType = TypeVar("ConfigType", bound=Config)
+ConfigType = TypeVar("ConfigType", bound=BaseModel)
 
 
 class ExperimentMode(StrEnum):
@@ -65,7 +65,7 @@ class BatchManager(ABC, Generic[SR]):
     @abstractmethod
     def run_batch(
             self,
-            dict_of_parameters: Dict[int, dict],
+            dict_of_parameters: dict[int, dict],
             experimental_state: ExperimentalState
     ) -> SimulationResultsDict:
         ...
@@ -76,14 +76,16 @@ class BatchManagerFactory:
     def make_batch_manager_config(
         experiment_mode: str,
         run_script_filename: str,
-        run_script_root_directory: str
-    ) -> ConfigType:
+        run_script_root_directory: str,
+        output_filename: str
+    ) -> BaseModel:
 
         if experiment_mode == ExperimentMode.LOCAL:
 
             return LocalBatchManagerConfig(
                 run_script_filename=run_script_filename,
                 run_script_root_directory=run_script_root_directory,
+                output_filename=output_filename
             )
 
         else:
@@ -146,7 +148,7 @@ class LocalBatchManager(BatchManager):
 
     def run_batch(
             self,
-            dict_of_parameters: Dict[int, dict],
+            dict_of_parameters: dict[int, dict],
             experimental_state: ExperimentalState
     ) -> SimulationResultsDict:
 

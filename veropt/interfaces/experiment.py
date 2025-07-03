@@ -5,7 +5,9 @@ import os
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner
 from veropt.interfaces.batch_manager import BatchManager, BatchManagerFactory, ExperimentMode
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
-from veropt.interfaces.experiment_utility import *
+from veropt.interfaces.experiment_utility import (
+    ExperimentConfig, OptimiserConfig, ExperimentalState, PathManager, Point
+    )
 from veropt.interfaces.utility import Config
 
 from veropt.optimiser.optimiser import BayesianOptimiser
@@ -43,12 +45,22 @@ ConfigType = TypeVar("ConfigType", bound=Config)
 class ExperimentObjective(InterfaceObjective):
     def __init__(
             self,
+            bounds: list[list[float]],
+            n_variables: int,
+            n_objectives: int,
             suggested_parameters_json: str,
-            evaluated_points_json: str
+            evaluated_points_json: str,
+            variable_names: Optional[list[str]] = None,
+            objective_names: Optional[list[str]] = None
     ) -> None:
 
+        self.bounds = torch.tensor(bounds)
+        self.n_variables = n_variables
+        self.n_objectives = n_objectives
         self.suggested_parameters_json = suggested_parameters_json
         self.evaluated_points_json = evaluated_points_json
+        self.variable_names = variable_names
+        self.objective_names = objective_names
 
     def save_candidates(
             self,
@@ -104,8 +116,13 @@ class Experiment:
         self.n_parameters = len(self.experiment_config.parameter_names)
         self.n_objectives = len(self.experiment_config.objective_names)
 
+        # TODO: This is awkward; make not awkward?
+        bounds_lower = [bounds[0] for name, bounds in self.experiment_config.parameter_bounds.items()]
+        bounds_upper = [bounds[1] for name, bounds in self.experiment_config.parameter_bounds.items()]
+        self.parameter_bounds = [bounds_lower, bounds_upper]
+
         objective = ExperimentObjective(
-            bounds=self.experiment_config.parameter_bounds,
+            bounds=self.parameter_bounds,
             n_variables=self.n_parameters,
             n_objectives=self.n_objectives,
             variable_names=self.experiment_config.parameter_names,
@@ -114,10 +131,11 @@ class Experiment:
             evaluated_points_json=self.path_manager.evaluated_points_json
         )
 
+        # TODO: Initialise any optimiser, not just default!
         self.optimiser = bayesian_optimiser(
             n_initial_points=self.optimiser_config.n_initial_points,
             n_bayesian_points=self.optimiser_config.n_bayesian_points,
-            n_evals_per_step=self.optimiser_config.n_evals_per_step,
+            n_evaluations_per_step=self.optimiser_config.n_evaluations_per_step,
             objective=objective
         )
 
@@ -126,7 +144,8 @@ class Experiment:
         self.batch_manager_config = BatchManagerFactory.make_batch_manager_config(
             experiment_mode=self.experiment_config.experiment_mode,
             run_script_filename=self.experiment_config.run_script_filename,
-            run_script_root_directory=self.path_manager.run_script_root_directory
+            run_script_root_directory=self.path_manager.run_script_root_directory,
+            output_filename=self.experiment_config.output_filename
         )
 
         self.batch_manager = BatchManagerFactory.make_batch_manager(
@@ -142,24 +161,20 @@ class Experiment:
         assert isinstance(self.batch_manager, BatchManager)
         assert isinstance(self.result_processor, ResultProcessor)
 
-    def get_parameters_from_optimiser(self) -> Dict[int, dict]:
-        
-        # TODO: NAMING!!! Is it points, candidates, variables, parameters?
+    def get_parameters_from_optimiser(self) -> dict[int, dict]:
+
         # TODO: Should this be try with open except?
         with open(self.path_manager.suggested_parameters_json, 'r') as f:
-            suggested_points = json.load(f)
+            suggested_parameters = json.load(f)
 
         # TODO: Is this really necessary and does it work?
-        assert suggested_points.keys() == self.experiment_config.parameter_names
+        assert suggested_parameters.keys() == self.experiment_config.parameter_names
 
         dict_of_parameters = {}
 
-        for i in range(self.optimiser_config.n_evals_per_step):
+        for i in range(self.optimiser.n_evaluations_per_step):
 
-            # TODO: Important - torch.Tensor -> numpy outputs float32
-            #       If the param val gets converted to float64 anywhere, errors can occur
-            #       I could pass around the param values as strings...?     
-            parameters = {name: value.numpy()[i] for name, value in suggested_points.items()}
+            parameters = {name: value.numpy()[i] for name, value in suggested_parameters.items()}
 
             dict_of_parameters[self.state.next_point] = parameters
 
@@ -178,8 +193,8 @@ class Experiment:
         ...
 
     def send_objectives_to_optimiser(
-            self,
-            objectives: ObjectivesDict
+        self,
+        objectives: ObjectivesDict
     ) -> None:
     # TODO: Is running an opt step correct to do here?
     #       Or should VerOpt automatically run an opt step when receiving objectives
@@ -188,9 +203,9 @@ class Experiment:
 
     def _sanity_check(
             self,
-            list_of_parameters: List[Dict[str, float]],
-            results: List[SimulationResult],
-            objectives: List[float]
+            list_of_parameters: list[dict[str, float]],
+            results: list[SimulationResult],
+            objectives: list[float]
     ) -> None:
         """
         Check if simulations ran with correct params;
@@ -200,14 +215,14 @@ class Experiment:
         ...
 
     def initialise_experimental_set_up(self) -> None:
-        
+
         self.initialise_optimiser()
-        
+
         if self.batch_manager is None:
             self.initialise_batch_manager()
 
         self._check_initialisation()
-        
+
     def run_experiment_step(self) -> None:
 
         # TODO: Naming here is poor
@@ -227,7 +242,7 @@ class Experiment:
     def run_experiment(self) -> None:
 
         n_iterations = (self.optimiser.n_initial_points + self.optimiser.n_bayesian_points) \
-                        // self.optimiser.n_evals_per_step
+                        // self.optimiser.n_evaluations_per_step
 
         for i in range(n_iterations):
             self.run_experiment_step()

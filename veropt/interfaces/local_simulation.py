@@ -18,7 +18,7 @@ class EnvManager(ABC):
             env_name: str,
             command: str
     ) -> None:
-        
+
         self.path_to_env = path_to_env
         self.env_name = env_name
         self.command = command
@@ -34,7 +34,7 @@ class Conda(EnvManager):
     def run_in_env(
             self
     ) -> subprocess.CompletedProcess:
-        
+
         # "path_to_env" is the path to the conda installation, not the environment
         full_command = f"source {self.path_to_env}/bin/activate {self.env_name} && {self.command}"
 
@@ -52,7 +52,7 @@ class Venv(EnvManager):
     def run_in_env(
             self
     ) -> subprocess.CompletedProcess:
-        
+
         full_command = f"source {self.path_to_env}/bin/activate && {self.command}"
 
         return subprocess.run(
@@ -73,18 +73,18 @@ class LocalSimulation(Simulation):
             env_manager: EnvManager,
             output_file: str
     ) -> None:
-        
+
         self.id = simulation_id
         self.run_script_directory = run_script_directory
         self.env_manager = env_manager
         self.output_file = output_file
-    
+
     # TODO: Should there be an option to supress output files?
     def run(
             self,
-            parameters: Dict[str, float]
+            parameters: dict[str, float]
     ) -> SimulationResult:
-        
+
         result = self.env_manager.run_in_env()
 
         stdout_file = os.path.join(self.run_script_directory, f"{self.id}.out")
@@ -107,10 +107,10 @@ class LocalSimulation(Simulation):
 
 
 class MockSimulationConfig(Config):
-    stdout_file: List[str] = ["test_stdout.txt"]
-    stderr_file: List[str] = ["test_stderr.txt"]
-    return_code: List[int] = [0]
-    output_file: List[str] = ["test_output.nc"]
+    stdout_file: list[str] = ["test_stdout.txt"]
+    stderr_file: list[str] = ["test_stderr.txt"]
+    return_code: list[int] = [0]
+    output_file: list[str] = ["test_output.nc"]
     return_list: bool = False
 
 
@@ -125,12 +125,12 @@ class MockSimulationRunner(SimulationRunner):
     def set_up_and_run(
             self,
             simulation_id: str,
-            parameters: Dict[str, float],
+            parameters: dict[str, float],
             run_script_directory: str = "",
             run_script_filename: str = "",
             output_filename: str = ""
-    ) -> Union[SimulationResult, List[SimulationResult]]:
-        
+    ) -> Union[SimulationResult, list[SimulationResult]]:
+
         print(f"Running test simulation with parameters: {parameters} and config: {self.config.model_dump()}")
 
         if self.config.return_list:
@@ -153,7 +153,7 @@ class MockSimulationRunner(SimulationRunner):
 
             return results
 
-        else: 
+        else:
             return SimulationResult(
                 simulation_id=simulation_id,
                 parameters=parameters,
@@ -192,13 +192,14 @@ class LocalVerosRunner(SimulationRunner):
     ) -> str:
         gpu_string = f"--backend {self.config.backend} --device {self.config.device}"
         # TODO: Using "veros_path" here is misleading. It should be the path to the Veros executable.
-        command = f"cd {run_script_directory} && {self.config.veros_path} run {gpu_string} --float-type {self.config.float_type} {run_script}"
+        command = f"cd {run_script_directory} && {self.config.veros_path} run {gpu_string}" \
+                  f" --float-type {self.config.float_type} {run_script}"
         return command
 
     def _edit_run_script(
             self,
             run_script: str,
-            parameters: Dict[str, float]
+            parameters: dict[str, float]
     ) -> None:
         with open(run_script, 'r') as file:
             data = file.readlines()
@@ -221,7 +222,7 @@ class LocalVerosRunner(SimulationRunner):
     def set_up_and_run(
             self,
             simulation_id: str,
-            parameters: Dict[str, float],
+            parameters: dict[str, float],
             run_script_directory: str,
             run_script_filename: str,
             output_filename: str
@@ -229,7 +230,8 @@ class LocalVerosRunner(SimulationRunner):
         run_script = os.path.join(run_script_directory, f"{run_script_filename}.py")
         output_file = os.path.join(run_script_directory, f"{output_filename}.nc")
         self._edit_run_script(run_script, parameters) if not self.config.keep_old_params else None
-        command = self._make_command(run_script, run_script_directory) if self.config.command is None else self.config.command
+        command = self._make_command(run_script, run_script_directory) if self.config.command is None \
+            else self.config.command
 
         # TODO: This is bad. It should be a factory method or similar?
         env_manager_classes = {
@@ -237,7 +239,7 @@ class LocalVerosRunner(SimulationRunner):
             "venv": Venv,
         }
         EnvManagerClass = env_manager_classes[self.config.env_manager]
-        
+
         env_manager = EnvManagerClass(
             path_to_env=self.config.path_to_env,
             env_name=self.config.env_name,
@@ -246,7 +248,7 @@ class LocalVerosRunner(SimulationRunner):
 
         simulation = LocalSimulation(
             simulation_id=simulation_id,
-            run_script_directory=run_script_directory, 
+            run_script_directory=run_script_directory,
             env_manager=env_manager,
             output_file=output_file
             )

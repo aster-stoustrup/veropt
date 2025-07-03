@@ -9,21 +9,21 @@ from pydantic import BaseModel
 
 class SimulationResult(BaseModel):
     simulation_id: str
-    parameters: Dict[str, float]
+    parameters: dict[str, float]
     stdout_file: str
     stderr_file: str
     output_file: str
     return_code: Optional[int] = None
 
 
-SimulationResultsDict = Dict[int, Union[SimulationResult, List[SimulationResult]]]
+SimulationResultsDict = Union[dict[int, SimulationResult], dict[int, list[SimulationResult]]]
 
 
 class Simulation(ABC):
     @abstractmethod
     def run(
             self,
-            parameters: Dict[str, float]
+            parameters: dict[str, float]
     ) -> SimulationResult:
         ...
 
@@ -37,11 +37,11 @@ class SimulationRunner(ABC):
     def save_set_up_and_run(
             self,
             simulation_id: str,
-            parameters: Dict[str, float],
+            parameters: dict[str, float],
             run_script_directory: str,
             run_script_filename: str,
             output_filename: str
-    ) -> Union[SimulationResult, List[SimulationResult]]:
+    ) -> Union[SimulationResult, list[SimulationResult]]:
 
         parameters_json_filename = f"{simulation_id}_parameters.json"
         parameters_json = os.path.join(run_script_directory, parameters_json_filename)
@@ -59,15 +59,17 @@ class SimulationRunner(ABC):
             output_filename=output_filename
         )
 
-        if isinstance(result, list): 
-            for r in result: assert isinstance(r, SimulationResult)
-        else: assert isinstance(result, SimulationResult)
+        if isinstance(result, list):
+            for r in result:
+                assert isinstance(r, SimulationResult)
+        else:
+            assert isinstance(result, SimulationResult)
 
         return result
 
     def _save_parameters(
             self,
-            parameters: Dict[str, float],
+            parameters: dict[str, float],
             parameters_json: str
     ) -> None:
 
@@ -78,9 +80,9 @@ class SimulationRunner(ABC):
     def set_up_and_run(
             self,
             simulation_id: str,
-            parameters: Dict[str, float],
+            parameters: dict[str, float],
             run_script_directory: str,
             run_script_filename: str,
             output_filename: str
-    ) -> Union[SimulationResult, List[SimulationResult]]:
+    ) -> Union[SimulationResult, list[SimulationResult]]:
         ...
