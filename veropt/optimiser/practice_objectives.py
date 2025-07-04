@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Literal, Optional
+from typing import Literal, Optional, Self
 
 import botorch
 import torch
@@ -36,6 +36,8 @@ class BotorchObjective(CallableObjective, ABC):
 
 class Hartmann(BotorchObjective):
 
+    name = 'hartmann'
+
     def __init__(
             self,
             n_variables: Literal[3, 4, 6]
@@ -54,4 +56,10 @@ class Hartmann(BotorchObjective):
             n_objectives=n_objectives,
             function=function,
             objective_names=['Hartmann']
+        )
+
+    @classmethod
+    def from_saved_state(cls, saved_state: dict) -> Self:
+        return cls(
+            n_variables=saved_state['n_variables']
         )

@@ -5,8 +5,7 @@ import torch
 from veropt.optimiser.utility import DataShape, SavableClass
 
 
-class Normaliser(SavableClass):
-    __metaclass__ = abc.ABCMeta
+class Normaliser(SavableClass, metaclass=abc.ABCMeta):
 
     name: str
 

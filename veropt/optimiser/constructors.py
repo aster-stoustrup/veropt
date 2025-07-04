@@ -1,6 +1,6 @@
 import json
 from importlib import resources
-from typing import Any, Literal, Mapping, Optional, TypedDict, Union, Unpack, get_args, overload
+from typing import Literal, Optional, TypedDict, Union, Unpack, get_args, overload
 
 import torch
 
@@ -16,7 +16,7 @@ from veropt.optimiser.objective import CallableObjective, InterfaceObjective
 from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.optimiser_utility import OptimiserSettingsInputDict
 from veropt.optimiser.prediction import BotorchPredictor
-
+from veropt.optimiser.utility import _validate_typed_dict
 
 SingleKernelOptions = Literal['matern']
 KernelOptimiserOptions = Literal['adam']
@@ -108,7 +108,7 @@ def bayesian_optimiser(
             normaliser_choice=normaliser  # type: ignore[arg-type]  # checked above with 'issubclass'
         )
 
-    return BayesianOptimiser(
+    return BayesianOptimiser.from_the_beginning(
         n_initial_points=n_initial_points,
         n_bayesian_points=n_bayesian_points,
         n_evaluations_per_step=n_evaluations_per_step,
@@ -356,24 +356,17 @@ def gpytorch_single_model(
 
     for kernel_dict in kernel_collections:
 
+        # TODO: Change the collections system
+
         if kernel == kernel_dict["kernel_class"].name:
 
-            _validate_typed_dict(
-                typed_dict=settings,
-                expected_typed_dict_class=kernel_dict['settings'],
-                object_name=kernel,
-            )
-
-            # TODO: Fix this
-            #   - this init is specific to matern
-            #   - should maybe just make a subclass that assumes this init
             return kernel_dict['kernel_class'].from_n_variables_and_settings(
                 n_variables=n_variables,
-                **settings
+                settings=settings
             )
 
    # Shouldn't reach this point if kernel is recognised
-    raise NotImplementedError(
+    raise ValueError(
         f"Kernel '{kernel}' not recognised. Implemented kernels are: {get_args(SingleKernelOptions)}"
     )
 
@@ -571,19 +564,6 @@ def build_normaliser(
 
     else:
         raise ValueError(f"Unknown normaliser type: {normaliser_choice}")
-
-
-def _validate_typed_dict(  # type: ignore[explicit-any]
-        typed_dict: Mapping[str, Any],
-        expected_typed_dict_class: type,
-        object_name: str
-) -> None:
-    expected_keys = list(expected_typed_dict_class.__annotations__.keys())
-
-    for key in typed_dict.keys():
-        assert key in expected_keys, (
-            f"Option '{key}' not recognised for '{object_name}'. Expected options: {expected_keys}."
-        )
 
 
 def _load_defaults() -> dict:

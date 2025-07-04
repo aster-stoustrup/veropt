@@ -1,13 +1,16 @@
 import abc
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional, Self, Union
 
 import torch
 
-from veropt.optimiser.utility import check_incoming_objective_dimensions_fix_1d
+from veropt.optimiser.utility import SavableClass, check_incoming_objective_dimensions_fix_1d
 
 
-class Objective:
+class Objective(SavableClass, metaclass=abc.ABCMeta):
+
+    name: str
+
     def __init__(
             self,
             bounds: list[list[float]],
@@ -33,9 +36,16 @@ class Objective:
         else:
             self.objective_names = objective_names
 
+    def gather_dicts_to_save(self) -> dict:
+        return {
+            'bounds': self.bounds,
+            'n_variables': self.n_variables,
+            'n_objectives': self.n_objectives,
+            'variable_names': self.variable_names,
+            'objective_names': self.objective_names,
+        }
 
-class CallableObjective(Objective):
-    __metaclass__ = abc.ABCMeta
+class CallableObjective(Objective, metaclass=abc.ABCMeta):
 
     def __call__(self, parameter_values: torch.Tensor) -> torch.Tensor:
 
@@ -59,8 +69,7 @@ class CallableObjective(Objective):
 
 
 # TODO: Consider if we want to check that var and obj names match at this level
-class InterfaceObjective(Objective):
-    __metaclass__ = abc.ABCMeta
+class InterfaceObjective(Objective, metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def save_candidates(

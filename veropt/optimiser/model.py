@@ -3,7 +3,7 @@ import functools
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Iterator, Optional, TypedDict, Union, Unpack
+from typing import Any, Callable, Iterator, Optional, Self, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
@@ -11,14 +11,14 @@ import torch
 from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
-from veropt.optimiser.utility import SavableClass, SavableDataClass, check_variable_and_objective_shapes, \
+from veropt.optimiser.utility import SavableClass, SavableDataClass, _validate_typed_dict, \
+    check_variable_and_objective_shapes, \
     check_variable_objective_values_matching, \
     enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs, SavableSettings
 
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
-class SurrogateModel:
-    __metaclass__ = abc.ABCMeta
+class SurrogateModel(metaclass=abc.ABCMeta):
 
     def __init__(
             self,
@@ -67,8 +67,7 @@ class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorc
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
-class GPyTorchSingleModel(SavableClass):
-    __metaclass__ = abc.ABCMeta
+class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
 
     name: str
 
@@ -110,6 +109,14 @@ class GPyTorchSingleModel(SavableClass):
             settings: dict
     ) -> 'GPyTorchSingleModel':
         pass
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> 'GPyTorchSingleModel':
+
+        raise NotImplementedError
 
     def initialise_model_with_data(
             self,
@@ -276,10 +283,11 @@ class MaternSingleModel(GPyTorchSingleModel):
             settings: dict
     ) -> 'MaternSingleModel':
 
-        # TODO: Check settings are correct
-        #   - i.e. move check from constructors
-
-        raise NotImplementedError
+        _validate_typed_dict(
+            typed_dict=settings,
+            expected_typed_dict_class=MaternParametersInputDict,
+            object_name=cls.name,
+        )
 
         return cls(
             n_variables=n_variables,
@@ -574,6 +582,14 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
         return estimated_objective_values
 
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> 'GPyTorchFullModel':
+
+        raise NotImplementedError
+
     @check_variable_objective_values_matching
     @_check_input_dimensions
     def train_model(
@@ -649,6 +665,13 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             'model_dicts': model_dicts,
             'settings': settings,
         }
+
+    @property
+    def model_has_been_trained(self):
+        if self._model is None:
+            return False
+        else:
+            return True
 
     def _train_backwards(self) -> None:
 

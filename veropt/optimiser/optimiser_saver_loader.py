@@ -1,6 +1,5 @@
 import json
 from json import JSONEncoder
-from typing import Optional, TypeVar
 
 import torch
 from torch.utils.data import Dataset
@@ -67,37 +66,3 @@ def load_optimiser_from_json(
     print("this is a breakpoint >:)")
 
     return BayesianOptimiser.from_saved_state(saved_dict['optimiser'])
-
-
-def get_all_subclasses[T](
-        cls: T
-) -> list[T]:
-
-    return cls.__subclasses__() + (
-        [subclass for class_ in cls.__subclasses__() for subclass in get_all_subclasses(class_)]
-    )
-
-
-# TODO: Relation to constructors...?
-
-# We're not showing that it's the superclass in type[T] but a subclass in the return
-#   - Not sure if this is a problem or not?
-T = TypeVar('T', bound=SavableClass)
-
-def rehydrate_object(
-        superclass: type[T],
-        name: str,
-        saved_state: dict,
-        subclasses: Optional[list[T]] = None
-) -> T:
-
-    subclasses = subclasses or get_all_subclasses(superclass)
-
-    for subclass in subclasses:
-        if subclass.name == name:
-            return subclass.from_saved_state(
-                saved_state=saved_state
-            )
-
-    else:
-        raise ValueError(f"Unknown subclass of {superclass.__name__}: '{name}'")

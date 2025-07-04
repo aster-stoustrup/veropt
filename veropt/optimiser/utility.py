@@ -3,7 +3,7 @@ import functools
 import inspect
 from copy import deepcopy
 from dataclasses import asdict, dataclass, fields
-from typing import Callable, Optional, Self, TypeVar, TypedDict, Union
+from typing import Any, Callable, Mapping, Optional, Self, TypeVar, TypedDict, Union
 
 import torch
 
@@ -259,8 +259,7 @@ class MetaClassWithMandatoryAttributes:
     pass
 
 
-class SavableClass:
-    __metaclass__ = abc.ABCMeta
+class SavableClass(metaclass=abc.ABCMeta):
 
     name: str
 
@@ -268,10 +267,10 @@ class SavableClass:
     def gather_dicts_to_save(self) -> dict:
         pass
 
-    # @classmethod
-    # @abc.abstractmethod
-    # def from_saved_state(cls, saved_state: dict) -> Self:
-    #     pass
+    @classmethod
+    @abc.abstractmethod
+    def from_saved_state(cls, saved_state: dict) -> Self:
+        pass
 
 
 @dataclass
@@ -296,4 +295,50 @@ class SavableDataClass(SavableClass):
         )
 
 
+def get_all_subclasses[T](
+        cls: T
+) -> list[T]:
+
+    return cls.__subclasses__() + (
+        [subclass for class_ in cls.__subclasses__() for subclass in get_all_subclasses(class_)]
+    )
+
+
 SavableSettings = TypeVar('SavableSettings', bound=SavableDataClass)
+T = TypeVar('T', bound=SavableClass)
+
+# TODO: Relation to constructors...?
+
+# We're not showing that it's the superclass in type[T] but a subclass in the return
+#   - Not sure if this is a problem or not?
+
+def rehydrate_object(
+        superclass: type[T],
+        name: str,
+        saved_state: dict,
+        subclasses: Optional[list[T]] = None
+) -> T:
+
+    subclasses = subclasses or get_all_subclasses(superclass)
+
+    for subclass in subclasses:
+        if subclass.name == name:
+            return subclass.from_saved_state(
+                saved_state=saved_state
+            )
+
+    else:
+        raise ValueError(f"Unknown subclass of {superclass.__name__}: '{name}'")
+
+
+def _validate_typed_dict(  # type: ignore[explicit-any]
+        typed_dict: Mapping[str, Any],
+        expected_typed_dict_class: type,
+        object_name: str
+) -> None:
+    expected_keys = list(expected_typed_dict_class.__annotations__.keys())
+
+    for key in typed_dict.keys():
+        assert key in expected_keys, (
+            f"Option '{key}' not recognised for '{object_name}'. Expected options: {expected_keys}."
+        )

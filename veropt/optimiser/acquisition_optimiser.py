@@ -1,7 +1,7 @@
 import abc
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Literal, Optional, TypedDict, Unpack
+from typing import Any, Callable, Literal, Optional, Self, TypedDict, Unpack
 
 import numpy as np
 import scipy
@@ -13,8 +13,7 @@ from veropt.optimiser.acquisition import AcquisitionFunction
 from veropt.optimiser.utility import DataShape, SavableClass, SavableDataClass
 
 
-class AcquisitionOptimiser(SavableClass):
-    __metaclass__ = abc.ABCMeta
+class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
 
     name: str
     maximum_evaluations_per_step: int | None
@@ -85,6 +84,14 @@ class AcquisitionOptimiser(SavableClass):
             'name': self.name,
             'settings': self.settings.gather_dicts_to_save()
         }
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> 'AcquisitionOptimiser':
+
+        raise NotImplementedError
 
 
 class TorchNumpyWrapper:

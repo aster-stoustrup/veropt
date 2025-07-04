@@ -1,6 +1,6 @@
 import abc
 import functools
-from typing import Callable
+from typing import Callable, Self
 
 import torch
 
@@ -9,11 +9,10 @@ from veropt.optimiser.acquisition_optimiser import AcquisitionOptimiser
 from veropt.optimiser.model import GPyTorchFullModel
 from veropt.optimiser.utility import DataShape, PredictionDict, SavableClass, check_variable_and_objective_shapes, \
     check_variable_objective_values_matching, \
-    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
+    enforce_amount_of_positional_arguments, rehydrate_object, unpack_variables_objectives_from_kwargs
 
 
-class Predictor(SavableClass):
-    __metaclass__ = abc.ABCMeta
+class Predictor(SavableClass, metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def predict_values(
@@ -46,6 +45,9 @@ class Predictor(SavableClass):
     ) -> None:
         pass
 
+    @abc.abstractmethod
+    def check_if_model_is_trained(self) -> bool:
+        pass
 
 # TODO: Figure out interface between predictor and optimiser
 #   - Note: One awkward thing about this might be when we want to display acq func values?
@@ -200,3 +202,36 @@ class BotorchPredictor(Predictor):
             'acquisition_function': self.acquisition_function.gather_dicts_to_save(),
             'acquisition_optimiser': self.acquisition_optimiser.gather_dicts_to_save()
         }
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> 'BotorchPredictor':
+
+        model = rehydrate_object(
+            superclass=GPyTorchFullModel,
+            name=saved_state['model']['name'],
+            saved_state=saved_state['model']['state']
+        )
+
+        acquisition_function = rehydrate_object(
+            superclass=BotorchAcquisitionFunction,
+            name=saved_state['acquisition_function']['name'],
+            saved_state=saved_state['acquisition_function']['state']
+        )
+
+        acquisition_optimiser = rehydrate_object(
+            superclass=AcquisitionOptimiser,
+            name=saved_state['acquisition_optimiser']['name'],
+            saved_state=saved_state['acquisition_optimiser']['state']
+        )
+
+        return cls(
+            model=model,
+            acquisition_function=acquisition_function,
+            acquisition_optimiser=acquisition_optimiser
+        )
+
+    def check_if_model_is_trained(self) -> bool:
+        return self.model.model_has_been_trained

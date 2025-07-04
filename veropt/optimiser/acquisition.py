@@ -1,7 +1,7 @@
 import abc
 import functools
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, TypedDict, Unpack
+from typing import Any, Callable, Optional, Self, TypedDict, Unpack
 
 import botorch
 import torch
@@ -62,8 +62,7 @@ def _check_input_dimensions[T, **P](
     return check_dimensions
 
 
-class AcquisitionFunction(SavableClass):
-    __metaclass__ = abc.ABCMeta
+class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
 
     name: str
 
@@ -122,9 +121,16 @@ class AcquisitionFunction(SavableClass):
             'settings': settings_dict
         }
 
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    )-> 'AcquisitionFunction':
 
-class BotorchAcquisitionFunction(AcquisitionFunction):
-    __metaclass__ = abc.ABCMeta
+        raise NotImplementedError
+
+
+class BotorchAcquisitionFunction(AcquisitionFunction, metaclass=abc.ABCMeta):
 
     @check_variable_objective_values_matching
     @_check_input_dimensions

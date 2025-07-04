@@ -1,20 +1,18 @@
 from copy import deepcopy
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional, TypedDict, Union
+from enum import StrEnum, auto
+from typing import Literal, Optional, TypedDict, Union
 
 import torch
 
-from veropt.optimiser.utility import DataShape, PredictionDict, SavableClass, TensorWithNormalisationFlag
+from veropt.optimiser.initial_points import InitialPointsGenerationMode
+from veropt.optimiser.utility import DataShape, PredictionDict, SavableClass, SavableDataClass, \
+    TensorWithNormalisationFlag
 
 
-class OptimisationMode(Enum):
-    initial = 1
-    bayesian = 2
-
-
-class InitialPointsGenerationMode(Enum):
-    random = 1
+class OptimisationMode(StrEnum):
+    initial = auto()
+    bayesian = auto()
 
 
 # TODO: Write a test to make sure the arguments of this and the dict are the same? (except n_init, n_bayes, n_objs)
@@ -26,7 +24,7 @@ class OptimiserSettings(SavableClass):
             n_bayesian_points: int,
             n_objectives: int,
             n_evaluations_per_step: int,
-            initial_points_generator: InitialPointsGenerationMode = InitialPointsGenerationMode.random,
+            initial_points_generator: Literal['random'] = 'random',  # TODO: Link typehint to list
             normalise: bool = True,
             verbose: bool = True,
             renormalise_each_step: Optional[bool] = None,
@@ -39,7 +37,7 @@ class OptimiserSettings(SavableClass):
         self.n_objectives = n_objectives
         self.n_evaluations_per_step = n_evaluations_per_step
 
-        self.initial_points_generator = initial_points_generator
+        self.initial_points_generator = InitialPointsGenerationMode(initial_points_generator)
 
         self.normalise = normalise
         self.verbose = verbose
@@ -67,11 +65,17 @@ class OptimiserSettings(SavableClass):
 
     def gather_dicts_to_save(self) -> dict:
 
-        save_dict = self.__dict__
-        save_dict['initial_points_generator'] = self.initial_points_generator.name
-        save_dict['objective_weights'] = self.objective_weights.tolist()
+        return self.__dict__
 
-        return save_dict
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> 'OptimiserSettings':
+
+        return cls(
+            **saved_state
+        )
 
 
 class OptimiserSettingsInputDict(TypedDict, total=False):
@@ -85,11 +89,11 @@ class OptimiserSettingsInputDict(TypedDict, total=False):
 
 
 @dataclass
-class SuggestedPoints:
+class SuggestedPoints(SavableDataClass):
     variable_values: torch.Tensor
     predicted_objective_values: Optional[PredictionDict]
     generated_at_step: int
-    generated_with_mode: OptimisationMode
+    generated_with_mode: str
     normalised: bool
 
     @property

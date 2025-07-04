@@ -21,7 +21,7 @@ def _build_matern_optimiser_ucb(
         n_evaluations_per_step=n_evaluations_per_step
     )
 
-    return BayesianOptimiser(
+    return BayesianOptimiser.from_the_beginning(
         n_initial_points=n_initial_points,
         n_bayesian_points=n_bayesian_points,
         n_evaluations_per_step=n_evaluations_per_step,

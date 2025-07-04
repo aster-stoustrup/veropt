@@ -6,15 +6,14 @@ from typing import Callable, Optional, Self, Union, Unpack
 import gpytorch.settings
 import torch
 
-from veropt.optimiser.optimiser_saver_loader import rehydrate_object
-
 torch.set_default_dtype(torch.float64)
 
-from veropt.optimiser.initial_points import generate_initial_points_random
+from veropt.optimiser.initial_points import generate_initial_points, generate_initial_points_random
 from veropt.optimiser.normalisation import Normaliser
-from veropt.optimiser.objective import CallableObjective, InterfaceObjective, ObjectiveKind, determine_objective_type
+from veropt.optimiser.objective import CallableObjective, InterfaceObjective, Objective, ObjectiveKind, \
+    determine_objective_type
 from veropt.optimiser.optimiser_utility import (
-    BestPoints, InitialPointsGenerationMode, OptimisationMode,
+    BestPoints, OptimisationMode,
     OptimiserSettings, OptimiserSettingsInputDict, ParetoOptimalPoints, SuggestedPoints,
     format_input_from_objective,
     format_output_for_objective, get_best_points, get_pareto_optimal_points,
@@ -23,7 +22,7 @@ from veropt.optimiser.optimiser_utility import (
 from veropt.optimiser.prediction import Predictor
 from veropt.optimiser.utility import DataShape, SavableClass, TensorWithNormalisationFlag, \
     check_variable_and_objective_shapes, \
-    enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs
+    enforce_amount_of_positional_arguments, rehydrate_object, unpack_flagged_variables_objectives_from_kwargs
 
 
 # TODO: Fix torch/np conflict over float size
@@ -32,68 +31,58 @@ class BayesianOptimiser(SavableClass):
 
     def __init__(
             self,
-            n_initial_points: int,
-            n_bayesian_points: int,
-            n_evaluations_per_step: int,
             objective: Union[CallableObjective, InterfaceObjective],
             predictor: Predictor,
             normaliser_class: type[Normaliser],
-            **kwargs: Unpack[OptimiserSettingsInputDict]
+            normaliser_variables: Optional[Normaliser],
+            normaliser_objectives: Optional[Normaliser],
+            settings: OptimiserSettings,
+            initial_points_real_units: torch.Tensor,
+            suggested_points: SuggestedPoints,
+            suggested_points_history: list[SuggestedPoints],
+            evaluated_variables_real_units: torch.Tensor,
+            evaluated_objectives_real_units: torch.Tensor
     ):
-
         self.objective = objective
         self.n_objectives = objective.n_objectives
-        self._bounds_real_units = objective.bounds
-        self.bounds_normalised: Optional[torch.Tensor] = None
-
-        self.predictor = predictor
-        self.normaliser_class = normaliser_class
-
-        self._normaliser_variables: Optional[Normaliser] = None
-        self._normaliser_objectives: Optional[Normaliser] = None
-
-        # TODO: Move this assert somewhere else?
-        # TODO: Write error message for this assert
-        for key in kwargs.keys():
-            assert key in get_annotations(OptimiserSettingsInputDict).keys()
-
-        self.settings = OptimiserSettings(
-            n_initial_points=n_initial_points,
-            n_bayesian_points=n_bayesian_points,
-            n_evaluations_per_step=n_evaluations_per_step,
-            n_objectives=self.n_objectives,
-            **kwargs
-        )
-
-        self._set_up_settings()
-
-        self._initial_points_real_units = self._generate_initial_points()
-        self.initial_points_normalised: Optional[torch.Tensor] = None
-
-        self._evaluated_variables_real_units: torch.Tensor = torch.tensor([])
-        self.evaluated_variables_normalised: Optional[torch.Tensor] = None
-
-        self._evaluated_objectives_real_units: torch.Tensor = torch.tensor([])
-        self.evaluated_objectives_normalised: Optional[torch.Tensor] = None
-
-        self.data_has_been_normalised = False
-        self.model_has_been_trained = False
-
-        self.suggested_points: Optional[SuggestedPoints] = None
-        self.suggested_points_history: list[Optional[SuggestedPoints]] = []
-
         self.objective_type = determine_objective_type(
             objective=objective
         )
+        self._bounds_real_units = objective.bounds
+
+        self.predictor = predictor
+
+        self.settings = settings
+
+        self._initial_points_real_units = initial_points_real_units
+
+        self._evaluated_variables_real_units = evaluated_variables_real_units
+        self._evaluated_objectives_real_units = evaluated_objectives_real_units
+
+        self.suggested_points = suggested_points
+        self.suggested_points_history = suggested_points_history
+
+        self.normaliser_class = normaliser_class
+        self._normaliser_variables = normaliser_variables
+        self._normaliser_objectives = normaliser_objectives
+
+        self.bounds_normalised: Optional[torch.Tensor] = None
+        self.initial_points_normalised: Optional[torch.Tensor] = None
+        self.evaluated_variables_normalised: Optional[torch.Tensor] = None
+        self.evaluated_objectives_normalised: Optional[torch.Tensor] = None
+
+        if self._normaliser_variables is not None and self._normaliser_objectives is not None:
+            self._update_normalised_values()
 
         self._verify_set_up()
+        self._set_up_settings()
 
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}("
             f"points: {self.n_points_evaluated} of {self.n_initial_points + self.n_bayesian_points}, "
             f"mode: {self.optimisation_mode.name}, "
-            f"normalised: {'yes' if self.data_has_been_normalised else 'no'}, "
+            f"normalised: {'yes' if self.normalisers_have_been_initialised else 'no'}, "
             f"model trained: {'yes' if self.model_has_been_trained else 'no'}, "
             f"best objective values: {list_with_floats_to_string(self.get_best_points()['objectives'].tolist())}"
             f")"
@@ -104,7 +93,7 @@ class BayesianOptimiser(SavableClass):
             f"{self.__class__.__name__}(\n"
             f"points: {self.n_points_evaluated} of {self.n_initial_points + self.n_bayesian_points}, \n"
             f"mode: {self.optimisation_mode.name}, \n"
-            f"normalised: {'yes' if self.data_has_been_normalised else 'no'}, \n"
+            f"normalised: {'yes' if self.normalisers_have_been_initialised else 'no'}, \n"
             f"model trained: {'yes' if self.model_has_been_trained else 'no'}, \n"
             f"best objective values: {list_with_floats_to_string(self.get_best_points()['objectives'].tolist())}\n"
             f"{str(self.predictor)}"
@@ -112,7 +101,77 @@ class BayesianOptimiser(SavableClass):
         )
 
     @classmethod
-    def from_saved_state(cls, saved_state: dict) -> 'BayesianOptimiser':
+    def from_the_beginning(
+            cls,
+            n_initial_points: int,
+            n_bayesian_points: int,
+            n_evaluations_per_step: int,
+            objective: Union[CallableObjective, InterfaceObjective],
+            predictor: Predictor,
+            normaliser_class: type[Normaliser],
+            **kwargs: Unpack[OptimiserSettingsInputDict]
+    ) -> 'BayesianOptimiser':
+
+        objective = objective
+        n_objectives = objective.n_objectives
+
+        predictor = predictor
+        normaliser_class = normaliser_class
+
+        normaliser_variables: Optional[Normaliser] = None
+        normaliser_objectives: Optional[Normaliser] = None
+
+        # TODO: Move this assert somewhere else?
+        # TODO: Write error message for this assert
+        for key in kwargs.keys():
+            assert key in get_annotations(OptimiserSettingsInputDict).keys()
+
+        settings = OptimiserSettings(
+            n_initial_points=n_initial_points,
+            n_bayesian_points=n_bayesian_points,
+            n_evaluations_per_step=n_evaluations_per_step,
+            n_objectives=n_objectives,
+            **kwargs
+        )
+
+        initial_points_real_units = generate_initial_points(
+            initial_points_generator=settings.initial_points_generator,
+            bounds=objective.bounds,
+            n_initial_points=n_initial_points,
+            n_variables=objective.n_variables
+        )
+
+        evaluated_variables_real_units: torch.Tensor = torch.tensor([])
+        evaluated_objectives_real_units: torch.Tensor = torch.tensor([])
+
+        suggested_points: Optional[SuggestedPoints] = None
+        suggested_points_history: list[Optional[SuggestedPoints]] = []
+
+        return cls(
+            objective=objective,
+            predictor=predictor,
+            normaliser_class=normaliser_class,
+            settings=settings,
+            initial_points_real_units=initial_points_real_units,
+            suggested_points=suggested_points,
+            suggested_points_history=suggested_points_history,
+            normaliser_variables=normaliser_variables,
+            normaliser_objectives=normaliser_objectives,
+            evaluated_variables_real_units=evaluated_variables_real_units,
+            evaluated_objectives_real_units=evaluated_objectives_real_units
+        )
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> 'BayesianOptimiser':
+
+        objective = rehydrate_object(
+            superclass=Objective,
+            name=saved_state['objective']['name'],
+            saved_state=saved_state['objective']['state']
+        )
 
         predictor = rehydrate_object(
             superclass=Predictor,
@@ -132,24 +191,58 @@ class BayesianOptimiser(SavableClass):
             saved_state=saved_state['normaliser_objectives']['state']
         )
 
+        normaliser_class = type(normaliser_variables)
+        assert type(normaliser_objectives) is normaliser_class, (
+            "Normalisers for variables and objectives must be of the same class."
+        )
+
+        initial_points_real_units = TensorWithNormalisationFlag(
+            tensor=torch.tensor(saved_state['initial_points']['values']),
+            normalised=saved_state['initial_points']['normalised'],
+        )
+
+        assert initial_points_real_units.normalised is False
+
+        suggested_points = SuggestedPoints.from_saved_state(
+            saved_state=saved_state['suggested_points']
+        )
+
+        suggested_points_history = [
+            SuggestedPoints.from_saved_state(suggested_point_state)
+            for suggested_point_state in saved_state['suggested_points_history']
+        ]
+
         evaluated_variable_values = TensorWithNormalisationFlag(
             tensor=torch.tensor(saved_state['evaluated_variables']['values']),
             normalised=saved_state['evaluated_variables']['normalised']
         )
+
+        assert evaluated_variable_values.normalised is False
 
         evaluated_objective_values = TensorWithNormalisationFlag(
             tensor=torch.tensor(saved_state['evaluated_objectives']['values']),
             normalised=saved_state['evaluated_objectives']['normalised']
         )
 
+        assert evaluated_objective_values.normalised is False
+
         settings = OptimiserSettings.from_saved_state(
             saved_state['optimiser']['settings']
         )
 
-        # TODO: Build optimiser
-        #   - Might need to move current init to classmethod?
-
-        raise NotImplementedError
+        return cls(
+            objective=objective,
+            predictor=predictor,
+            normaliser_class=normaliser_class,
+            normaliser_variables=normaliser_variables,
+            normaliser_objectives=normaliser_objectives,
+            settings=settings,
+            initial_points_real_units=initial_points_real_units.tensor,
+            suggested_points=suggested_points,
+            suggested_points_history=suggested_points_history,
+            evaluated_variables_real_units=evaluated_variable_values.tensor,
+            evaluated_objectives_real_units=evaluated_objective_values.tensor
+        )
 
     @staticmethod
     def _check_input_dimensions[T, **P](
@@ -193,20 +286,22 @@ class BayesianOptimiser(SavableClass):
 
     def gather_dicts_to_save(self) -> dict:
 
-        dicts_from_predictor = self.predictor.gather_dicts_to_save()
-
-        settings = self.settings.gather_dicts_to_save()
-
-        if self.data_has_been_normalised:
+        if self.normalisers_have_been_initialised:
             normaliser_variables_dict = self._normaliser_variables.gather_dicts_to_save()
             normaliser_objectives_dict = self._normaliser_objectives.gather_dicts_to_save()
+
         else:
             normaliser_variables_dict = None
             normaliser_objectives_dict = None
 
         return {
             'optimiser': {
-                'predictor': dicts_from_predictor,
+                'objective': self.objective.gather_dicts_to_save(),
+                'predictor': self.predictor.gather_dicts_to_save(),
+                'initial_points': {
+                    'values': self.initial_points_real_units,
+                    'normalised': False
+                },
                 'normaliser_variables': normaliser_variables_dict,
                 'normaliser_objectives': normaliser_objectives_dict,
                 'evaluated_variable_values': {
@@ -217,7 +312,11 @@ class BayesianOptimiser(SavableClass):
                     'values': self.evaluated_objectives_real_units,
                     'normalised': False,
                 },
-                'settings': settings
+                'suggested_points': self.suggested_points.gather_dicts_to_save() if self.suggested_points else {},
+                'suggsted_points_history': [
+                    suggested_point.gather_dicts_to_save() for suggested_point in self.suggested_points_history
+                ],
+                'settings': self.settings.gather_dicts_to_save()
             }
         }
 
@@ -275,7 +374,7 @@ class BayesianOptimiser(SavableClass):
             variable_values=suggested_variables_tensor,
             predicted_objective_values=prediction,
             generated_at_step=deepcopy(self.current_step),
-            generated_with_mode=deepcopy(self.optimisation_mode),
+            generated_with_mode=deepcopy(self.optimisation_mode.name),
             normalised= deepcopy(self.return_normalised_data)
         )
 
@@ -336,52 +435,57 @@ class BayesianOptimiser(SavableClass):
         assert variable_values_flagged.normalised is False
         assert objective_values_flagged.normalised is False
 
-        # TODO: Write good error message
-        #   - Could also move this check somewhere...?
-        #   - Then again, maybe we want a more flexible way to handle this in the future...?
-
-        # TODO: Remove check or make setting to turn off
-        #   - Consider if not checking this can make errors
-        #   - Current step might be the main issue?
-        assert variable_values_flagged.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
-        assert objective_values_flagged.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
-
-        if self.n_points_evaluated == 0:
-
-            self.evaluated_variables_real_units = variable_values_flagged.tensor.detach()
-            self.evaluated_objectives_real_units = objective_values_flagged.tensor.detach()
+        if len(variable_values_flagged.tensor) == 0 and len(objective_values_flagged.tensor) == 0:
+            pass
 
         else:
 
-            self.evaluated_variables_real_units = torch.cat(
-                tensors=[self.evaluated_variables_real_units, variable_values_flagged.tensor.detach()],
-                dim=DataShape.index_points
-            )
-            self.evaluated_objectives_real_units = torch.cat(
-                tensors=[self.evaluated_objectives_real_units, objective_values_flagged.tensor.detach()],
-                dim=DataShape.index_points
-            )
+            # TODO: Write good error message
+            #   - Could also move this check somewhere...?
+            #   - Then again, maybe we want a more flexible way to handle this in the future...?
 
-        if self.model_has_been_trained:
+            # TODO: Remove check or make setting to turn off
+            #   - Consider if not checking this can make errors
+            #   - Current step might be the main issue?
+            assert variable_values_flagged.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
+            assert objective_values_flagged.tensor.shape[DataShape.index_points] == self.n_evaluations_per_step
 
-            if self.settings.normalise:
+            if self.n_points_evaluated == 0:
 
-                if self.settings.renormalise_each_step:
+                self.evaluated_variables_real_units = variable_values_flagged.tensor.detach()
+                self.evaluated_objectives_real_units = objective_values_flagged.tensor.detach()
+
+            else:
+
+                self.evaluated_variables_real_units = torch.cat(
+                    tensors=[self.evaluated_variables_real_units, variable_values_flagged.tensor.detach()],
+                    dim=DataShape.index_points
+                )
+                self.evaluated_objectives_real_units = torch.cat(
+                    tensors=[self.evaluated_objectives_real_units, objective_values_flagged.tensor.detach()],
+                    dim=DataShape.index_points
+                )
+
+            if self.model_has_been_trained:
+
+                if self.settings.normalise:
+
+                    if self.settings.renormalise_each_step:
+
+                        self._fit_normaliser()
+
+                self._train_model()
+
+            elif self.n_points_evaluated >= self.settings.n_points_before_fitting:
+
+                if self.settings.normalise:
 
                     self._fit_normaliser()
 
-            self._train_model()
+                self._train_model()
 
-        elif self.n_points_evaluated >= self.settings.n_points_before_fitting:
-
-            if self.settings.normalise:
-
-                self._fit_normaliser()
-
-            self._train_model()
-
-        if self.settings.verbose:
-            self._print_status()
+            if self.settings.verbose:
+                self._print_status()
 
     def _load_latest_points(self) -> None:
 
@@ -435,6 +539,8 @@ class BayesianOptimiser(SavableClass):
 
     def _verify_set_up(self) -> None:
 
+        assert self.n_initial_points > 0, "The number of initial points should be greater than 0."
+
         assert self.n_initial_points % self.n_evaluations_per_step == 0, (
             "The amount of initial points is not divisable by the amount of points evaluated each step."
         )
@@ -448,20 +554,6 @@ class BayesianOptimiser(SavableClass):
         if self.settings.mask_nans:
             gpytorch.settings.observation_nan_policy('mask')
 
-    def _generate_initial_points(self) -> torch.Tensor:
-
-        if self.settings.initial_points_generator == InitialPointsGenerationMode.random:
-            return generate_initial_points_random(
-                bounds=self.objective.bounds,
-                n_initial_points=self.n_initial_points,
-                n_variables=self.objective.n_variables
-            )
-
-        else:
-            raise ValueError(
-                f"Initial point mode {self.settings.initial_points_generator} is not understood or not implemented."
-            )
-
     def _reset_suggested_points(self) -> None:
 
         if self.suggested_points is None: raise RuntimeError()
@@ -472,14 +564,12 @@ class BayesianOptimiser(SavableClass):
     def _train_model(self) -> None:
 
         if self.settings.normalise:
-            assert self.data_has_been_normalised
+            assert self.normalisers_have_been_initialised
 
         self.predictor.update_with_new_data(
             variable_values=self.evaluated_variable_values.tensor,
             objective_values=self.evaluated_objective_values.tensor
         )
-
-        self.model_has_been_trained = True
 
         self.suggested_points = None
 
@@ -492,8 +582,6 @@ class BayesianOptimiser(SavableClass):
         self._normaliser_objectives = self.normaliser_class.from_tensor(
             tensor=self.evaluated_objectives_real_units
         )
-
-        self.data_has_been_normalised = True
 
         self._update_normalised_values()
 
@@ -523,7 +611,9 @@ class BayesianOptimiser(SavableClass):
             tensor=self.evaluated_objectives_real_units
         )
 
-        self.predictor.update_bounds(self.bounds.tensor)
+        self.predictor.update_bounds(
+            new_bounds=self.bounds.tensor
+        )
 
     @_check_input_dimensions
     def _unnormalise_variables(
@@ -585,9 +675,11 @@ class BayesianOptimiser(SavableClass):
 
     @property
     def current_step(self) -> int:
+
         assert self.n_points_evaluated % self.n_evaluations_per_step == 0, (
             "Amount of points evaluated does not match step size."
         )
+
         return self.n_points_evaluated // self.n_evaluations_per_step
 
     @property
@@ -602,8 +694,20 @@ class BayesianOptimiser(SavableClass):
             return OptimisationMode.bayesian
 
     @property
+    def model_has_been_trained(self):
+        return self.predictor.check_if_model_is_trained()
+
+    @property
+    def normalisers_have_been_initialised(self):
+
+        if self._normaliser_variables is not None and self._normaliser_objectives is not None:
+            return True
+        else:
+            return False
+
+    @property
     def return_normalised_data(self) -> bool:
-        if self.settings.normalise and self.data_has_been_normalised:
+        if self.settings.normalise and self.normalisers_have_been_initialised:
             return True
         else:
             return False
