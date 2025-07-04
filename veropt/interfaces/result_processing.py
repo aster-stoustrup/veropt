@@ -97,7 +97,7 @@ class MockResultProcessor(ResultProcessor):
 
     def calculate_objectives(
             self,
-            result: Union[SimulationResult, List[SimulationResult]]
+            result: Union[SimulationResult, list[SimulationResult]]
     ) -> dict[str, float]:
 
         return self.objectives

@@ -10,7 +10,7 @@ class Point(BaseModel):
     parameters: dict[str, float]
     state: str
     job_id: Optional[int] = None
-    result: Optional[Union[SimulationResult, List[SimulationResult]]] = None
+    result: Optional[Union[SimulationResult, list[SimulationResult]]] = None
     objective_value: Optional[dict[str, float]] = None
 
 
@@ -57,9 +57,9 @@ class ExperimentalState(Config):
 
 class ExperimentConfig(Config):
     experiment_name: str
-    parameter_names: List[str]
+    parameter_names: list[str]
     parameter_bounds: dict[str, list[float]]
-    objective_names: List[str]
+    objective_names: list[str]
     path_to_experiment: str
     experiment_mode: str
     experiment_directory_name: Optional[str] = None

@@ -203,7 +203,7 @@ class LocalSlurmBatchManager(BatchManager):
 
     def run_batch(
             self,
-            dict_of_parameters: Dict[int, dict],
+            dict_of_parameters: dict[int, dict],
             experimental_state: ExperimentalState
     ) -> SimulationResultsDict:
         # TODO: Implement
@@ -225,7 +225,7 @@ class RemoteSlurmBatchManager(BatchManager):
 
     def run_batch(
             self,
-            dict_of_parameters: Dict[int, dict],
+            dict_of_parameters: dict[int, dict],
             experimental_state: ExperimentalState
     ) -> SimulationResultsDict:
         # TODO: Implement
