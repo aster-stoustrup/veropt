@@ -7,10 +7,9 @@ import botorch
 import torch
 from botorch.utils.multi_objective.box_decompositions.non_dominated import FastNondominatedPartitioning
 
-from veropt.optimiser.optimiser_saver import SavableClass, SavableDataClass
 from veropt.optimiser.optimiser_utility import get_nadir_point
 from veropt.optimiser.utility import (
-    check_variable_and_objective_shapes, check_variable_objective_values_matching,
+    SavableClass, SavableDataClass, check_variable_and_objective_shapes, check_variable_objective_values_matching,
     enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 )
 

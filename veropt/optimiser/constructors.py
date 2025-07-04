@@ -367,7 +367,7 @@ def gpytorch_single_model(
             # TODO: Fix this
             #   - this init is specific to matern
             #   - should maybe just make a subclass that assumes this init
-            return kernel_dict['kernel_class'](
+            return kernel_dict['kernel_class'].from_n_variables_and_settings(
                 n_variables=n_variables,
                 **settings
             )
@@ -555,7 +555,7 @@ def acquisition_optimiser_with_proximity_punishment(
 
 
 def build_normaliser(
-        normaliser_choice: Union[Literal['zero_mean_unit_variance'], None]
+        normaliser_choice: Union[NormaliserChoice, None]
 ) -> type[Normaliser]:
 
     if normaliser_choice == 'zero_mean_unit_variance':

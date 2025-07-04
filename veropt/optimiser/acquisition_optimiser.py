@@ -10,15 +10,14 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
-from veropt.optimiser.optimiser_saver import SavableClass, SavableDataClass
-from veropt.optimiser.utility import DataShape
+from veropt.optimiser.utility import DataShape, SavableClass, SavableDataClass
 
 
 class AcquisitionOptimiser(SavableClass):
     __metaclass__ = abc.ABCMeta
 
     name: str
-    maximum_evaluations_per_step: Optional[int]
+    maximum_evaluations_per_step: int | None
 
     def __init__(
             self,
@@ -29,13 +28,25 @@ class AcquisitionOptimiser(SavableClass):
         self.bounds = bounds
         self.n_evaluations_per_step = n_evaluations_per_step
 
+        self.settings: Any  # type: ignore[explicit-any]  # Defined in subclass >:(
+
+        # TODO: Do this in all classes that uses this weird set-up...?
+        #   - Otherwise, code might just fail in methods that reference this :(
+        #   - Write better error msg
+        #   - Could also do a superclass that does all this automatically...?
+        #       - That might be rad actually!
+        #       - Maybe wait until we get further with the loader and haven't found something better
+        assert 'settings' in self.__dict__, "Must define settings in subclass"
+
+        assert 'maximum_evaluations_per_step' in self.__class__.__dict__, (
+            f"Must give subclass '{self.__class__.__name__}' the static class variable 'maximum_evaluations_per_step'."
+        )
+
         if self.maximum_evaluations_per_step is not None:
             assert n_evaluations_per_step == self.maximum_evaluations_per_step, (
                 f"This optimiser can only find {self.maximum_evaluations_per_step} point(s) at a time "
                 f"but received a setting of {n_evaluations_per_step} evaluations per step."
             )
-
-        self.settings: Any  # type: ignore[explicit-any]  # Defined in subclass >:(
 
         assert 'name' in self.__class__.__dict__, (
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."

@@ -36,13 +36,17 @@ optimiser = bayesian_optimiser(
     objective=objective
 )
 
-from veropt.optimiser.optimiser_saver import save_to_json
+from veropt.optimiser.optimiser_saver_loader import load_optimiser_from_json, save_to_json
 
 optimiser.run_optimisation_step()
 optimiser.run_optimisation_step()
 
 save_to_json(
     object_to_save=optimiser,
+    file_name='test'
+)
+
+reloaded_optimiser = load_optimiser_from_json(
     file_name='test'
 )
 

@@ -5,8 +5,7 @@ from typing import Optional, TypedDict, Union
 
 import torch
 
-from veropt.optimiser.optimiser_saver import SavableClass
-from veropt.optimiser.utility import DataShape, PredictionDict, TensorWithNormalisationFlag
+from veropt.optimiser.utility import DataShape, PredictionDict, SavableClass, TensorWithNormalisationFlag
 
 
 class OptimisationMode(Enum):

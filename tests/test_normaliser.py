@@ -20,7 +20,7 @@ def test_standard_normaliser_transform() -> None:
 
     n_variables = test_matrix.shape[DataShape.index_dimensions]
 
-    normaliser = NormaliserZeroMeanUnitVariance(tensor=test_matrix)
+    normaliser = NormaliserZeroMeanUnitVariance.from_tensor(tensor=test_matrix)
     normed_test_matrix = normaliser.transform(tensor=test_matrix)
 
     mean_tensor = normed_test_matrix.mean(dim=DataShape.index_points)
@@ -49,7 +49,7 @@ def test_standard_normaliser_inverse_transform() -> None:
     ])
     test_matrix = test_matrix.T  # Making the columns columns here
 
-    normaliser = NormaliserZeroMeanUnitVariance(tensor=test_matrix)
+    normaliser = NormaliserZeroMeanUnitVariance.from_tensor(tensor=test_matrix)
 
     normed_test_matrix = normaliser.transform(test_matrix)
 

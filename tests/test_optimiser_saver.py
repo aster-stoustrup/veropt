@@ -1,4 +1,4 @@
-def test_load_optimiser_from_json():
+def test_load_optimiser_from_json() -> None:
 
     # TODO: Implement! Important test :))
     #   - Make optimiser, save, verify sameness

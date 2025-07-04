@@ -11,8 +11,8 @@ import torch
 from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
-from veropt.optimiser.optimiser_saver import SavableClass, SavableDataClass
-from veropt.optimiser.utility import check_variable_and_objective_shapes, check_variable_objective_values_matching, \
+from veropt.optimiser.utility import SavableClass, SavableDataClass, check_variable_and_objective_shapes, \
+    check_variable_objective_values_matching, \
     enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs, SavableSettings
 
 
@@ -74,15 +74,17 @@ class GPyTorchSingleModel(SavableClass):
 
     def __init__(
             self,
-            n_variables: int,
-            **settings: Union[float, int, str, bool]
+            likelihood: gpytorch.likelihoods.GaussianLikelihood,
+            mean_module: gpytorch.means.Mean,
+            kernel: gpytorch.kernels.Kernel,
+            settings_class: SavableDataClass
     ) -> None:
 
-        self.likelihood: gpytorch.likelihoods.GaussianLikelihood
-        self.mean_module: gpytorch.means.Mean
-        self.kernel: gpytorch.kernels.Kernel
+        self.likelihood = likelihood
+        self.mean_module = mean_module
+        self.kernel = kernel
 
-        self.settings: Any  # type: ignore[explicit-any]  # Dataclass defined in subclass >:( >:)
+        self.settings = settings_class
 
         self.model_with_data: Optional[GPyTorchDataModel] = None
 
@@ -99,6 +101,15 @@ class GPyTorchSingleModel(SavableClass):
             f"settings: {self.settings}"
             f")"
         )
+
+    @classmethod
+    @abc.abstractmethod
+    def from_n_variables_and_settings(
+            cls,
+            n_variables: int,
+            settings: dict
+    ) -> 'GPyTorchSingleModel':
+        pass
 
     def initialise_model_with_data(
             self,
@@ -238,23 +249,43 @@ class MaternSingleModel(GPyTorchSingleModel):
             self,
             n_variables: int,
             **settings: Unpack[MaternParametersInputDict]
-    ) -> None:
+    ):
 
-        self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.kernel = gpytorch.kernels.MaternKernel(
+        likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        mean_module = gpytorch.means.ConstantMean()
+        kernel = gpytorch.kernels.MaternKernel(
             ard_num_dims=n_variables,
             batch_shape=torch.Size([])
         )
 
-        self.settings = MaternParameters(
+        settings_class = MaternParameters(
             **settings
         )
 
         super().__init__(
+            likelihood=likelihood,
+            mean_module=mean_module,
+            kernel=kernel,
+            settings_class=settings_class
+        )
+
+    @classmethod
+    def from_n_variables_and_settings(
+            cls,
+            n_variables: int,
+            settings: dict
+    ) -> 'MaternSingleModel':
+
+        # TODO: Check settings are correct
+        #   - i.e. move check from constructors
+
+        raise NotImplementedError
+
+        return cls(
             n_variables=n_variables,
             **settings
         )
+
 
     def _set_up_trained_parameters(self) -> None:
 

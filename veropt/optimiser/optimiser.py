@@ -1,12 +1,12 @@
 import functools
 from copy import deepcopy
 from inspect import get_annotations
-from typing import Callable, Optional, Union, Unpack
+from typing import Callable, Optional, Self, Union, Unpack
 
 import gpytorch.settings
 import torch
 
-from veropt.optimiser.optimiser_saver import SavableClass
+from veropt.optimiser.optimiser_saver_loader import rehydrate_object
 
 torch.set_default_dtype(torch.float64)
 
@@ -21,13 +21,15 @@ from veropt.optimiser.optimiser_utility import (
     list_with_floats_to_string
 )
 from veropt.optimiser.prediction import Predictor
-from veropt.optimiser.utility import DataShape, TensorWithNormalisationFlag, check_variable_and_objective_shapes, \
+from veropt.optimiser.utility import DataShape, SavableClass, TensorWithNormalisationFlag, \
+    check_variable_and_objective_shapes, \
     enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs
 
 
 # TODO: Fix torch/np conflict over float size
 #   - Put the torch default setting into this file, should we have it more places?
 class BayesianOptimiser(SavableClass):
+
     def __init__(
             self,
             n_initial_points: int,
@@ -48,7 +50,7 @@ class BayesianOptimiser(SavableClass):
         self.normaliser_class = normaliser_class
 
         self._normaliser_variables: Optional[Normaliser] = None
-        self._normaliser_objective_values: Optional[Normaliser] = None
+        self._normaliser_objectives: Optional[Normaliser] = None
 
         # TODO: Move this assert somewhere else?
         # TODO: Write error message for this assert
@@ -71,8 +73,8 @@ class BayesianOptimiser(SavableClass):
         self._evaluated_variables_real_units: torch.Tensor = torch.tensor([])
         self.evaluated_variables_normalised: Optional[torch.Tensor] = None
 
-        self._evaluated_objective_real_units: torch.Tensor = torch.tensor([])
-        self.evaluated_objective_normalised: Optional[torch.Tensor] = None
+        self._evaluated_objectives_real_units: torch.Tensor = torch.tensor([])
+        self.evaluated_objectives_normalised: Optional[torch.Tensor] = None
 
         self.data_has_been_normalised = False
         self.model_has_been_trained = False
@@ -108,6 +110,46 @@ class BayesianOptimiser(SavableClass):
             f"{str(self.predictor)}"
             f")"
         )
+
+    @classmethod
+    def from_saved_state(cls, saved_state: dict) -> 'BayesianOptimiser':
+
+        predictor = rehydrate_object(
+            superclass=Predictor,
+            name=saved_state['predictor']['name'],
+            saved_state=saved_state['predictor']['state']
+        )
+
+        normaliser_variables = rehydrate_object(
+            superclass=Normaliser,
+            name=saved_state['normaliser_variables']['name'],
+            saved_state=saved_state['normaliser_variables']['state']
+        )
+
+        normaliser_objectives = rehydrate_object(
+            superclass=Normaliser,
+            name=saved_state['normaliser_objectives']['name'],
+            saved_state=saved_state['normaliser_objectives']['state']
+        )
+
+        evaluated_variable_values = TensorWithNormalisationFlag(
+            tensor=torch.tensor(saved_state['evaluated_variables']['values']),
+            normalised=saved_state['evaluated_variables']['normalised']
+        )
+
+        evaluated_objective_values = TensorWithNormalisationFlag(
+            tensor=torch.tensor(saved_state['evaluated_objectives']['values']),
+            normalised=saved_state['evaluated_objectives']['normalised']
+        )
+
+        settings = OptimiserSettings.from_saved_state(
+            saved_state['optimiser']['settings']
+        )
+
+        # TODO: Build optimiser
+        #   - Might need to move current init to classmethod?
+
+        raise NotImplementedError
 
     @staticmethod
     def _check_input_dimensions[T, **P](
@@ -148,6 +190,36 @@ class BayesianOptimiser(SavableClass):
             )
 
         return check_dimensions
+
+    def gather_dicts_to_save(self) -> dict:
+
+        dicts_from_predictor = self.predictor.gather_dicts_to_save()
+
+        settings = self.settings.gather_dicts_to_save()
+
+        if self.data_has_been_normalised:
+            normaliser_variables_dict = self._normaliser_variables.gather_dicts_to_save()
+            normaliser_objectives_dict = self._normaliser_objectives.gather_dicts_to_save()
+        else:
+            normaliser_variables_dict = None
+            normaliser_objectives_dict = None
+
+        return {
+            'optimiser': {
+                'predictor': dicts_from_predictor,
+                'normaliser_variables': normaliser_variables_dict,
+                'normaliser_objectives': normaliser_objectives_dict,
+                'evaluated_variable_values': {
+                    'values': self.evaluated_variables_real_units,
+                    'normalised': False,
+                },
+                'evaluated_objective_values': {
+                    'values': self.evaluated_objectives_real_units,
+                    'normalised': False,
+                },
+                'settings': settings
+            }
+        }
 
     def run_optimisation_step(self) -> None:
 
@@ -229,17 +301,6 @@ class BayesianOptimiser(SavableClass):
 
         return pareto_optimal_points
 
-    def gather_dicts_to_save(self) -> dict:
-
-        dicts_from_predictor = self.predictor.gather_dicts_to_save()
-
-        settings = self.settings.gather_dicts_to_save()
-
-        return {
-            'predictor': dicts_from_predictor,
-            'settings': settings
-        }
-
     def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:
 
         assert self.objective_type == ObjectiveKind.callable, (
@@ -288,7 +349,7 @@ class BayesianOptimiser(SavableClass):
         if self.n_points_evaluated == 0:
 
             self.evaluated_variables_real_units = variable_values_flagged.tensor.detach()
-            self.evaluated_objective_real_units = objective_values_flagged.tensor.detach()
+            self.evaluated_objectives_real_units = objective_values_flagged.tensor.detach()
 
         else:
 
@@ -296,8 +357,8 @@ class BayesianOptimiser(SavableClass):
                 tensors=[self.evaluated_variables_real_units, variable_values_flagged.tensor.detach()],
                 dim=DataShape.index_points
             )
-            self.evaluated_objective_real_units = torch.cat(
-                tensors=[self.evaluated_objective_real_units, objective_values_flagged.tensor.detach()],
+            self.evaluated_objectives_real_units = torch.cat(
+                tensors=[self.evaluated_objectives_real_units, objective_values_flagged.tensor.detach()],
                 dim=DataShape.index_points
             )
 
@@ -424,11 +485,12 @@ class BayesianOptimiser(SavableClass):
 
     def _fit_normaliser(self) -> None:
 
-        self._normaliser_variables = self.normaliser_class(
+        self._normaliser_variables = self.normaliser_class.from_tensor(
             tensor=self.evaluated_variables_real_units
         )
-        self._normaliser_objective_values = self.normaliser_class(
-            tensor=self.evaluated_objective_real_units
+
+        self._normaliser_objectives = self.normaliser_class.from_tensor(
+            tensor=self.evaluated_objectives_real_units
         )
 
         self.data_has_been_normalised = True
@@ -443,7 +505,7 @@ class BayesianOptimiser(SavableClass):
     def _update_normalised_values(self) -> None:
 
         assert self._normaliser_variables is not None, "Normaliser must be initiated to update normalised values"
-        assert self._normaliser_objective_values is not None, "Normaliser must be initiated to update normalised values"
+        assert self._normaliser_objectives is not None, "Normaliser must be initiated to update normalised values"
 
         self.initial_points_normalised = self._normaliser_variables.transform(
             tensor=self.initial_points_real_units
@@ -457,8 +519,8 @@ class BayesianOptimiser(SavableClass):
             tensor=self.evaluated_variables_real_units
         )
 
-        self.evaluated_objective_normalised = self._normaliser_objective_values.transform(
-            tensor=self.evaluated_objective_real_units
+        self.evaluated_objectives_normalised = self._normaliser_objectives.transform(
+            tensor=self.evaluated_objectives_real_units
         )
 
         self.predictor.update_bounds(self.bounds.tensor)
@@ -567,13 +629,13 @@ class BayesianOptimiser(SavableClass):
     def evaluated_objective_values(self) -> TensorWithNormalisationFlag:
         if self.return_normalised_data:
 
-            assert self.evaluated_objective_normalised is not None, (
+            assert self.evaluated_objectives_normalised is not None, (
                 "Normalised tensor 'evaluated_objective_normalised' has not been initiated"
             )
 
-            values = self.evaluated_objective_normalised
+            values = self.evaluated_objectives_normalised
         else:
-            values = self.evaluated_objective_real_units
+            values = self.evaluated_objectives_real_units
 
         return TensorWithNormalisationFlag(
             tensor=values,
@@ -630,18 +692,18 @@ class BayesianOptimiser(SavableClass):
             )
 
     @property
-    def evaluated_objective_real_units(self) -> torch.Tensor:
-        return self._evaluated_objective_real_units
+    def evaluated_objectives_real_units(self) -> torch.Tensor:
+        return self._evaluated_objectives_real_units
 
-    @evaluated_objective_real_units.setter
-    def evaluated_objective_real_units(self, objective_values: torch.Tensor) -> None:
+    @evaluated_objectives_real_units.setter
+    def evaluated_objectives_real_units(self, objective_values: torch.Tensor) -> None:
 
-        self._evaluated_objective_real_units = objective_values
+        self._evaluated_objectives_real_units = objective_values
 
-        if self._normaliser_objective_values is not None:
+        if self._normaliser_objectives is not None:
 
-            self.evaluated_objective_normalised = self._normaliser_objective_values.transform(
-                tensor=self._evaluated_objective_real_units
+            self.evaluated_objectives_normalised = self._normaliser_objectives.transform(
+                tensor=self._evaluated_objectives_real_units
             )
 
     @property

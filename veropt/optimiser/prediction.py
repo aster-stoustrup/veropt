@@ -7,8 +7,7 @@ import torch
 from veropt.optimiser.acquisition import BotorchAcquisitionFunction
 from veropt.optimiser.acquisition_optimiser import AcquisitionOptimiser
 from veropt.optimiser.model import GPyTorchFullModel
-from veropt.optimiser.optimiser_saver import SavableClass
-from veropt.optimiser.utility import DataShape, PredictionDict, check_variable_and_objective_shapes, \
+from veropt.optimiser.utility import DataShape, PredictionDict, SavableClass, check_variable_and_objective_shapes, \
     check_variable_objective_values_matching, \
     enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 
