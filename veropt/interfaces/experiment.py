@@ -49,7 +49,7 @@ class ExperimentObjective(InterfaceObjective):
             n_variables: int,
             n_objectives: int,
             suggested_parameters_json: str,
-            evaluated_points_json: str,
+            evaluated_objectives_json: str,
             variable_names: Optional[list[str]] = None,
             objective_names: Optional[list[str]] = None
     ) -> None:
@@ -58,7 +58,7 @@ class ExperimentObjective(InterfaceObjective):
         self.n_variables = n_variables
         self.n_objectives = n_objectives
         self.suggested_parameters_json = suggested_parameters_json
-        self.evaluated_points_json = evaluated_points_json
+        self.evaluated_objectives_json = evaluated_objectives_json
         self.variable_names = variable_names
         self.objective_names = objective_names
 
@@ -66,20 +66,22 @@ class ExperimentObjective(InterfaceObjective):
             self,
             suggested_variables: dict[str, torch.Tensor],
     ) -> None:
+        
+        suggested_variables_np = {name: value.numpy() for name, value in suggested_variables.items()}
 
         with open(self.suggested_parameters_json, 'w') as f:
-            json.dump(suggested_variables, f)
+            json.dump(suggested_variables_np, f)
 
     def load_evaluated_points(self) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
 
-        # TODO: This structure is wrong, jsyk
-        # TODO: Need to initialise the json files as empty so the first opt step passes empty dicts
+        with open(self.suggested_parameters_json, 'r') as f:
+            suggested_variables_np = json.load(f)
 
-        with open(self.evaluated_points_json, 'r') as f:
-            data = json.load(f)
+        with open(self.evaluated_objectives_json, 'r') as f:
+            evaluated_objectives_np = json.load(f)
 
-        suggested_variables = {k: torch.tensor(v) for k, v in data['suggested_variables'].items()}
-        evaluated_objectives = {k: torch.tensor(v) for k, v in data['evaluated_objectives'].items()}
+        suggested_variables = {name: torch.tensor(value) for name, value in suggested_variables_np.items()}
+        evaluated_objectives = {name: torch.tensor(value) for name, value in evaluated_objectives_np.items()}
 
         return suggested_variables, evaluated_objectives
 
@@ -112,13 +114,13 @@ class Experiment:
 
         self.initialise_experimental_set_up()
 
-    def initialise_optimiser(self) -> None:
+    def _initialise_optimiser(self) -> None:
         self.n_parameters = len(self.experiment_config.parameter_names)
         self.n_objectives = len(self.experiment_config.objective_names)
 
         # TODO: This is awkward; make not awkward?
-        bounds_lower = [bounds[0] for name, bounds in self.experiment_config.parameter_bounds.items()]
-        bounds_upper = [bounds[1] for name, bounds in self.experiment_config.parameter_bounds.items()]
+        bounds_lower = [bounds[0] for bounds in self.experiment_config.parameter_bounds.values()]
+        bounds_upper = [bounds[1] for bounds in self.experiment_config.parameter_bounds.values()]
         self.parameter_bounds = [bounds_lower, bounds_upper]
 
         objective = ExperimentObjective(
@@ -128,7 +130,7 @@ class Experiment:
             variable_names=self.experiment_config.parameter_names,
             objective_names=self.experiment_config.objective_names,
             suggested_parameters_json=self.path_manager.suggested_parameters_json,
-            evaluated_points_json=self.path_manager.evaluated_points_json
+            evaluated_objectives_json=self.path_manager.evaluated_objectives_json
         )
 
         # TODO: Initialise any optimiser, not just default!
@@ -139,7 +141,7 @@ class Experiment:
             objective=objective
         )
 
-    def initialise_batch_manager(self) -> None:
+    def _initialise_batch_manager(self) -> None:
 
         self.batch_manager_config = BatchManagerFactory.make_batch_manager_config(
             experiment_mode=self.experiment_config.experiment_mode,
@@ -174,7 +176,7 @@ class Experiment:
 
         for i in range(self.optimiser.n_evaluations_per_step):
 
-            parameters = {name: value.numpy()[i] for name, value in suggested_parameters.items()}
+            parameters = {name: value[i] for name, value in suggested_parameters.items()}
 
             dict_of_parameters[self.state.next_point] = parameters
 
@@ -216,10 +218,10 @@ class Experiment:
 
     def initialise_experimental_set_up(self) -> None:
 
-        self.initialise_optimiser()
+        self._initialise_optimiser()
 
         if self.batch_manager is None:
-            self.initialise_batch_manager()
+            self._initialise_batch_manager()
 
         self._check_initialisation()
 

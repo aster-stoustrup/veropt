@@ -19,9 +19,7 @@ class ExperimentMode(StrEnum):
     REMOTE_SLURM = "remote_slurm"
 
 
-def create_directory(
-        path: str,
-) -> None:
+def create_directory(path: str,) -> None:
 
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
@@ -51,7 +49,7 @@ def copy_files(
             else:
                 print(f"File already exists: {destination_file}")
 
-        else:
+        else:  # This is wrong; source directories containing supporting files should also be copied!
             print(f"Skipping non-file: {source_file}")
 
 
@@ -95,7 +93,7 @@ class BatchManagerFactory:
     def make_batch_manager(
         experiment_mode: str,
         simulation_runner: SR,
-        config: ConfigType
+        config: BaseModel
     ) -> BatchManager:
 
         if experiment_mode == ExperimentMode.LOCAL:

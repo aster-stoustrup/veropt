@@ -11,7 +11,6 @@ class Point(BaseModel):
     state: str
     job_id: Optional[int] = None
     result: Optional[Union[SimulationResult, List[SimulationResult]]] = None
-    processing_method: Optional[Union[str, List[str]]] = None
     objective_value: Optional[dict[str, float]] = None
 
 
@@ -76,68 +75,69 @@ class PathManager:
     ) -> None:
 
         self.experiment_config = experiment_config
+
         self.experiment_directory = self.make_experiment_directory_path()
         self.run_script_root_directory = self.make_run_script_root_directory_path()
+        self.results_directory = self.make_results_directory()
+
         self.experimental_state_json = self.make_experimental_state_json()
         self.suggested_parameters_json = self.make_suggested_parameters_json()
-        self.evaluated_points_json = self.make_evaluated_points_json()
+        self.evaluated_objectives_json = self.make_evaluated_objectives_json()
 
-    def make_experiment_directory_path(
-            self
-    ) -> str:
+    def make_experiment_directory_path(self) -> str:
 
         if self.experiment_config.experiment_directory_name is not None:
-            return os.path.join(
+            path = os.path.join(
                 self.experiment_config.path_to_experiment,
                 self.experiment_config.experiment_directory_name
                 )
 
         else:
-            return os.path.join(
+            path = os.path.join(
                 self.experiment_config.path_to_experiment,
                 self.experiment_config.experiment_name
                 )
 
-    def make_run_script_root_directory_path(
-            self,
-    ) -> str:
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def make_run_script_root_directory_path(self) -> str:
 
         if self.experiment_config.run_script_root_directory is not None:
-            return self.experiment_config.run_script_root_directory
+            path = self.experiment_config.run_script_root_directory
 
         else:
-            return os.path.join(
+            path = os.path.join(
                 self.experiment_directory,
                 f"{self.experiment_config.experiment_name}_setup"  # better name?
             )
 
+        assert os.path.isdir(path), "Run script root directory not found."
+        return path
+
     @staticmethod
-    def make_simulation_id(
-            i: int,
-    ) -> str:
-
+    def make_simulation_id(i: int) -> str:
         return f"point={i}"
+    
+    def make_results_directory(self) -> None:
+        path = os.path.join(self.experiment_directory, "results")
+        os.makedirs(path, exist_ok=True)
+        return path
 
-    def make_experimental_state_json(
-            self
-    ) -> str:
-
+    def make_experimental_state_json(self) -> str:
         return os.path.join(
-            self.experiment_directory,
-            "results",
+            self.results_directory,
             f"{self.experiment_config.experiment_name}_experimental_state.json"
         )
 
     def make_suggested_parameters_json(self) -> str:
         return os.path.join(
-            self.experiment_directory,
-            "results",
-            f"{self.experiment_config.experiment_name}_candidates.json"
+            self.results_directory,
+            f"{self.experiment_config.experiment_name}_suggested_parameters.json"
         )
 
-    def make_evaluated_points_json(self) -> str:
+    def make_evaluated_objectives_json(self) -> str:
         return os.path.join(
-            self.experiment_directory,
-            "results",
-            f"{self.experiment_config.experiment_name}_evaluated_points.json"
+            self.results_directory,
+            f"{self.experiment_config.experiment_name}_evaluated_objectives.json"
         )

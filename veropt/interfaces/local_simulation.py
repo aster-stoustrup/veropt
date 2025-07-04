@@ -24,16 +24,12 @@ class EnvManager(ABC):
         self.command = command
 
     @abstractmethod
-    def run_in_env(
-            self
-    ) -> subprocess.CompletedProcess:
+    def run_in_env(self) -> subprocess.CompletedProcess:
         ...
 
 
 class Conda(EnvManager):
-    def run_in_env(
-            self
-    ) -> subprocess.CompletedProcess:
+    def run_in_env(self) -> subprocess.CompletedProcess:
 
         # "path_to_env" is the path to the conda installation, not the environment
         full_command = f"source {self.path_to_env}/bin/activate {self.env_name} && {self.command}"
@@ -49,9 +45,7 @@ class Conda(EnvManager):
 
 
 class Venv(EnvManager):
-    def run_in_env(
-            self
-    ) -> subprocess.CompletedProcess:
+    def run_in_env(self) -> subprocess.CompletedProcess:
 
         full_command = f"source {self.path_to_env}/bin/activate && {self.command}"
 

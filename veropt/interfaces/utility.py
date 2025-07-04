@@ -39,7 +39,7 @@ class Config(BaseModel):
             with open(path, "r") as f:
                 loaded_class = cls.model_validate_json(f.read())
         except Exception as e:
-            print(f"While reading {path}:{e}")
+            print(f"While reading {path}: {e}")
             sys.exit(1)
 
         return loaded_class
