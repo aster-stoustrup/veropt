@@ -10,10 +10,11 @@ from pydantic import BaseModel
 class SimulationResult(BaseModel):
     simulation_id: str
     parameters: dict[str, float]
+    output_file: str
     stdout_file: str
     stderr_file: str
-    output_file: str
     return_code: Optional[int] = None
+    slurm_log_file: Optional[str] = None
 
 
 SimulationResultsDict = Union[dict[int, SimulationResult], dict[int, list[SimulationResult]]]

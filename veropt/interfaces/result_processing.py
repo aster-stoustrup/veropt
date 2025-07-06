@@ -60,7 +60,7 @@ class ResultProcessor(ABC):
 
         return_nan = False
 
-        if result.return_code is None or result.return_code != 0:
+        if result.return_code is not None and result.return_code != 0:
             return_nan = True
             print(f"Result {result.simulation_id} has a non-zero return code: {result.return_code}")
         elif not os.path.isfile(result.output_file):

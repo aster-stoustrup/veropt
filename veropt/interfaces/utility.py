@@ -1,9 +1,44 @@
 from pydantic import BaseModel
 import json
 import os
+import shutil
 import sys
 from typing import Self, Union, Optional, Type, TypeVar
 from abc import abstractmethod
+
+
+def create_directory(path: str) -> None:
+
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+        print(f"Created directory: {path}")
+
+    else:
+        print(f"Directory already exists: {path}")
+
+
+def copy_files(
+        source_directory: str,
+        destination_directory: str
+) -> None:
+
+    if not os.path.exists(destination_directory):
+        os.makedirs(destination_directory, exist_ok=True)
+
+    for file_name in os.listdir(source_directory):
+        source_file = os.path.join(source_directory, file_name)
+        destination_file = os.path.join(destination_directory, file_name)
+
+        if os.path.isfile(source_file):
+            if not os.path.exists(destination_file):
+                shutil.copy(source_file, destination_directory)
+                print(f"Copied {source_file} to {destination_directory}")
+
+            else:
+                print(f"File already exists: {destination_file}")
+
+        else:  # This is wrong; source directories containing supporting files should also be copied!
+            print(f"Skipping non-file: {source_file}")
 
 
 class Config(BaseModel):

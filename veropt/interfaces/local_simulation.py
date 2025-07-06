@@ -5,6 +5,7 @@ import os
 import subprocess
 from typing import Optional, Unpack, Union, TypedDict, Literal, Dict, List
 from veropt.interfaces.simulation import SimulationRunnerConfig, SimulationResult, Simulation, SimulationRunner
+from veropt.interfaces.veros_utility import edit_veros_run_script
 from veropt.interfaces.utility import Config
 
 import torch
@@ -34,7 +35,6 @@ class Conda(EnvManager):
         # "path_to_env" is the path to the conda installation, not the environment
         full_command = f"source {self.path_to_env}/bin/activate {self.env_name} && {self.command}"
 
-        # TODO: Understand the subprocess.run parameters "shell" and "executable"
         return subprocess.run(
             full_command,
             shell=True,
@@ -190,29 +190,6 @@ class LocalVerosRunner(SimulationRunner):
                   f" --float-type {self.config.float_type} {run_script}"
         return command
 
-    def _edit_run_script(
-            self,
-            run_script: str,
-            parameters: dict[str, float]
-    ) -> None:
-        with open(run_script, 'r') as file:
-            data = file.readlines()
-
-        # TODO: This is not robust. Need to figure out how to handle the indentation.
-        #       Regular expression match /\w+settings\.([a-zA-Z0-9_]+)\w*=/, for all matches look up key and set value; gather all keys in file, complement with assigned keys, add new lines.
-        # TODO: How to introduce new parameters that are not already in the setup file?
-        # TODO: Check if the parameters are already overwritten in the setup file.
-        for i, line in enumerate(data):
-            for key, value in parameters.items():
-                if line.startswith(f"        settings.{key} ="):
-                    print(f"Overwriting {key} in setup file with value: {value}")
-                    old_line = data[i].strip()
-                    data[i] = f"        settings.{key} = {value}  # default {old_line}\n"
-                    break
-
-        with open(run_script, 'w') as file:
-            file.writelines(data)
-
     def set_up_and_run(
             self,
             simulation_id: str,
@@ -221,11 +198,19 @@ class LocalVerosRunner(SimulationRunner):
             run_script_filename: str,
             output_filename: str
     ) -> SimulationResult:
+        
         run_script = os.path.join(run_script_directory, f"{run_script_filename}.py")
         output_file = os.path.join(run_script_directory, f"{output_filename}.nc")
-        self._edit_run_script(run_script, parameters) if not self.config.keep_old_params else None
-        command = self._make_command(run_script, run_script_directory) if self.config.command is None \
-            else self.config.command
+
+        edit_veros_run_script(
+            run_script=run_script, 
+            parameters=parameters
+        ) if not self.config.keep_old_params else None
+
+        command = self._make_command(
+            run_script=run_script, 
+            run_script_directory=run_script_directory
+        ) if self.config.command is None else self.config.command
 
         # TODO: This is bad. It should be a factory method or similar?
         env_manager_classes = {

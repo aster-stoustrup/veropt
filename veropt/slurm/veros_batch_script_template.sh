@@ -1,16 +1,16 @@
 #!/bin/bash -l
-#SBATCH -p {self.partition_name}
-#SBATCH -A ocean
-#SBATCH --job-name={setup_name}
+#SBATCH -p {partition_name}
+#SBATCH -A {group_name}
+#SBATCH --job-name={simulation_id}
 #SBATCH --time=23:59:59
-#SBATCH --constraint={self.constraint}
+#SBATCH --constraint={constraint}
 #SBATCH --nodes=1
-#SBATCH --ntasks={self.n_cores}
+#SBATCH --ntasks={n_cores}
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=0
 ##SBATCH --threads-per-core=1
 ##SBATCH --exclusive
-#SBATCH --output={setup_name}.out
+#SBATCH --output={slurm_log_filename}.out
 
 if [ X"$SLURM_STEP_ID" = "X" -a X"$SLURM_PROCID" = "X"0 ]
 then
@@ -37,6 +37,6 @@ fi
 
 conda activate veros_jax_cpu
 
-veros resubmit -i {setup_name} -n {self.ncycles} -l {self.cycle_length} \
--c 'mpiexec -n {self.n_cores} -- veros run {setup_name}.py -b {self.backend} -n {self.n_cores_nx} {self.n_cores_ny} --float-type {self.float_type}' \
---callback 'sbatch veros_batch.sh'
+veros resubmit -i {output_filename} -n {n_cycles} -l {cycle_length} \
+-c 'mpiexec -n {n_cores} -- veros run {run_script_filename}.py -b {backend} -n {n_cores_nx} {n_cores_ny} --float-type {float_type}' \
+--callback 'sbatch {sbatch_filename}.sh'
