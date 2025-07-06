@@ -96,7 +96,8 @@ class LocalSimulation(Simulation):
             stdout_file=stdout_file,
             stderr_file=stderr_file,
             return_code=result.returncode,
-            output_file=self.output_file
+            output_directory=self.run_script_directory,
+            output_filename=self.output_file
         )
 
 
@@ -104,7 +105,7 @@ class MockSimulationConfig(Config):
     stdout_file: list[str] = ["test_stdout.txt"]
     stderr_file: list[str] = ["test_stderr.txt"]
     return_code: list[int] = [0]
-    output_file: list[str] = ["test_output.nc"]
+    output_filename: list[str] = ["test_output.nc"]
     return_list: bool = False
 
 
@@ -132,18 +133,19 @@ class MockSimulationRunner(SimulationRunner):
             stdout_files = self.config.stdout_file
             stderr_files = self.config.stderr_file
             return_codes = self.config.return_code
-            output_files = self.config.output_file
+            output_filenames = self.config.output_filename
 
-            zipped_lists = zip(stdout_files, stderr_files, return_codes, output_files)
+            zipped_lists = zip(stdout_files, stderr_files, return_codes, output_filenames)
 
             results = [SimulationResult(
                 simulation_id=simulation_id,
                 parameters=parameters,
                 stdout_file=out_file,
                 stderr_file=err_file,
-                output_file=output_file,  # Assuming output_file is the same as stdout_file for mock
+                output_directory="",
+                output_filename=output_filename,
                 return_code=return_code
-            ) for out_file, err_file, return_code, output_file in zipped_lists]
+            ) for out_file, err_file, return_code, output_filenames in zipped_lists]
 
             return results
 
@@ -153,7 +155,8 @@ class MockSimulationRunner(SimulationRunner):
                 parameters=parameters,
                 stdout_file=self.config.stdout_file[0],
                 stderr_file=self.config.stderr_file[0],
-                output_file=self.config.output_file[0],
+                output_directory="",
+                output_filename=self.config.output_filename[0],
                 return_code=self.config.return_code[0]
             )
 
@@ -200,7 +203,6 @@ class LocalVerosRunner(SimulationRunner):
     ) -> SimulationResult:
         
         run_script = os.path.join(run_script_directory, f"{run_script_filename}.py")
-        output_file = os.path.join(run_script_directory, f"{output_filename}.nc")
 
         edit_veros_run_script(
             run_script=run_script, 
@@ -229,8 +231,8 @@ class LocalVerosRunner(SimulationRunner):
             simulation_id=simulation_id,
             run_script_directory=run_script_directory,
             env_manager=env_manager,
-            output_file=output_file
-            )
+            output_filename=output_filename
+        )
 
         result = simulation.run(parameters=parameters)
 

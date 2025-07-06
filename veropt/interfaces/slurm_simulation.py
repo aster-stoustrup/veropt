@@ -9,8 +9,8 @@ from veropt.interfaces.veros_utility import edit_veros_run_script
 
 
 def write_batch_script_string(
-    batch_script_template: str,
-    template_substitutions: dict
+        batch_script_template: str,
+        template_substitutions: dict
 ) -> str:
     
     assert os.path.isfile(batch_script_template), "Batch script template not found."
@@ -22,8 +22,8 @@ def write_batch_script_string(
 
 
 def create_batch_script(
-    batch_script_file: str,
-    batch_script_string: str
+        batch_script_file: str,
+        batch_script_string: str
 ) -> None:
 
     with open(batch_script_file, 'w+') as file:
@@ -34,10 +34,10 @@ def create_batch_script(
 
 
 def try_to_run(
-    simulation: Simulation,
-    parameters: dict[str, float],
-    max_tries: int
-) -> Union[SimulationResult, list[SimulationResult]]:
+        simulation: Simulation,
+        parameters: dict[str, float],
+        max_tries: int
+) -> SimulationResult:
         
     success = False
     tries = 0
@@ -66,22 +66,22 @@ def try_to_run(
 
 class SlurmSimulation(Simulation):
     def __init__(
-        self,
-        simulation_id: str,
-        run_script_directory: str,
-        output_file: str,
-        batch_script_file: str,
+            self,
+            simulation_id: str,
+            run_script_directory: str,
+            output_filename: str,
+            batch_script_file: str,
     ) -> None:
 
         self.id = simulation_id
         self.run_script_directory = run_script_directory
-        self.output_file = output_file
+        self.output_filename = output_filename
         self.batch_script_file = batch_script_file
         self.command = f"cd {run_script_directory} && sbatch --parsable {batch_script_file}"
         
     def run(
-        self,
-        parameters: dict[str, float]
+            self,
+            parameters: dict[str, float]
     ) -> SimulationResult:
         
         assert os.path.isfile(self.batch_script_file), "Batch script not found."
@@ -107,7 +107,8 @@ class SlurmSimulation(Simulation):
             parameters=parameters,
             stdout_file=stdout_file,
             stderr_file=stderr_file,
-            output_file=self.output_file
+            output_directory=self.run_script_directory,
+            output_filename=self.output_file
         )
 
 
@@ -129,22 +130,21 @@ class SlurmVerosConfig(Config):
 
 class SlurmVerosRunner(SimulationRunner):
     def __init__(
-        self,
-        config: SlurmVerosConfig
+            self,
+            config: SlurmVerosConfig
     ) -> None:
         self.config = config
 
     def set_up_and_run(
-        self,
-        simulation_id: str,
-        parameters: dict[str, float],
-        run_script_directory: str,
-        run_script_filename: str,
-        output_filename: str
-    ) -> Union[SimulationResult, list[SimulationResult]]:
+            self,
+            simulation_id: str,
+            parameters: dict[str, float],
+            run_script_directory: str,
+            run_script_filename: str,
+            output_filename: str
+    ) -> SimulationResult:
         
         run_script_file = os.path.join(run_script_directory, f"{run_script_filename}.py")
-        output_file = os.path.join(run_script_directory, f"{output_filename}.nc")
         batch_script_filename = f"veros_batch_{simulation_id}"
         batch_script_file = os.path.join(run_script_directory, f"{batch_script_filename}.sh")
         slurm_log_filename = f"slurm_{simulation_id}"
@@ -178,9 +178,9 @@ class SlurmVerosRunner(SimulationRunner):
         simulation = SlurmSimulation(
             simulation_id=simulation_id,
             run_script_directory=run_script_directory,
-            output_file=output_file,
+            output_filename=output_filename,
             batch_script_file=batch_script_file
-            )
+        )
         
         result = try_to_run(
             simulation=simulation,

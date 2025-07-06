@@ -10,7 +10,8 @@ from pydantic import BaseModel
 class SimulationResult(BaseModel):
     simulation_id: str
     parameters: dict[str, float]
-    output_file: str
+    output_directory: str
+    output_filename: str
     stdout_file: str
     stderr_file: str
     return_code: Optional[int] = None
