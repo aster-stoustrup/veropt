@@ -108,7 +108,7 @@ class SlurmSimulation(Simulation):
             stdout_file=stdout_file,
             stderr_file=stderr_file,
             output_directory=self.run_script_directory,
-            output_filename=self.output_file
+            output_filename=self.output_filename
             )
 
 
