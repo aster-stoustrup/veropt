@@ -7,7 +7,7 @@ import torch
 from veropt.optimiser.objective import CallableObjective
 
 
-class BotorchObjective(CallableObjective, ABC):
+class BotorchPracticeObjective(CallableObjective, ABC):
 
     def __init__(
             self,
@@ -18,6 +18,9 @@ class BotorchObjective(CallableObjective, ABC):
             variable_names: Optional[list[str]] = None,
             objective_names: Optional[list[str]] = None
     ):
+
+        variable_names = variable_names or [f"var_{i}" for i in range(1, n_variables + 1)]
+        objective_names = objective_names or [f"obj_{i}" for i in range(1, n_objectives + 1)]
 
         self.function = function
 
@@ -34,7 +37,7 @@ class BotorchObjective(CallableObjective, ABC):
         return self.function(parameter_values)
 
 
-class Hartmann(BotorchObjective):
+class Hartmann(BotorchPracticeObjective):
 
     name = 'hartmann'
 

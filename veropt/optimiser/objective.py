@@ -13,28 +13,22 @@ class Objective(SavableClass, metaclass=abc.ABCMeta):
 
     def __init__(
             self,
-            bounds: list[list[float]],
+            bounds_lower: list[float],
+            bounds_upper: list[float],
             n_variables: int,
             n_objectives: int,
-            variable_names: Optional[list[str]] = None,
-            objective_names: Optional[list[str]] = None
+            variable_names: list[str],
+            objective_names: list[str]
     ):
-        # TODO: Check dimensions of the bounds against n_vars
-        self.bounds = torch.tensor(bounds)
+        assert len(bounds_lower) == n_variables
+        assert len(bounds_upper) == n_variables
+
+        self.bounds = torch.tensor([bounds_lower, bounds_upper])
         self.n_variables = n_variables
         self.n_objectives = n_objectives
 
-        # TODO: Consider dropping these defaults?
-        #   - maybe annoying for callable objective...?
-        if variable_names is None:
-            self.variable_names = [f"Variable {i}" for i in range(1, n_variables + 1)]
-        else:
-            self.variable_names = variable_names
-
-        if objective_names is None:
-            self.objective_names = [f"Objective {i}" for i in range(1, n_objectives + 1)]
-        else:
-            self.objective_names = objective_names
+        self.variable_names = variable_names
+        self.objective_names = objective_names
 
     def gather_dicts_to_save(self) -> dict:
         return {
@@ -44,6 +38,7 @@ class Objective(SavableClass, metaclass=abc.ABCMeta):
             'variable_names': self.variable_names,
             'objective_names': self.objective_names,
         }
+
 
 class CallableObjective(Objective, metaclass=abc.ABCMeta):
 

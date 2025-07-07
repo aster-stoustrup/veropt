@@ -311,17 +311,19 @@ def format_input_from_objective(
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
     for name in variable_names:
-        assert len(new_variable_values[name]) == expected_amount_points
+        assert len(new_variable_values[name]) in (expected_amount_points, 0)
 
     for name in objective_names:
-        assert len(new_objective_values[name]) == expected_amount_points
+        assert len(new_objective_values[name]) in (expected_amount_points, 0)
 
-    new_variable_values_tensor = torch.vstack(
+    new_variable_values_tensor = torch.stack(
         [new_variable_values[name] for name in variable_names],
+        dim=DataShape.index_dimensions
     )
 
-    new_objective_values_tensor = torch.vstack(
-        [new_objective_values[name] for name in objective_names]
+    new_objective_values_tensor = torch.stack(
+        [new_objective_values[name] for name in objective_names],
+        dim=DataShape.index_dimensions
     )
 
     return (

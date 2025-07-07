@@ -4,95 +4,9 @@ import torch
 from veropt.optimiser.acquisition import QLogExpectedHyperVolumeImprovement, \
     UpperConfidenceBound
 from veropt.optimiser.acquisition_optimiser import ProximityPunishmentSequentialOptimiser, DualAnnealingOptimiser
+from veropt.optimiser.constructors import botorch_predictor
 from veropt.optimiser.model import AdamModelOptimiser, GPyTorchFullModel, MaternSingleModel
 from veropt.optimiser.prediction import BotorchPredictor
-
-
-def _build_matern_model(
-        n_variables: int,
-        n_objectives: int,
-) -> GPyTorchFullModel:
-    model = GPyTorchFullModel(
-        n_variables=n_variables,
-        n_objectives=n_objectives,
-        single_model_list=[
-            MaternSingleModel(
-                n_variables=n_variables,
-            ) for _ in range(n_objectives)
-        ],
-        model_optimiser=AdamModelOptimiser()
-    )
-
-    return model
-
-
-def _build_matern_predictor_ucb(
-        bounds: torch.Tensor,
-        n_variables: int,
-        n_objectives: int,
-        n_evaluations_per_step: int
-) -> BotorchPredictor:
-
-    model = _build_matern_model(
-        n_variables=n_variables,
-        n_objectives=n_objectives
-    )
-
-    acquisition_function = UpperConfidenceBound(
-        n_variables=n_variables,
-        n_objectives=n_objectives,
-    )
-
-    acquisition_optimiser = ProximityPunishmentSequentialOptimiser(
-        bounds=bounds,
-        n_evaluations_per_step=n_evaluations_per_step,
-        single_step_optimiser=DualAnnealingOptimiser(
-            bounds=bounds,
-            n_evaluations_per_step=1
-        ),
-    )
-
-    predictor = BotorchPredictor(
-        model=model,
-        acquisition_function=acquisition_function,
-        acquisition_optimiser=acquisition_optimiser,
-    )
-
-    return predictor
-
-
-def _build_matern_predictor_qlogehvi(
-        bounds: torch.Tensor,
-        n_variables: int,
-        n_objectives: int,
-        n_evaluations_per_step: int
-) -> BotorchPredictor:
-    model = _build_matern_model(
-        n_variables=n_variables,
-        n_objectives=n_objectives
-    )
-
-    acquisition_function = QLogExpectedHyperVolumeImprovement(
-        n_variables=n_variables,
-        n_objectives=n_objectives,
-    )
-
-    acquisition_optimiser = ProximityPunishmentSequentialOptimiser(
-        bounds=bounds,
-        n_evaluations_per_step=n_evaluations_per_step,
-        single_step_optimiser=DualAnnealingOptimiser(
-            bounds=bounds,
-            n_evaluations_per_step=1
-        ),
-    )
-
-    predictor = BotorchPredictor(
-        model=model,
-        acquisition_function=acquisition_function,
-        acquisition_optimiser=acquisition_optimiser,
-    )
-
-    return predictor
 
 
 def test_botorch_predict_values_1_objective() -> None:
@@ -111,11 +25,13 @@ def test_botorch_predict_values_1_objective() -> None:
     variable_values = variable_values.T
     objective_values = objective_values.T
 
-    predictor = _build_matern_predictor_ucb(
-        bounds=bounds,
-        n_variables=1,
-        n_objectives=1,
-        n_evaluations_per_step=4
+    predictor = botorch_predictor(
+        problem_information={
+            'n_variables': 1,
+            'n_objectives': 1,
+            'n_evaluations_per_step': 4,
+            'bounds': bounds.tolist()
+        }
     )
 
     predictor.update_with_new_data(
@@ -155,11 +71,13 @@ def test_botorch_predict_values_2_objectives() -> None:
     variable_values = variable_values.T
     objective_values = objective_values.T
 
-    predictor = _build_matern_predictor_qlogehvi(
-        bounds=bounds,
-        n_variables=2,
-        n_objectives=2,
-        n_evaluations_per_step=4
+    predictor = botorch_predictor(
+        problem_information={
+            'n_variables': 2,
+            'n_objectives': 2,
+            'n_evaluations_per_step': 4,
+            'bounds': bounds.tolist()
+        }
     )
 
     predictor.update_with_new_data(
@@ -189,11 +107,13 @@ def test_botorch_predict_values_wrong_dimensions() -> None:
     variable_values = variable_values.T
     objective_values = objective_values.T
 
-    predictor = _build_matern_predictor_qlogehvi(
-        bounds=bounds,
-        n_variables=2,
-        n_objectives=2,
-        n_evaluations_per_step=4
+    predictor = botorch_predictor(
+        problem_information={
+            'n_variables': 2,
+            'n_objectives': 2,
+            'n_evaluations_per_step': 4,
+            'bounds': bounds.tolist()
+        }
     )
 
     predictor.update_with_new_data(
@@ -229,11 +149,13 @@ def test_botorch_predict_train_wrong_obj_dims() -> None:
     variable_values = variable_values.T
     objective_values = objective_values.T
 
-    predictor = _build_matern_predictor_qlogehvi(
-        bounds=bounds,
-        n_variables=2,
-        n_objectives=2,
-        n_evaluations_per_step=4
+    predictor = botorch_predictor(
+        problem_information={
+            'n_variables': 2,
+            'n_objectives': 2,
+            'n_evaluations_per_step': 4,
+            'bounds': bounds.tolist()
+        }
     )
 
     with pytest.raises(ValueError):
@@ -259,11 +181,13 @@ def test_botorch_update_with_new_data_fails_at_positional_args() -> None:
     variable_values = variable_values.T
     objective_values = objective_values.T
 
-    predictor = _build_matern_predictor_qlogehvi(
-        bounds=bounds,
-        n_variables=2,
-        n_objectives=2,
-        n_evaluations_per_step=4
+    predictor = botorch_predictor(
+        problem_information={
+            'n_variables': 2,
+            'n_objectives': 2,
+            'n_evaluations_per_step': 4,
+            'bounds': bounds.tolist()
+        }
     )
 
     with pytest.raises(TypeError):

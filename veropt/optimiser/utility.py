@@ -247,6 +247,9 @@ class TensorWithNormalisationFlag:
             normalised=self.normalised
         )
 
+    def __len__(self) -> int:
+        return len(self.tensor)
+
     @property
     def shape(self) -> torch.Size:
         return self.tensor.shape

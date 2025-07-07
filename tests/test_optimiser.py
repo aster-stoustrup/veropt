@@ -1,34 +1,11 @@
+from typing import Self
+
 import torch
 
-from veropt.optimiser.normalisation import NormaliserZeroMeanUnitVariance
-from veropt.optimiser.objective import CallableObjective
+from veropt.optimiser.constructors import bayesian_optimiser
+from veropt.optimiser.objective import InterfaceObjective
 from veropt.optimiser.practice_objectives import Hartmann
-from .test_prediction import _build_matern_predictor_qlogehvi, _build_matern_predictor_ucb
-from veropt.optimiser.optimiser import BayesianOptimiser
-
-
-def _build_matern_optimiser_ucb(
-        n_initial_points: int,
-        n_bayesian_points: int,
-        n_evaluations_per_step: int,
-        objective: CallableObjective
-) -> BayesianOptimiser:
-
-    predictor = _build_matern_predictor_ucb(
-        bounds=objective.bounds,
-        n_variables=objective.n_variables,
-        n_objectives=objective.n_objectives,
-        n_evaluations_per_step=n_evaluations_per_step
-    )
-
-    return BayesianOptimiser.from_the_beginning(
-        n_initial_points=n_initial_points,
-        n_bayesian_points=n_bayesian_points,
-        n_evaluations_per_step=n_evaluations_per_step,
-        objective=objective,
-        predictor=predictor,
-        normaliser_class=NormaliserZeroMeanUnitVariance
-    )
+from veropt.optimiser.utility import DataShape
 
 
 def test_run_optimisation_step() -> None:
@@ -41,11 +18,11 @@ def test_run_optimisation_step() -> None:
         n_variables=6
     )
 
-    optimiser = _build_matern_optimiser_ucb(
+    optimiser = bayesian_optimiser(
         n_initial_points=n_initial_points,
         n_bayesian_points=n_bayesian_points,
         n_evaluations_per_step=n_evalations_per_step,
-        objective=objective
+        objective=objective,
     )
 
     for i in range (5):
@@ -65,3 +42,138 @@ def test__set_up_settings_nans() -> None:
     #   - Might need to use as a context manager during training?
 
     assert False
+
+
+def test_add_new_points_interface_objective() -> None:
+
+    class TestObjective(InterfaceObjective):
+        def __init__(self) -> None:
+            super().__init__(
+                bounds_lower=[0, 0, 0],
+                bounds_upper=[1, 1, 1],
+                n_variables=3,
+                n_objectives=2,
+                variable_names=[
+                    'var_1',
+                    'var_2',
+                    'var_3'
+                ],
+                objective_names=[
+                    'obj_1',
+                    'obj_2'
+                ]
+            )
+
+        def save_candidates(self, suggested_variables: dict[str, torch.Tensor]) -> None:
+            pass
+
+        def load_evaluated_points(self) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+            return (
+                {
+                    'var_1': var_1_tensor,
+                    'var_2': var_2_tensor,
+                    'var_3': var_3_tensor,
+                },
+                {
+                    'obj_1': obj_1_tensor,
+                    'obj_2': obj_2_tensor,
+                }
+            )
+
+        @classmethod
+        def from_saved_state(cls, saved_state: dict) -> Self:
+            raise NotImplementedError
+
+    var_1_tensor = torch.tensor([0.4, 0.1, 0.7, 0.3])
+    var_2_tensor = torch.tensor([0.1, 0.5, 0.2, 0.6])
+    var_3_tensor = torch.tensor([0.5, 0.2, 0.5, 0.9])
+
+    obj_1_tensor = torch.tensor([2.1, 3.4, 5.2, 1.2])
+    obj_2_tensor = torch.tensor([4.3, 6.3, 1.2, 4.2])
+
+    objective = TestObjective()
+
+    optimiser = bayesian_optimiser(
+        n_initial_points=4,
+        n_bayesian_points=8,
+        n_evaluations_per_step=4,
+        objective=objective,
+    )
+
+    optimiser.run_optimisation_step()
+
+    expected_var_tensor = torch.stack(
+        tensors=(
+            var_1_tensor,
+            var_2_tensor,
+            var_3_tensor,
+        ),
+        dim=DataShape.index_dimensions
+    )
+
+    expected_obj_tensor = torch.stack(
+        tensors=(
+            obj_1_tensor,
+            obj_2_tensor,
+        ),
+        dim=DataShape.index_dimensions
+    )
+
+    assert torch.eq(optimiser._evaluated_variables_real_units, expected_var_tensor)
+    assert torch.eq(optimiser._evaluated_objectives_real_units, expected_obj_tensor)
+
+
+def test_add_new_points_empty_tensors() -> None:
+    class TestObjective(InterfaceObjective):
+        def __init__(self) -> None:
+
+            super().__init__(
+                bounds_lower=[0, 0, 0],
+                bounds_upper=[1, 1, 1],
+                n_variables=3,
+                n_objectives=2,
+                variable_names=[
+                    'var_1',
+                    'var_2',
+                    'var_3'
+                ],
+                objective_names=[
+                    'obj_1',
+                    'obj_2'
+                ]
+            )
+
+        def save_candidates(self, suggested_variables: dict[str, torch.Tensor]) -> None:
+            pass
+
+        def load_evaluated_points(self) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+
+            return (
+                {
+                    'var_1': torch.tensor([]),
+                    'var_2': torch.tensor([]),
+                    'var_3': torch.tensor([])
+                },
+                {
+                    'obj_1': torch.tensor([]),
+                    'obj_2': torch.tensor([]),
+                }
+            )
+
+        @classmethod
+        def from_saved_state(cls, saved_state: dict) -> Self:
+            raise NotImplementedError
+
+    objective = TestObjective()
+
+    optimiser = bayesian_optimiser(
+        n_initial_points=4,
+        n_bayesian_points=8,
+        n_evaluations_per_step=4,
+        objective=objective,
+    )
+    
+    optimiser.run_optimisation_step()
+
+    assert len(optimiser.evaluated_variable_values) == 0
+    assert len(optimiser.evaluated_objective_values) == 0

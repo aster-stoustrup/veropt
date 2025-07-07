@@ -178,14 +178,13 @@ def test_get_pareto_optimal_points_weights() -> None:
 def test_format_input_from_objective() -> None:
     expected_amount_points = 4
 
-    variable_names = ['var_1', 'var_2', 'var_3', 'var_4']
+    variable_names = ['var_1', 'var_2', 'var_3']
     objective_names = ['obj_1', 'obj_2', 'obj_3']
 
     new_variable_values = {
         'var_3': torch.tensor([0.2, -0.2, -0.1, 2.2]),
         'var_2': torch.tensor([1.2, -1.4, 1.1, 0.2]),
         'var_1': torch.tensor([0.4, 0.3, 0.7, -0.3]),
-        'var_4': torch.tensor([-0.5, 0.7, 2.0, 1.2]),
     }
     new_objective_values = {
         'obj_2': torch.tensor([0.5, -2.1, 0.3, 1.1]),
@@ -197,7 +196,6 @@ def test_format_input_from_objective() -> None:
         [0.4, 0.3, 0.7, -0.3],
         [1.2, -1.4, 1.1, 0.2],
         [0.2, -0.2, -0.1, 2.2],
-        [-0.5, 0.7, 2.0, 1.2]
     ])
 
     expected_objective_values = torch.tensor([
@@ -205,6 +203,9 @@ def test_format_input_from_objective() -> None:
         [0.5, -2.1, 0.3, 1.1],
         [0.2, 0.5, 2.1, 2.2]
     ])
+
+    expected_variable_tensor = expected_variable_tensor.T
+    expected_objective_values = expected_objective_values.T
 
     (new_variable_values_tensor, new_objective_values_tensor) = format_input_from_objective(
         new_variable_values=new_variable_values,
