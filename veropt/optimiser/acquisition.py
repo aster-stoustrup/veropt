@@ -9,9 +9,10 @@ from botorch.utils.multi_objective.box_decompositions.non_dominated import FastN
 
 from veropt.optimiser.optimiser_utility import get_nadir_point
 from veropt.optimiser.utility import (
-    SavableClass, SavableDataClass, check_variable_and_objective_shapes, check_variable_objective_values_matching,
+    check_variable_and_objective_shapes, check_variable_objective_values_matching,
     enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 )
+from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
 
 
 # TODO: Decide on architecture

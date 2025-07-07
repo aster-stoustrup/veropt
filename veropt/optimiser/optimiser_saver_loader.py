@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import Dataset
 
 from veropt.optimiser.optimiser import BayesianOptimiser
-from veropt.optimiser.utility import SavableClass
+from veropt.optimiser.saver_loader_utility import SavableClass
 
 
 # TODO: Implement
@@ -62,7 +62,5 @@ def load_optimiser_from_json(
 
     with open(f'{file_name}.json', 'r') as json_file:
         saved_dict = json.load(json_file)
-
-    print("this is a breakpoint >:)")
 
     return BayesianOptimiser.from_saved_state(saved_dict['optimiser'])

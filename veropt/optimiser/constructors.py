@@ -193,7 +193,7 @@ def gpytorch_model(
         kernel_optimiser=kernel_optimiser,
     )
 
-    return GPyTorchFullModel(
+    return GPyTorchFullModel.from_the_beginning(
         n_variables=n_variables,
         n_objectives=n_objectives,
         single_model_list=single_model_list,

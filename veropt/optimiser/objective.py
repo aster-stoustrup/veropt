@@ -4,7 +4,8 @@ from typing import Optional, Self, Union
 
 import torch
 
-from veropt.optimiser.utility import SavableClass, check_incoming_objective_dimensions_fix_1d
+from veropt.optimiser.utility import check_incoming_objective_dimensions_fix_1d
+from veropt.optimiser.saver_loader_utility import SavableClass
 
 
 class Objective(SavableClass, metaclass=abc.ABCMeta):
@@ -32,11 +33,14 @@ class Objective(SavableClass, metaclass=abc.ABCMeta):
 
     def gather_dicts_to_save(self) -> dict:
         return {
-            'bounds': self.bounds,
-            'n_variables': self.n_variables,
-            'n_objectives': self.n_objectives,
-            'variable_names': self.variable_names,
-            'objective_names': self.objective_names,
+            'name': self.name,
+            'state':{
+                'bounds': self.bounds,
+                'n_variables': self.n_variables,
+                'n_objectives': self.n_objectives,
+                'variable_names': self.variable_names,
+                'objective_names': self.objective_names,
+            }
         }
 
 

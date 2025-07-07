@@ -6,7 +6,6 @@ from veropt.optimiser.constructors import botorch_acquisition_function, gpytorch
 
 torch.set_default_dtype(torch.float64)
 
-from tests.test_optimiser import _build_matern_optimiser_ucb
 from veropt.optimiser.practice_objectives import Hartmann
 
 n_initial_points = 16
@@ -18,12 +17,6 @@ objective = Hartmann(
     n_variables=6
 )
 
-# optimiser = _build_matern_optimiser_ucb(
-#     n_initial_points=n_initial_points,
-#     n_bayesian_points=n_bayesian_points,
-#     n_evaluations_per_step=n_evalations_per_step,
-#     objective=objective
-# )
 
 # TODO: Make tests for various calls to this and sub-functions
 #   - Probably especially really smart to see if it fails in all the right ways
@@ -33,7 +26,12 @@ optimiser = bayesian_optimiser(
     n_initial_points=n_initial_points,
     n_bayesian_points=n_bayesian_points,
     n_evaluations_per_step=n_evalations_per_step,
-    objective=objective
+    objective=objective,
+    model={
+        'training_settings': {
+            'max_iter': 1_000  # This is just to develop faster, probably not enough to train well
+        }
+    }
 )
 
 from veropt.optimiser.optimiser_saver_loader import load_optimiser_from_json, save_to_json

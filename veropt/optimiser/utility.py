@@ -1,9 +1,7 @@
-import abc
 import functools
 import inspect
 from copy import deepcopy
-from dataclasses import asdict, dataclass, fields
-from typing import Any, Callable, Mapping, Optional, Self, TypeVar, TypedDict, Union
+from typing import Any, Callable, Mapping, Optional, TypedDict, Union
 
 import torch
 
@@ -260,78 +258,6 @@ class MetaClassWithMandatoryAttributes:
     # TODO: Implement
 
     pass
-
-
-class SavableClass(metaclass=abc.ABCMeta):
-
-    name: str
-
-    @abc.abstractmethod
-    def gather_dicts_to_save(self) -> dict:
-        pass
-
-    @classmethod
-    @abc.abstractmethod
-    def from_saved_state(cls, saved_state: dict) -> Self:
-        pass
-
-
-@dataclass
-class SavableDataClass(SavableClass):
-
-    def gather_dicts_to_save(self) -> dict:
-        return asdict(self)
-
-    @classmethod
-    def from_saved_state(cls, saved_state: dict) -> 'SavableDataClass':
-
-        expected_fields = [field.name for field in fields(cls)]
-
-        for key in saved_state.keys():
-            assert key in expected_fields, f"Field '{key}' from saved state not expected for dataclass {cls.__name__}"
-
-        for expected_field in expected_fields:
-            assert expected_field in saved_state, f"Field '{expected_field}' not found in saved state"
-
-        return cls(
-            **saved_state
-        )
-
-
-def get_all_subclasses[T](
-        cls: T
-) -> list[T]:
-
-    return cls.__subclasses__() + (
-        [subclass for class_ in cls.__subclasses__() for subclass in get_all_subclasses(class_)]
-    )
-
-
-SavableSettings = TypeVar('SavableSettings', bound=SavableDataClass)
-T = TypeVar('T', bound=SavableClass)
-
-# TODO: Relation to constructors...?
-
-# We're not showing that it's the superclass in type[T] but a subclass in the return
-#   - Not sure if this is a problem or not?
-
-def rehydrate_object(
-        superclass: type[T],
-        name: str,
-        saved_state: dict,
-        subclasses: Optional[list[T]] = None
-) -> T:
-
-    subclasses = subclasses or get_all_subclasses(superclass)
-
-    for subclass in subclasses:
-        if subclass.name == name:
-            return subclass.from_saved_state(
-                saved_state=saved_state
-            )
-
-    else:
-        raise ValueError(f"Unknown subclass of {superclass.__name__}: '{name}'")
 
 
 def _validate_typed_dict(  # type: ignore[explicit-any]

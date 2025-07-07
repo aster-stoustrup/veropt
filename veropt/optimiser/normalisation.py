@@ -2,7 +2,8 @@ import abc
 
 import torch
 
-from veropt.optimiser.utility import DataShape, SavableClass
+from veropt.optimiser.utility import DataShape
+from veropt.optimiser.saver_loader_utility import SavableClass
 
 
 class Normaliser(SavableClass, metaclass=abc.ABCMeta):
@@ -16,6 +17,7 @@ class Normaliser(SavableClass, metaclass=abc.ABCMeta):
             tensor: torch.Tensor,
             norm_dim: int = DataShape.index_points
     ) -> 'NormaliserZeroMeanUnitVariance':
+
         pass
 
     @abc.abstractmethod
@@ -97,22 +99,3 @@ class NormaliserZeroMeanUnitVariance(Normaliser):
                 'variances': self.variances,
             }
         }
-
-
-# TODO: See if we can do this automatically with getmembers from inspect
-normalisers = [NormaliserZeroMeanUnitVariance]
-
-def rehydrate_normaliser(
-        name: str,
-        saved_state: dict,
-) -> Normaliser:
-
-    for normaliser in normalisers:
-        if normaliser.name == name:
-            return normaliser.from_saved_state(
-                saved_state=saved_state
-            )
-
-    else:
-        raise ValueError(f"Unknown normaliser '{name}'")
-

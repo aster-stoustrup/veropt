@@ -6,8 +6,8 @@ from typing import Literal, Optional, TypedDict, Union
 import torch
 
 from veropt.optimiser.initial_points import InitialPointsGenerationMode
-from veropt.optimiser.utility import DataShape, PredictionDict, SavableClass, SavableDataClass, \
-    TensorWithNormalisationFlag
+from veropt.optimiser.utility import DataShape, PredictionDict, TensorWithNormalisationFlag
+from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
 
 
 class OptimisationMode(StrEnum):

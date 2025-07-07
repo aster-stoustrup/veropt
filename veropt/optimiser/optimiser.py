@@ -20,9 +20,10 @@ from veropt.optimiser.optimiser_utility import (
     list_with_floats_to_string
 )
 from veropt.optimiser.prediction import Predictor
-from veropt.optimiser.utility import DataShape, SavableClass, TensorWithNormalisationFlag, \
+from veropt.optimiser.utility import DataShape, TensorWithNormalisationFlag, \
     check_variable_and_objective_shapes, \
-    enforce_amount_of_positional_arguments, rehydrate_object, unpack_flagged_variables_objectives_from_kwargs
+    enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs
+from veropt.optimiser.saver_loader_utility import SavableClass, rehydrate_object
 
 
 # TODO: Fix torch/np conflict over float size
@@ -176,7 +177,7 @@ class BayesianOptimiser(SavableClass):
         predictor = rehydrate_object(
             superclass=Predictor,
             name=saved_state['predictor']['name'],
-            saved_state=saved_state['predictor']['state']
+            saved_state=saved_state['predictor']['state'],
         )
 
         normaliser_variables = rehydrate_object(

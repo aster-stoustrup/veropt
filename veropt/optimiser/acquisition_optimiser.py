@@ -10,7 +10,8 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
-from veropt.optimiser.utility import DataShape, SavableClass, SavableDataClass
+from veropt.optimiser.utility import DataShape
+from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
 
 
 class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):

@@ -7,12 +7,15 @@ import torch
 from veropt.optimiser.acquisition import BotorchAcquisitionFunction
 from veropt.optimiser.acquisition_optimiser import AcquisitionOptimiser
 from veropt.optimiser.model import GPyTorchFullModel
-from veropt.optimiser.utility import DataShape, PredictionDict, SavableClass, check_variable_and_objective_shapes, \
+from veropt.optimiser.utility import DataShape, PredictionDict, check_variable_and_objective_shapes, \
     check_variable_objective_values_matching, \
-    enforce_amount_of_positional_arguments, rehydrate_object, unpack_variables_objectives_from_kwargs
+    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
+from veropt.optimiser.saver_loader_utility import SavableClass, rehydrate_object
 
 
 class Predictor(SavableClass, metaclass=abc.ABCMeta):
+
+    name: str
 
     @abc.abstractmethod
     def predict_values(
@@ -59,6 +62,9 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
 
 
 class BotorchPredictor(Predictor):
+
+    name = 'botorch_predictor'
+
     def __init__(
             self,
             model: GPyTorchFullModel,
@@ -198,9 +204,12 @@ class BotorchPredictor(Predictor):
 
     def gather_dicts_to_save(self) -> dict:
         return {
-            'model': self.model.gather_dicts_to_save(),
-            'acquisition_function': self.acquisition_function.gather_dicts_to_save(),
-            'acquisition_optimiser': self.acquisition_optimiser.gather_dicts_to_save()
+            'name': self.name,
+            'state': {
+                'model': self.model.gather_dicts_to_save(),
+                'acquisition_function': self.acquisition_function.gather_dicts_to_save(),
+                'acquisition_optimiser': self.acquisition_optimiser.gather_dicts_to_save()
+            }
         }
 
     @classmethod

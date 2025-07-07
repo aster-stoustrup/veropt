@@ -119,8 +119,8 @@ def test_add_new_points_interface_objective() -> None:
         dim=DataShape.index_dimensions
     )
 
-    assert torch.eq(optimiser._evaluated_variables_real_units, expected_var_tensor)
-    assert torch.eq(optimiser._evaluated_objectives_real_units, expected_obj_tensor)
+    assert torch.equal(optimiser._evaluated_variables_real_units, expected_var_tensor)
+    assert torch.equal(optimiser._evaluated_objectives_real_units, expected_obj_tensor)
 
 
 def test_add_new_points_empty_tensors() -> None:

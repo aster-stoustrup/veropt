@@ -3,7 +3,7 @@ import functools
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Iterator, Optional, Self, TypedDict, Union, Unpack
+from typing import Callable, Iterator, Optional, Self, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
@@ -11,10 +11,11 @@ import torch
 from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
-from veropt.optimiser.utility import SavableClass, SavableDataClass, _validate_typed_dict, \
+from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass, rehydrate_object
+from veropt.optimiser.utility import _validate_typed_dict, \
     check_variable_and_objective_shapes, \
     check_variable_objective_values_matching, \
-    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs, SavableSettings
+    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
@@ -67,6 +68,21 @@ class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorc
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
+# TODO: Move to different file
+def format_json_state_dict(
+        state_dict: dict,
+):
+    formatted_dict = {}
+
+    for key, value in state_dict.items():
+        if "inf" in value:
+            formatted_dict[key] = torch.tensor(float(value))
+        else:
+            formatted_dict[key] = torch.tensor(value)
+
+    return formatted_dict
+
+
 class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
 
     name: str
@@ -76,12 +92,15 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             likelihood: gpytorch.likelihoods.GaussianLikelihood,
             mean_module: gpytorch.means.Mean,
             kernel: gpytorch.kernels.Kernel,
+            n_variables: int,
             settings_class: SavableDataClass
     ) -> None:
 
         self.likelihood = likelihood
         self.mean_module = mean_module
         self.kernel = kernel
+
+        self.n_variables = n_variables
 
         self.settings = settings_class
 
@@ -116,7 +135,27 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             saved_state: dict
     ) -> 'GPyTorchSingleModel':
 
-        raise NotImplementedError
+        model = cls.from_n_variables_and_settings(
+            n_variables=saved_state['n_variables'],
+            settings=saved_state['settings']
+        )
+
+        if len(saved_state['state_dict']) > 0:
+            model.initialise_model_from_state_dict(
+                train_inputs=torch.tensor(saved_state['train_inputs']),
+                train_targets=torch.tensor(saved_state['train_targets']),
+                state_dict=format_json_state_dict(saved_state['state_dict']),
+            )
+
+        return model
+
+    @abc.abstractmethod
+    def _set_up_trained_parameters(self) -> None:
+        pass
+
+    @abc.abstractmethod
+    def _set_up_model_constraints(self) -> None:
+        pass
 
     def initialise_model_with_data(
             self,
@@ -132,18 +171,48 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             kernel=self.kernel
         )
 
+        self._set_up_trained_parameters()
+
+        self._set_up_model_constraints()
+
+    def initialise_model_from_state_dict(
+            self,
+            train_inputs: torch.Tensor,
+            train_targets: torch.Tensor,
+            state_dict: dict
+    ):
+
+        self.initialise_model_with_data(
+            train_inputs=train_inputs,
+            train_targets=train_targets
+        )
+
+        self.model_with_data.load_state_dict(
+            state_dict=state_dict
+        )
+
+
     def gather_dicts_to_save(self) -> dict:
 
         if self.model_with_data is not None:
             state_dict = self.model_with_data.state_dict()
+            train_inputs = self.model_with_data.train_inputs
+            train_targets = self.model_with_data.train_targets
 
         else:
             state_dict = {}
+            train_inputs = {}
+            train_targets = {}
 
         return {
             'name': self.name,
-            'state_dict': state_dict,
-            'settings': self.settings.gather_dicts_to_save()
+            'state': {
+                'state_dict': state_dict,
+                'train_inputs': train_inputs,
+                'train_targets': train_targets,
+                'n_variables': self.n_variables,
+                'settings': self.settings.gather_dicts_to_save()
+            }
         }
 
     def set_constraint(
@@ -273,6 +342,7 @@ class MaternSingleModel(GPyTorchSingleModel):
             likelihood=likelihood,
             mean_module=mean_module,
             kernel=kernel,
+            n_variables=n_variables,
             settings_class=settings_class
         )
 
@@ -293,7 +363,6 @@ class MaternSingleModel(GPyTorchSingleModel):
             n_variables=n_variables,
             **settings
         )
-
 
     def _set_up_trained_parameters(self) -> None:
 
@@ -319,16 +388,7 @@ class MaternSingleModel(GPyTorchSingleModel):
 
         self.trained_parameters = parameter_group_list
 
-    def initialise_model_with_data(
-            self,
-            train_inputs: torch.Tensor,
-            train_targets: torch.Tensor,
-    ) -> None:
-
-        super().initialise_model_with_data(
-            train_inputs=train_inputs,
-            train_targets=train_targets
-        )
+    def _set_up_model_constraints(self) -> None:
 
         self.change_lengthscale_constraints(
             lower_bound=self.settings.lengthscale_lower_bound,
@@ -342,8 +402,6 @@ class MaternSingleModel(GPyTorchSingleModel):
         self.set_noise_constraint(
             lower_bound=self.settings.noise_lower_bound
         )
-
-        self._set_up_trained_parameters()
 
     def change_lengthscale_constraints(
             self,
@@ -398,19 +456,39 @@ class MaternSingleModel(GPyTorchSingleModel):
         )
 
 
-class TorchModelOptimiser:
+class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):
 
-    name: Optional[str] = None
+    name: str
 
     def __init__(
             self,
             optimiser_class: type[torch.optim.Optimizer],
             optimiser_settings: Optional[dict] = None
     ) -> None:
+
         self.optimiser: Optional[torch.optim.Optimizer] = None
         self.optimiser_class = optimiser_class
 
+        # TODO: Should probably do the dataclass thing here as well
         self.optimiser_settings = optimiser_settings or {}
+
+    def gather_dicts_to_save(self) -> dict:
+
+        return {
+            'name': self.name,
+            'state': {
+                'settings': self.optimiser_settings
+            }
+        }
+
+    @classmethod
+    def from_saved_state(cls, saved_state: dict) -> 'TorchModelOptimiser':
+
+        # TODO: Make this nicer?
+        #   - This is essentially assuming an init like in the Adam implementation
+        return cls(
+            **saved_state['settings']
+        )
 
     def initiate_optimiser(
             self,
@@ -452,6 +530,7 @@ class GPyTorchTrainingParametersInputDict(TypedDict, total=False):
     learning_rate: float
     loss_change_to_stop: float
     max_iter: int
+    verbose: bool
 
 
 @dataclass
@@ -459,9 +538,12 @@ class GPyTorchTrainingParameters(SavableDataClass):
     learning_rate: float = 0.1
     loss_change_to_stop: float = 1e-6  # TODO: Find optimal value for this?
     max_iter: int = 10_000
+    verbose: bool = True
 
 
 class GPyTorchFullModel(SurrogateModel, SavableClass):
+
+    name = 'gpytorch_full_model'
 
     def __init__(
             self,
@@ -469,13 +551,10 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             n_objectives: int,
             single_model_list: list[GPyTorchSingleModel],
             model_optimiser: TorchModelOptimiser,
-            verbose: bool = True,
-            **kwargs: Unpack[GPyTorchTrainingParametersInputDict]
+            training_settings: GPyTorchTrainingParameters
     ) -> None:
 
-        self.training_settings = GPyTorchTrainingParameters(
-            **kwargs
-        )
+        self.training_settings = training_settings
 
         assert len(single_model_list) == n_objectives, "Number of objectives must match the length of the model list"
 
@@ -486,11 +565,68 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
         self._model_optimiser = model_optimiser
 
-        self.verbose = verbose
-
         super().__init__(
             n_variables=n_variables,
             n_objectives=n_objectives
+        )
+
+    @classmethod
+    def from_the_beginning(
+            cls,
+            n_variables: int,
+            n_objectives: int,
+            single_model_list: list[GPyTorchSingleModel],
+            model_optimiser: TorchModelOptimiser,
+            **kwargs: Unpack[GPyTorchTrainingParametersInputDict]
+    ) -> 'GPyTorchFullModel':
+
+        training_settings = GPyTorchTrainingParameters(
+            **kwargs
+        )
+
+        return cls(
+            n_variables=n_variables,
+            n_objectives=n_objectives,
+            single_model_list=single_model_list,
+            model_optimiser=model_optimiser,
+            training_settings=training_settings
+        )
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> 'GPyTorchFullModel':
+
+        model_list = []
+
+        for model_dict in saved_state['model_dicts'].values():
+            model_list.append(rehydrate_object(
+                superclass=GPyTorchSingleModel,
+                name=model_dict['name'],
+                saved_state=model_dict['state']
+            ))
+
+        assert len(model_list) == saved_state['n_objectives']
+
+        settings = rehydrate_object(
+            superclass=GPyTorchTrainingParameters,
+            name=cls.name,
+            saved_state=saved_state['settings']
+        )
+
+        model_optimiser = rehydrate_object(
+            superclass=TorchModelOptimiser,
+            name=saved_state['model_optimiser']['name'],
+            saved_state=saved_state['model_optimiser']['state']
+        )
+
+        return cls(
+            n_variables=saved_state['n_variables'],
+            n_objectives=saved_state['n_objectives'],
+            single_model_list=model_list,
+            model_optimiser=model_optimiser,
+            training_settings=settings
         )
 
     @staticmethod
@@ -582,13 +718,23 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
         return estimated_objective_values
 
-    @classmethod
-    def from_saved_state(
-            cls,
-            saved_state: dict
-    ) -> 'GPyTorchFullModel':
+    def gather_dicts_to_save(self) -> dict:
 
-        raise NotImplementedError
+        model_dicts: dict[str, dict] = {}
+
+        for model_no, model in enumerate(self._model_list):
+            model_dicts[f'model_{model_no}'] = model.gather_dicts_to_save()
+
+        return {
+            'name': self.name,
+            'state': {
+                'model_dicts': model_dicts,
+                'settings': self.training_settings.gather_dicts_to_save(),
+                'model_optimiser': self._model_optimiser.gather_dicts_to_save(),
+                'n_variables': self.n_variables,
+                'n_objectives': self.n_objectives,
+            }
+        }
 
     @check_variable_objective_values_matching
     @_check_input_dimensions
@@ -652,20 +798,6 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
         return self._model
 
-    def gather_dicts_to_save(self) -> dict:
-
-        model_dicts: dict[str, dict] = {}
-
-        for model_no, model in enumerate(self._model_list):
-            model_dicts[f'model_{model_no}'] = model.gather_dicts_to_save()
-
-        settings = self.training_settings.gather_dicts_to_save()
-
-        return {
-            'model_dicts': model_dicts,
-            'settings': settings,
-        }
-
     @property
     def model_has_been_trained(self):
         if self._model is None:
@@ -702,7 +834,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
             self._model_optimiser.optimiser.step()
 
-            if self.verbose:
+            if self.training_settings.verbose:
                 print(
                     f"Training model... Iteration {iteration} (of a maximum {self.training_settings.max_iter})"
                     f" - MLL: {loss.item():.3f}",
@@ -714,7 +846,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
                 warnings.warn("Stopped training due to maximum iterations reached.")
                 break
 
-        if self.verbose:
+        if self.training_settings.verbose:
             print("\n")
 
     def _initiate_optimiser(self) -> None:

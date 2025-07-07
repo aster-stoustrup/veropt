@@ -1,5 +1,5 @@
-from abc import ABC
-from typing import Literal, Optional, Self
+import abc
+from typing import Literal, Optional
 
 import botorch
 import torch
@@ -7,11 +7,12 @@ import torch
 from veropt.optimiser.objective import CallableObjective
 
 
-class BotorchPracticeObjective(CallableObjective, ABC):
+class BotorchPracticeObjective(CallableObjective, metaclass=abc.ABCMeta):
 
     def __init__(
             self,
-            bounds: list[list[float]],
+            bounds_lower: list[float],
+            bounds_upper: list[float],
             n_variables: int,
             n_objectives: int,
             function: botorch.test_functions.SyntheticTestFunction,
@@ -25,7 +26,8 @@ class BotorchPracticeObjective(CallableObjective, ABC):
         self.function = function
 
         super().__init__(
-            bounds=bounds,
+            bounds_lower=bounds_lower,
+            bounds_upper=bounds_upper,
             n_variables=n_variables,
             n_objectives=n_objectives,
             variable_names=variable_names,
@@ -48,13 +50,13 @@ class Hartmann(BotorchPracticeObjective):
 
         assert n_variables in [3, 4, 6]
 
-        bounds = [[0.0] * 6, [1.0] * 6]
         n_objectives = 1
 
         function = botorch.test_functions.Hartmann(negate=True)
 
         super().__init__(
-            bounds=bounds,
+            bounds_lower=[0.0] * n_variables,
+            bounds_upper=[1.0] * n_variables,
             n_variables=n_variables,
             n_objectives=n_objectives,
             function=function,
@@ -62,7 +64,7 @@ class Hartmann(BotorchPracticeObjective):
         )
 
     @classmethod
-    def from_saved_state(cls, saved_state: dict) -> Self:
+    def from_saved_state(cls, saved_state: dict) -> 'Hartmann':
         return cls(
             n_variables=saved_state['n_variables']
         )
