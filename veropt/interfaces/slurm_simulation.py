@@ -4,7 +4,7 @@ import stat
 import time
 from typing import Union, Literal
 from veropt.interfaces.simulation import Simulation, SimulationResult, SimulationResultsDict, SimulationRunner, SimulationRunnerConfig
-from veropt.interfaces.utility import Config
+from veropt.interfaces.utility import Config, run_subprocess
 from veropt.interfaces.veros_utility import edit_veros_run_script
 
 
@@ -70,14 +70,15 @@ class SlurmSimulation(Simulation):
             simulation_id: str,
             run_script_directory: str,
             output_filename: str,
-            batch_script_file: str,
+            batch_script_file: str
     ):
 
         self.id = simulation_id
         self.run_script_directory = run_script_directory
         self.output_filename = output_filename
         self.batch_script_file = batch_script_file
-        self.command = f"cd {run_script_directory} && sbatch --parsable {batch_script_file}"
+        command = f"sbatch --parsable {batch_script_file}"
+        self.command_arguments = command.split(" ")
         
     def run(
             self,
@@ -85,22 +86,19 @@ class SlurmSimulation(Simulation):
     ) -> SimulationResult:
         
         assert os.path.isfile(self.batch_script_file), "Batch script not found."
-        
-        pipe = subprocess.Popen(args=self.command,
-                                shell=True,
-                                executable="/bin/bash",
-                                stdout=subprocess.PIPE, 
-                                stderr=subprocess.PIPE,
-                                text=True)
+
+        stdout, stderr = run_subprocess(
+            command_arguments=self.command_arguments,
+            directory=self.run_script_directory)
 
         stdout_file = os.path.join(self.run_script_directory, f"{self.id}.out")
         stderr_file = os.path.join(self.run_script_directory, f"{self.id}.err")
 
         with open(stdout_file, "w") as f_out:
-            f_out.write(pipe.stdout.read())
+            f_out.write(stdout)
 
         with open(stderr_file, "w") as f_err:
-            f_err.write(pipe.stderr.read())
+            f_err.write(stderr)
 
         return SimulationResult(
             simulation_id=self.id,

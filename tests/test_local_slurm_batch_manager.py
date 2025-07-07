@@ -1,14 +1,17 @@
 from veropt.interfaces.slurm_simulation import SlurmVerosConfig, SlurmVerosRunner
-from veropt.interfaces.batch_manager import LocalSlurmBatchManager, LocalSlurmBatchManagerConfig
+from veropt.interfaces.batch_manager import LocalSlurmBatchManager
 from veropt.interfaces.experiment_utility import ExperimentalState, Point
 
 runner_config = SlurmVerosConfig.load("/groups/ocean/mmroz/veropt_dev/veropt/tests/configs/slurm_veros_config.json")
 simulation_runner = SlurmVerosRunner(config=runner_config)
 
-batch_manager_config = LocalSlurmBatchManagerConfig.load("/groups/ocean/mmroz/veropt_dev/veropt/tests/configs/local_slurm_batch_manager_config.json")
 batch_manager = LocalSlurmBatchManager(
     simulation_runner=simulation_runner,
-    config=batch_manager_config
+    run_script_filename="acc",
+    run_script_root_directory="/groups/ocean/mmroz/veropt_dev/test_sbatch/source",
+    results_directory="/groups/ocean/mmroz/veropt_dev/test_sbatch/results",
+    output_filename="test",
+    check_job_status_sleep_time=10
 )
 
 dict_of_parameters = {

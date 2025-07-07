@@ -8,14 +8,14 @@ from typing import TypeVar, Generic, List, Dict, Literal, Union, Tuple, Optional
 from pydantic import BaseModel
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner, SimulationResultsDict
 from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
-from veropt.interfaces.utility import Config, create_directory, copy_files
+from veropt.interfaces.utility import Config, create_directory, copy_files, shell_subprocess
 
 
 SR = TypeVar("SR", bound=SimulationRunner)
 ConfigType = TypeVar("ConfigType", bound=BaseModel)
 
 
-def get_job_status_dict(
+def _get_job_status_dict(
         output: str
 ) -> dict[str, str]:
     job_status_dict = {}
@@ -26,7 +26,7 @@ def get_job_status_dict(
     return job_status_dict
 
 
-def check_if_job_completed(
+def _check_if_job_completed(
         job_status_dict: dict,
         error: str
 ) -> bool:
@@ -54,8 +54,21 @@ class BatchManager(ABC, Generic[SR]):
     def __init__(
             self,
             simulation_runner: SR,
+            run_script_filename: str,
+            run_script_root_directory: str,
+            results_directory: str,
+            output_filename: str,
+            check_job_status_sleep_time: Optional[int],
+            remote: bool = False
     ):
         self.simulation_runner = simulation_runner
+        self.run_script_filename = run_script_filename
+        self.run_script_root_directory = run_script_root_directory
+        self.results_directory = results_directory
+        self.output_filename = output_filename
+        self.check_job_status_sleep_time = 60 if check_job_status_sleep_time is None \
+            else check_job_status_sleep_time 
+        self.remote = remote
 
     @abstractmethod
     def run_batch(
@@ -65,166 +78,27 @@ class BatchManager(ABC, Generic[SR]):
     ) -> SimulationResultsDict:
         ...
 
-
-class BatchManagerFactory:
-    @staticmethod
-    def make_batch_manager_config(
-            experiment_mode: str,
-            run_script_filename: str,
-            run_script_root_directory: str,
-            output_filename: str
-    ) -> BaseModel:
-
-        if experiment_mode == ExperimentMode.LOCAL:
-
-            return LocalBatchManagerConfig(
-                run_script_filename=run_script_filename,
-                run_script_root_directory=run_script_root_directory,
-                output_filename=output_filename
-                )
-
-        else:
-            raise NotImplementedError
-
-    @staticmethod
-    def make_batch_manager(
-            experiment_mode: str,
-            simulation_runner: SR,
-            config: BaseModel
-    ) -> BatchManager:
-
-        if experiment_mode == ExperimentMode.LOCAL:
-
-            assert isinstance(config, LocalBatchManagerConfig)
-
-            return LocalBatchManager(
-                simulation_runner=simulation_runner,
-                config=config
-                )
-
-        elif experiment_mode == ExperimentMode.LOCAL_SLURM:
-
-            assert isinstance(config, LocalSlurmBatchManagerConfig)
-
-            return LocalSlurmBatchManager(
-                simulation_runner=simulation_runner,
-                config=config
-                )
-
-        elif experiment_mode == ExperimentMode.REMOTE_SLURM:
-
-            assert isinstance(config, RemoteSlurmBatchManagerConfig)
-
-            return RemoteSlurmBatchManager(
-                simulation_runner=simulation_runner,
-                config=config
-                )
-
-        else:
-
-            raise ValueError(f"Unsupported mode: {experiment_mode!r}")
-
-
-class LocalBatchManagerConfig(Config):
-    run_script_filename: str
-    run_script_root_directory: str
-    results_directory: str
-    output_filename: str
-
-
-# TODO: should latest_point be read from the directory structure?
-class LocalBatchManager(BatchManager):
-    def __init__(
-            self,
-            simulation_runner: SR,
-            config: LocalBatchManagerConfig
-    ):
-        self.simulation_runner = simulation_runner
-        self.config = config
-
-    def run_batch(
-            self,
-            dict_of_parameters: dict[int, dict],
-            experimental_state: ExperimentalState
-    ) -> SimulationResultsDict:
-
-        results = {}
-
-        # TODO: This is fine for now but could be done better; however it is important to check
-        #       - If use Process manager instead of for loop, does Simulation structure have to change?
-        #       - Support for running simulation on GPUs!!!
-        for i, parameters in dict_of_parameters.items():
-
-            simulation_id = PathManager.make_simulation_id(i=i)
-            result_i_directory = os.path.join(
-                self.config.results_directory,
-                simulation_id
-                )
-
-            create_directory(path=result_i_directory)
-
-            copy_files(
-                source_directory=self.config.run_script_root_directory,
-                destination_directory=result_i_directory
-                )
-
-            experimental_state.points[i].state = "Simulation started"
-            result = self.simulation_runner.save_set_up_and_run(
-                simulation_id=simulation_id,
-                parameters=parameters,
-                run_script_directory=result_i_directory,
-                run_script_filename=self.config.run_script_filename,
-                output_filename=self.config.output_filename
-                )
-            experimental_state.points[i].state = "Simulation completed"
-
-            experimental_state.points[i].result = result
-
-            results[i] = result
-
-            experimental_state.save_to_json(experimental_state.state_json)
-
-        return results
-
-
-class LocalSlurmBatchManagerConfig(Config):
-    run_script_filename: str
-    run_script_root_directory: str
-    results_directory: str
-    output_filename: str
-    check_job_status_sleep_time: int
-
-
-class LocalSlurmBatchManager(BatchManager):
-    def __init__(
-            self,
-            simulation_runner: SR,
-            config: LocalSlurmBatchManagerConfig
-    ):
-        self.simulation_runner = simulation_runner
-        self.config = config
-
-    def set_up_run(
+    def _set_up_directory(
             self,
             i: int
     ) -> tuple[str, str]:
         
         simulation_id = PathManager.make_simulation_id(i=i)
         result_i_directory = os.path.join(
-            self.config.results_directory,
+            self.results_directory,
             simulation_id
             )
 
         create_directory(path=result_i_directory)
 
         copy_files(
-            source_directory=self.config.run_script_root_directory,
+            source_directory=self.run_script_root_directory,
             destination_directory=result_i_directory
             )
         
         return simulation_id, result_i_directory
 
-    def submit_job(
+    def _submit_job(
             self,
             parameters: dict[str, float],
             simulation_id: str,
@@ -235,8 +109,8 @@ class LocalSlurmBatchManager(BatchManager):
                 simulation_id=simulation_id,
                 parameters=parameters,
                 run_script_directory=result_i_directory,
-                run_script_filename=self.config.run_script_filename,
-                output_filename=self.config.output_filename
+                run_script_filename=self.run_script_filename,
+                output_filename=self.output_filename
                 )
         
         with open(result.stdout_file, "r") as file:
@@ -251,27 +125,23 @@ class LocalSlurmBatchManager(BatchManager):
         
         return job_id, result
     
-    def check_job_status(
+    def _check_job_status(
             self,
             job_id: int,
-            state: str
+            state: str,
+            remote: bool
     ) -> str:
         
-        pipe = subprocess.Popen(f"scontrol show job {job_id}",
-                                shell=True,
-                                executable="/bin/bash",
-                                stdout=subprocess.PIPE, 
-                                stderr=subprocess.PIPE,
-                                text=True)
-        
-        stdout = pipe.stdout.read()
-        stderr = pipe.stderr.read()
+        stdout, stderr = shell_subprocess(
+            command=f"scontrol show job {job_id}",
+            remote=remote
+            )
 
         if stdout:
-            job_status_dict = get_job_status_dict(output=stdout)
+            job_status_dict = _get_job_status_dict(output=stdout)
             print("Job {jd[JobId]}/{jd[JobName]} status: {jd[JobState]} (Reason: {jd[Reason]}).".format(jd=job_status_dict))
 
-            completed = check_if_job_completed(
+            completed = _check_if_job_completed(
                 job_status_dict=job_status_dict,
                 error=stderr
                 )
@@ -291,8 +161,76 @@ class LocalSlurmBatchManager(BatchManager):
             time.sleep(60)
 
         return state
+    
+
+def batch_manager(
+            experiment_mode: str,
+            simulation_runner: SR,
+            run_script_filename: str,
+            run_script_root_directory: str,
+            results_directory: str,
+            output_filename: str,
+            check_job_status_sleep_time: int = 60
+    ) -> BatchManager:
+        
+        batch_manager_classes = {
+            ExperimentMode.LOCAL: LocalBatchManager,
+            ExperimentMode.LOCAL_SLURM: LocalSlurmBatchManager,
+            ExperimentMode.REMOTE_SLURM: RemoteSlurmBatchManager
+            }
+        
+        assert experiment_mode in ExperimentMode, f"Unsupported experiment mode: {experiment_mode}."
+
+        remote = True if experiment_mode == ExperimentMode.REMOTE_SLURM else False
+        
+        BatchManagerClass = batch_manager_classes[experiment_mode]
+
+        return BatchManagerClass(
+            simulation_runner=simulation_runner,
+            run_script_filename=run_script_filename,
+            run_script_root_directory=run_script_root_directory,
+            results_directory=results_directory,
+            output_filename=output_filename,
+            check_job_status_sleep_time=check_job_status_sleep_time,
+            remote=remote
+            )
 
 
+class LocalBatchManager(BatchManager):
+    def run_batch(
+            self,
+            dict_of_parameters: dict[int, dict],
+            experimental_state: ExperimentalState
+    ) -> SimulationResultsDict:
+
+        results = {}
+
+        # TODO: This is fine for now but could be done better; however it is important to check
+        #       - If use Process manager instead of for loop, does Simulation structure have to change?
+        #       - Support for running simulation on GPUs!!!
+        for i, parameters in dict_of_parameters.items():
+            simulation_id, result_i_directory = self._set_up_directory(i=i)
+
+            experimental_state.points[i].state = "Simulation started"
+            result = self.simulation_runner.save_set_up_and_run(
+                simulation_id=simulation_id,
+                parameters=parameters,
+                run_script_directory=result_i_directory,
+                run_script_filename=self.run_script_filename,
+                output_filename=self.output_filename
+                )
+            experimental_state.points[i].state = "Simulation completed"
+
+            experimental_state.points[i].result = result
+
+            results[i] = result
+
+            experimental_state.save_to_json(experimental_state.state_json)
+
+        return results
+
+
+class LocalSlurmBatchManager(BatchManager):
     def run_batch(
             self,
             dict_of_parameters: dict[int, dict],
@@ -302,8 +240,8 @@ class LocalSlurmBatchManager(BatchManager):
         results = {}
 
         for i, parameters in dict_of_parameters.items():
-            simulation_id, result_i_directory = self.set_up_run(i=i)
-            job_id, result = self.submit_job(
+            simulation_id, result_i_directory = self._set_up_directory(i=i)
+            job_id, result = self._submit_job(
                 parameters=parameters,
                 simulation_id=simulation_id,
                 result_i_directory=result_i_directory
@@ -332,9 +270,12 @@ class LocalSlurmBatchManager(BatchManager):
             for i in range(len(submitted_jobs)):
                 point_id, job_id = submitted_points[i], submitted_jobs[i]
 
-                state = self.check_job_status(
+                state = self._check_job_status(
                     job_id=job_id,
-                    state=experimental_state.points[point_id].state)
+                    state=experimental_state.points[point_id].state,
+                    remote=self.remote
+                    )
+                
                 experimental_state.points[point_id].state = state
                 if state == "Simulation completed":
                     pending_jobs &= ~(1 << i)
@@ -349,7 +290,7 @@ class LocalSlurmBatchManager(BatchManager):
 
                 experimental_state.save_to_json(experimental_state.state_json)
 
-                for i in tqdm.tqdm(range(self.config.check_job_status_sleep_time), "Time until next server poll"):
+                for i in tqdm.tqdm(range(self.check_job_status_sleep_time), "Time until next server poll"):
                     time.sleep(1)
 
         experimental_state.save_to_json(experimental_state.state_json)
@@ -357,19 +298,7 @@ class LocalSlurmBatchManager(BatchManager):
         return results
 
 
-class RemoteSlurmBatchManagerConfig(Config):
-    ...
-
-
 class RemoteSlurmBatchManager(BatchManager):
-    def __init__(
-            self,
-            simulation_runner: SR,
-            config: RemoteSlurmBatchManagerConfig
-    ):
-        self.simulation_runner = simulation_runner
-        self.config = config
-
     def run_batch(
             self,
             dict_of_parameters: dict[int, dict],

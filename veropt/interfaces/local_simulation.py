@@ -7,7 +7,6 @@ from typing import Optional, Unpack, Union, TypedDict, Literal, Dict, List
 from veropt.interfaces.simulation import SimulationRunnerConfig, SimulationResult, Simulation, SimulationRunner
 from veropt.interfaces.veros_utility import edit_veros_run_script
 from veropt.interfaces.utility import Config
-
 import torch
 from pydantic import BaseModel
 
@@ -15,44 +14,61 @@ from pydantic import BaseModel
 class EnvManager(ABC):
     def __init__(
             self,
-            path_to_env: str,
+            env_root: str,
             env_name: str,
-            command: str
+            command_arguments: list[str]
     ):
 
-        self.path_to_env = path_to_env
+        self.env_root = env_root
         self.env_name = env_name
-        self.command = command
+        self.command_arguments = command_arguments
 
     @abstractmethod
-    def run_in_env(self) -> subprocess.CompletedProcess:
+    def run_in_env(
+            self,
+            directory: str
+    ) -> subprocess.CompletedProcess:
         ...
 
 
-class Conda(EnvManager):
-    def run_in_env(self) -> subprocess.CompletedProcess:
+class Venv(EnvManager):
+    def run_in_env(
+            self,
+            directory: str
+    ) -> subprocess.CompletedProcess:
+        python_exe = self.env_root / "bin" / "python"
+        command = [str(python_exe), *self.command_arguments]
 
-        # "path_to_env" is the path to the conda installation, not the environment
-        full_command = f"source {self.path_to_env}/bin/activate {self.env_name} && {self.command}"
+        env = os.environ.copy()
+        env["VIRTUAL_ENV"] = str(self.env_root)
+        env["PATH"] = f"{self.env_root/'bin'}:{env['PATH']}"
 
         return subprocess.run(
-            full_command,
-            shell=True,
-            executable="/bin/bash",
+            args=command,
+            cwd=directory,
+            env=env,
             capture_output=True,
             text=True
             )
 
 
-class Venv(EnvManager):
-    def run_in_env(self) -> subprocess.CompletedProcess:
+class Conda(EnvManager):
+    def run_in_env(
+            self,
+            directory: str
+    ) -> subprocess.CompletedProcess:
+        conda_env_path = self.env_root / "envs" / self.env_name
+        python_exe = conda_env_path / "bin" / "python"
+        command = [str(python_exe), *self.command_arguments]
 
-        full_command = f"source {self.path_to_env}/bin/activate && {self.command}"
+        env = os.environ.copy()
+        env["CONDA_PREFIX"] = str(conda_env_path)
+        env["PATH"] = f"{conda_env_path/'bin'}:{env['PATH']}"
 
         return subprocess.run(
-            full_command,
-            shell=True,
-            executable="/bin/bash",
+            args=command,
+            cwd=directory,
+            env=env,
             capture_output=True,
             text=True
             )
@@ -79,7 +95,7 @@ class LocalSimulation(Simulation):
             parameters: dict[str, float]
     ) -> SimulationResult:
 
-        result = self.env_manager.run_in_env()
+        result = self.env_manager.run_in_env(directory=self.run_script_directory)
 
         stdout_file = os.path.join(self.run_script_directory, f"{self.id}.out")
         stderr_file = os.path.join(self.run_script_directory, f"{self.id}.err")
@@ -164,12 +180,11 @@ class MockSimulationRunner(SimulationRunner):
 class LocalVerosConfig(Config):
     env_manager: Literal["conda", "venv"]
     env_name: str
-    path_to_env: str
+    env_root: str
     veros_path: str
     backend: Literal["jax", "numpy"]
     device: Literal["cpu", "gpu"]
     float_type: Literal["float32", "float64"]
-    command: Optional[str] = None
     keep_old_params: bool = False
 
 
@@ -181,15 +196,13 @@ class LocalVerosRunner(SimulationRunner):
     ) -> None:
         self.config = config
 
-    # TODO: Should there be a way to override the command to include custom settings?
     def _make_command(
             self,
-            run_script: str,
-            run_script_directory: str
+            run_script: str
     ) -> str:
         gpu_string = f"--backend {self.config.backend} --device {self.config.device}"
         # TODO: Using "veros_path" here is misleading. It should be the path to the Veros executable.
-        command = f"cd {run_script_directory} && {self.config.veros_path} run {gpu_string}" \
+        command = f"{self.config.veros_path} run {gpu_string}" \
                   f" --float-type {self.config.float_type} {run_script}"
         return command
 
@@ -209,22 +222,20 @@ class LocalVerosRunner(SimulationRunner):
             parameters=parameters
             ) if not self.config.keep_old_params else None
 
-        command = self._make_command(
-            run_script=run_script, 
-            run_script_directory=run_script_directory
-            ) if self.config.command is None else self.config.command
+        command_arguments = self._make_command(run_script=run_script).split(" ")
 
         # TODO: This is bad. It should be a factory method or similar?
         env_manager_classes = {
             "conda": Conda,
             "venv": Venv,
             }
+        
         EnvManagerClass = env_manager_classes[self.config.env_manager]
 
         env_manager = EnvManagerClass(
-            path_to_env=self.config.path_to_env,
+            env_root=self.config.env_root,
             env_name=self.config.env_name,
-            command=command
+            command_arguments=command_arguments
             )
 
         simulation = LocalSimulation(

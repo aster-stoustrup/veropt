@@ -1,10 +1,28 @@
 from pydantic import BaseModel
 import json
+import subprocess
 import os
 import shutil
 import sys
 from typing import Self, Union, Optional, Type, TypeVar
 from abc import abstractmethod
+
+
+def run_subprocess(
+        command_arguments: list[str],
+        directory: str
+) -> tuple[str, str]:
+    
+    pipe = subprocess.Popen(args=command_arguments,
+                            cwd=directory,
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.PIPE,
+                            text=True)
+        
+    stdout = pipe.stdout.read()
+    stderr = pipe.stderr.read()
+
+    return stdout, stderr
 
 
 def create_directory(path: str) -> None:
