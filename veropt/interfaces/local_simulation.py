@@ -18,7 +18,7 @@ class EnvManager(ABC):
             path_to_env: str,
             env_name: str,
             command: str
-    ) -> None:
+    ):
 
         self.path_to_env = path_to_env
         self.env_name = env_name
@@ -41,7 +41,7 @@ class Conda(EnvManager):
             executable="/bin/bash",
             capture_output=True,
             text=True
-        )
+            )
 
 
 class Venv(EnvManager):
@@ -55,7 +55,7 @@ class Venv(EnvManager):
             executable="/bin/bash",
             capture_output=True,
             text=True
-        )
+            )
 
 
 class LocalSimulation(Simulation):
@@ -66,7 +66,7 @@ class LocalSimulation(Simulation):
             run_script_directory: str,
             env_manager: EnvManager,
             output_file: str
-    ) -> None:
+    ):
 
         self.id = simulation_id
         self.run_script_directory = run_script_directory
@@ -98,7 +98,7 @@ class LocalSimulation(Simulation):
             return_code=result.returncode,
             output_directory=self.run_script_directory,
             output_filename=self.output_file
-        )
+            )
 
 
 class MockSimulationConfig(Config):
@@ -145,7 +145,7 @@ class MockSimulationRunner(SimulationRunner):
                 output_directory="",
                 output_filename=output_filename,
                 return_code=return_code
-            ) for out_file, err_file, return_code, output_filenames in zipped_lists]
+                ) for out_file, err_file, return_code, output_filename in zipped_lists]
 
             return results
 
@@ -158,7 +158,7 @@ class MockSimulationRunner(SimulationRunner):
                 output_directory="",
                 output_filename=self.config.output_filename[0],
                 return_code=self.config.return_code[0]
-            )
+                )
 
 
 class LocalVerosConfig(Config):
@@ -207,32 +207,32 @@ class LocalVerosRunner(SimulationRunner):
         edit_veros_run_script(
             run_script=run_script, 
             parameters=parameters
-        ) if not self.config.keep_old_params else None
+            ) if not self.config.keep_old_params else None
 
         command = self._make_command(
             run_script=run_script, 
             run_script_directory=run_script_directory
-        ) if self.config.command is None else self.config.command
+            ) if self.config.command is None else self.config.command
 
         # TODO: This is bad. It should be a factory method or similar?
         env_manager_classes = {
             "conda": Conda,
             "venv": Venv,
-        }
+            }
         EnvManagerClass = env_manager_classes[self.config.env_manager]
 
         env_manager = EnvManagerClass(
             path_to_env=self.config.path_to_env,
             env_name=self.config.env_name,
             command=command
-        )
+            )
 
         simulation = LocalSimulation(
             simulation_id=simulation_id,
             run_script_directory=run_script_directory,
             env_manager=env_manager,
             output_filename=output_filename
-        )
+            )
 
         result = simulation.run(parameters=parameters)
 

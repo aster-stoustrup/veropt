@@ -52,7 +52,7 @@ class ExperimentObjective(InterfaceObjective):
             evaluated_objectives_json: str,
             variable_names: Optional[list[str]] = None,
             objective_names: Optional[list[str]] = None
-    ) -> None:
+    ):
 
         self.bounds = torch.tensor(bounds)
         self.n_variables = n_variables
@@ -88,14 +88,14 @@ class ExperimentObjective(InterfaceObjective):
 
 class Experiment:
     def __init__(
-        self, 
-        simulation_runner: SimulationRunner,
-        result_processor: ResultProcessor,
-        experiment_config: Union[str, ExperimentConfig],
-        optimiser_config: Union[str, OptimiserConfig],
-        batch_manager: Optional[BatchManager] = None,
-        state: Optional[Union[str, ExperimentalState]] = None
-    ) -> None:
+            self, 
+            simulation_runner: SimulationRunner,
+            result_processor: ResultProcessor,
+            experiment_config: Union[str, ExperimentConfig],
+            optimiser_config: Union[str, OptimiserConfig],
+            batch_manager: Optional[BatchManager] = None,
+            state: Optional[Union[str, ExperimentalState]] = None
+    ):
 
         self.experiment_config = ExperimentConfig.load(experiment_config)
         self.optimiser_config = OptimiserConfig.load(optimiser_config)
@@ -131,7 +131,7 @@ class Experiment:
             objective_names=self.experiment_config.objective_names,
             suggested_parameters_json=self.path_manager.suggested_parameters_json,
             evaluated_objectives_json=self.path_manager.evaluated_objectives_json
-        )
+            )
 
         # TODO: Initialise any optimiser, not just default!
         self.optimiser = bayesian_optimiser(
@@ -139,7 +139,7 @@ class Experiment:
             n_bayesian_points=self.optimiser_config.n_bayesian_points,
             n_evaluations_per_step=self.optimiser_config.n_evaluations_per_step,
             objective=objective
-        )
+            )
 
     def _initialise_batch_manager(self) -> None:
 
@@ -148,13 +148,13 @@ class Experiment:
             run_script_filename=self.experiment_config.run_script_filename,
             run_script_root_directory=self.path_manager.run_script_root_directory,
             output_filename=self.experiment_config.output_filename
-        )
+            )
 
         self.batch_manager = BatchManagerFactory.make_batch_manager(
             experiment_mode=self.experiment_config.experiment_mode,
             simulation_runner=self.simulation_runner,
             config=self.batch_manager_config
-        )
+            )
 
     # TODO: is this redundant?
     def _check_initialisation(self) -> None:
@@ -195,8 +195,8 @@ class Experiment:
         ...
 
     def send_objectives_to_optimiser(
-        self,
-        objectives: ObjectivesDict
+            self,
+            objectives: ObjectivesDict
     ) -> None:
     # TODO: Is running an opt step correct to do here?
     #       Or should VerOpt automatically run an opt step when receiving objectives

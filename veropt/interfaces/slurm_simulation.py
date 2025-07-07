@@ -71,7 +71,7 @@ class SlurmSimulation(Simulation):
             run_script_directory: str,
             output_filename: str,
             batch_script_file: str,
-    ) -> None:
+    ):
 
         self.id = simulation_id
         self.run_script_directory = run_script_directory
@@ -109,7 +109,7 @@ class SlurmSimulation(Simulation):
             stderr_file=stderr_file,
             output_directory=self.run_script_directory,
             output_filename=self.output_file
-        )
+            )
 
 
 class SlurmVerosConfig(Config):
@@ -132,7 +132,7 @@ class SlurmVerosRunner(SimulationRunner):
     def __init__(
             self,
             config: SlurmVerosConfig
-    ) -> None:
+    ):
         self.config = config
 
     def set_up_and_run(
@@ -153,7 +153,7 @@ class SlurmVerosRunner(SimulationRunner):
         edit_veros_run_script(
             run_script=run_script_file, 
             parameters=parameters
-        ) if not self.config.keep_old_params else None
+            ) if not self.config.keep_old_params else None
 
         substitutions_dict = {
             "simulation_id": simulation_id,
@@ -161,32 +161,32 @@ class SlurmVerosRunner(SimulationRunner):
             "batch_script_filename": batch_script_filename,
             "slurm_log_filename": slurm_log_filename,
             "output_filename": output_filename
-        }
+            }
 
         template_substitutions = self.config.model_dump() | substitutions_dict
 
         batch_script_string = write_batch_script_string(
             batch_script_template=self.config.batch_script_template,
             template_substitutions=template_substitutions
-        )
+            )
 
         create_batch_script(
             batch_script_file=batch_script_file,
             batch_script_string=batch_script_string
-        )
+            )
 
         simulation = SlurmSimulation(
             simulation_id=simulation_id,
             run_script_directory=run_script_directory,
             output_filename=output_filename,
             batch_script_file=batch_script_file
-        )
+            )
         
         result = try_to_run(
             simulation=simulation,
             parameters=parameters,
             max_tries=self.config.max_tries
-        )
+            )
 
         result.slurm_log_file = slurm_log_file
 

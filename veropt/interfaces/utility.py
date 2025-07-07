@@ -45,8 +45,8 @@ class Config(BaseModel):
 
     @classmethod
     def load(
-        cls,
-        source: Optional[Union[str, Self]] = None
+            cls,
+            source: Optional[Union[str, Self]] = None
     ) -> Self:
 
         if isinstance(source, str):
@@ -57,8 +57,8 @@ class Config(BaseModel):
             raise ValueError(f"Invalid source type: {type(source)}. Expected str or {cls.__name__} instance.")
 
     def save_to_json(
-        self,
-        config_file: str
+            self,
+            config_file: str
     ) -> None:
 
         with open(config_file, "w") as f:
@@ -66,8 +66,8 @@ class Config(BaseModel):
 
     @classmethod
     def load_from_json(
-        cls,
-        path: str
+            cls,
+            path: str
     ) -> Self:
 
         try:

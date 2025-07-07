@@ -10,28 +10,28 @@ ObjectivesDict = dict[int, dict[str, float]]
 class ResultProcessor(ABC):
 
     def __init__(
-        self,
-        objective_names: list[str]
+            self,
+            objective_names: list[str]
     ):
         self.objective_names = objective_names
 
     @abstractmethod
     def calculate_objectives(
-        self,
-        result: Union[SimulationResult, list[SimulationResult]]
+            self,
+            result: Union[SimulationResult, list[SimulationResult]]
     ) -> dict[str, float]:
         ...
 
     @abstractmethod
     def open_output_file(
-        self,
-        result: SimulationResult
+            self,
+            result: SimulationResult
     ) -> None:
         ...
 
     def process(
-        self,
-        results: SimulationResultsDict
+            self,
+            results: SimulationResultsDict
     ) -> ObjectivesDict:
 
         objectives_dict: ObjectivesDict = {}
@@ -81,7 +81,7 @@ class MockResultProcessor(ResultProcessor):
             self,
             objectives: dict[str, float],
             objective_names: list[str]
-    ) -> None:
+    ):
         self.objectives = objectives
         self.objective_names = objective_names
 

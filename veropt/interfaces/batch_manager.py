@@ -22,7 +22,7 @@ class BatchManager(ABC, Generic[SR]):
     def __init__(
             self,
             simulation_runner: SR,
-    ) -> None:
+    ):
         self.simulation_runner = simulation_runner
 
     @abstractmethod
@@ -37,10 +37,10 @@ class BatchManager(ABC, Generic[SR]):
 class BatchManagerFactory:
     @staticmethod
     def make_batch_manager_config(
-        experiment_mode: str,
-        run_script_filename: str,
-        run_script_root_directory: str,
-        output_filename: str
+            experiment_mode: str,
+            run_script_filename: str,
+            run_script_root_directory: str,
+            output_filename: str
     ) -> BaseModel:
 
         if experiment_mode == ExperimentMode.LOCAL:
@@ -49,16 +49,16 @@ class BatchManagerFactory:
                 run_script_filename=run_script_filename,
                 run_script_root_directory=run_script_root_directory,
                 output_filename=output_filename
-            )
+                )
 
         else:
             raise NotImplementedError
 
     @staticmethod
     def make_batch_manager(
-        experiment_mode: str,
-        simulation_runner: SR,
-        config: BaseModel
+            experiment_mode: str,
+            simulation_runner: SR,
+            config: BaseModel
     ) -> BatchManager:
 
         if experiment_mode == ExperimentMode.LOCAL:
@@ -68,7 +68,7 @@ class BatchManagerFactory:
             return LocalBatchManager(
                 simulation_runner=simulation_runner,
                 config=config
-            )
+                )
 
         elif experiment_mode == ExperimentMode.LOCAL_SLURM:
 
@@ -77,7 +77,7 @@ class BatchManagerFactory:
             return LocalSlurmBatchManager(
                 simulation_runner=simulation_runner,
                 config=config
-            )
+                )
 
         elif experiment_mode == ExperimentMode.REMOTE_SLURM:
 
@@ -86,7 +86,7 @@ class BatchManagerFactory:
             return RemoteSlurmBatchManager(
                 simulation_runner=simulation_runner,
                 config=config
-            )
+                )
 
         else:
 
@@ -105,7 +105,7 @@ class LocalBatchManager(BatchManager):
             self,
             simulation_runner: SR,
             config: LocalBatchManagerConfig
-    ) -> None:
+    ):
         self.simulation_runner = simulation_runner
         self.config = config
 
@@ -126,14 +126,15 @@ class LocalBatchManager(BatchManager):
             result_directory = os.path.join(
                 experimental_state.experiment_directory,
                 "results",
-                simulation_id)
+                simulation_id
+                )
 
             create_directory(path=result_directory)
 
             copy_files(
                 source_directory=self.config.run_script_root_directory,
                 destination_directory=result_directory
-            )
+                )
 
             experimental_state.points[i].state = "Simulation started"
             result = self.simulation_runner.save_set_up_and_run(
@@ -162,7 +163,7 @@ class LocalSlurmBatchManager(BatchManager):
             self,
             simulation_runner: SR,
             config: LocalSlurmBatchManagerConfig
-    ) -> None:
+    ):
         self.simulation_runner = simulation_runner
         self.config = config
 
@@ -184,7 +185,7 @@ class RemoteSlurmBatchManager(BatchManager):
             self,
             simulation_runner: SR,
             config: RemoteSlurmBatchManagerConfig
-    ) -> None:
+    ):
         self.simulation_runner = simulation_runner
         self.config = config
 

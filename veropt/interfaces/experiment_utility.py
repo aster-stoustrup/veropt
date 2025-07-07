@@ -29,8 +29,8 @@ class ExperimentalState(Config):
     next_point: int = 0
 
     def update(
-        self,
-        new_point: Point
+            self,
+            new_point: Point
     ) -> None:
 
         self.points[self.next_point] = new_point
@@ -38,12 +38,12 @@ class ExperimentalState(Config):
 
     @classmethod
     def make_fresh_state(
-        cls,
-        experiment_name: str,
-        experiment_directory: str,
-        state_json: str,
-        points: dict[int, Point] = {},
-        next_point: int = 0
+            cls,
+            experiment_name: str,
+            experiment_directory: str,
+            state_json: str,
+            points: dict[int, Point] = {},
+            next_point: int = 0
     ) -> Self:
 
         return cls(
@@ -52,7 +52,7 @@ class ExperimentalState(Config):
             state_json=state_json,
             points=points,
             next_point=next_point
-        )
+            )
 
 
 class ExperimentConfig(Config):
@@ -72,7 +72,7 @@ class PathManager:
     def __init__(
             self,
             experiment_config: ExperimentConfig
-    ) -> None:
+    ):
 
         self.experiment_config = experiment_config
 
@@ -110,7 +110,7 @@ class PathManager:
             path = os.path.join(
                 self.experiment_directory,
                 f"{self.experiment_config.experiment_name}_setup"  # better name?
-            )
+                )
 
         assert os.path.isdir(path), "Run script root directory not found."
         return path
@@ -128,16 +128,16 @@ class PathManager:
         return os.path.join(
             self.results_directory,
             f"{self.experiment_config.experiment_name}_experimental_state.json"
-        )
+            )
 
     def make_suggested_parameters_json(self) -> str:
         return os.path.join(
             self.results_directory,
             f"{self.experiment_config.experiment_name}_suggested_parameters.json"
-        )
+            )
 
     def make_evaluated_objectives_json(self) -> str:
         return os.path.join(
             self.results_directory,
             f"{self.experiment_config.experiment_name}_evaluated_objectives.json"
-        )
+            )

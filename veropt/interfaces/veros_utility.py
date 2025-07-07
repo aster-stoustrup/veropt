@@ -3,7 +3,7 @@ def edit_veros_run_script(
         run_script: str,
         parameters: dict[str, float]
 ) -> None:
-    
+
     with open(run_script, 'r') as file:
         data = file.readlines()
 
