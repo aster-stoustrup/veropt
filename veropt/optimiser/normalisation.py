@@ -68,7 +68,7 @@ class NormaliserZeroMeanUnitVariance(Normaliser):
     def from_saved_state(
             cls,
             saved_state: dict
-    ):
+    ) -> 'NormaliserZeroMeanUnitVariance':
         means = saved_state['means']
         variances = saved_state['variances']
 

@@ -22,13 +22,13 @@ def generate_initial_points_random(
 
 
 def generate_initial_points(
-        initial_points_generator: InitialPointsChoice,
+        initial_points_generator: InitialPointsGenerationMode,
         bounds: torch.Tensor,
         n_initial_points: int,
         n_variables: int
 ) -> torch.Tensor:
 
-    if InitialPointsGenerationMode(initial_points_generator) == InitialPointsGenerationMode.random:
+    if initial_points_generator == InitialPointsGenerationMode.random:
         return generate_initial_points_random(
             bounds=bounds,
             n_initial_points=n_initial_points,

@@ -39,7 +39,7 @@ class BayesianOptimiser(SavableClass):
             normaliser_objectives: Optional[Normaliser],
             settings: OptimiserSettings,
             initial_points_real_units: torch.Tensor,
-            suggested_points: SuggestedPoints,
+            suggested_points: Optional[SuggestedPoints],
             suggested_points_history: list[SuggestedPoints],
             evaluated_variables_real_units: torch.Tensor,
             evaluated_objectives_real_units: torch.Tensor
@@ -119,8 +119,8 @@ class BayesianOptimiser(SavableClass):
         predictor = predictor
         normaliser_class = normaliser_class
 
-        normaliser_variables: Optional[Normaliser] = None
-        normaliser_objectives: Optional[Normaliser] = None
+        normaliser_variables = None
+        normaliser_objectives = None
 
         # TODO: Move this assert somewhere else?
         # TODO: Write error message for this assert
@@ -142,11 +142,11 @@ class BayesianOptimiser(SavableClass):
             n_variables=objective.n_variables
         )
 
-        evaluated_variables_real_units: torch.Tensor = torch.tensor([])
-        evaluated_objectives_real_units: torch.Tensor = torch.tensor([])
+        evaluated_variables_real_units = torch.tensor([])
+        evaluated_objectives_real_units = torch.tensor([])
 
-        suggested_points: Optional[SuggestedPoints] = None
-        suggested_points_history: list[Optional[SuggestedPoints]] = []
+        suggested_points = None
+        suggested_points_history: list[SuggestedPoints] = []
 
         return cls(
             objective=objective,
@@ -173,6 +173,8 @@ class BayesianOptimiser(SavableClass):
             name=saved_state['objective']['name'],
             saved_state=saved_state['objective']['state']
         )
+
+        assert type(objective) is CallableObjective or type(objective) is InterfaceObjective
 
         predictor = rehydrate_object(
             superclass=Predictor,
@@ -288,8 +290,8 @@ class BayesianOptimiser(SavableClass):
     def gather_dicts_to_save(self) -> dict:
 
         if self.normalisers_have_been_initialised:
-            normaliser_variables_dict = self._normaliser_variables.gather_dicts_to_save()
-            normaliser_objectives_dict = self._normaliser_objectives.gather_dicts_to_save()
+            normaliser_variables_dict = self._normaliser_variables.gather_dicts_to_save()  # type: ignore[union-attr]
+            normaliser_objectives_dict = self._normaliser_objectives.gather_dicts_to_save()  # type: ignore[union-attr]
 
         else:
             normaliser_variables_dict = None
@@ -695,11 +697,11 @@ class BayesianOptimiser(SavableClass):
             return OptimisationMode.bayesian
 
     @property
-    def model_has_been_trained(self):
+    def model_has_been_trained(self) -> bool:
         return self.predictor.check_if_model_is_trained()
 
     @property
-    def normalisers_have_been_initialised(self):
+    def normalisers_have_been_initialised(self) -> bool:
 
         if self._normaliser_variables is not None and self._normaliser_objectives is not None:
             return True

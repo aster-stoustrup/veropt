@@ -1,7 +1,8 @@
 import abc
 from dataclasses import asdict, dataclass, fields
-from typing import Optional, Self, TypeVar
+from typing import Self, TypeVar
 from inspect import isabstract
+
 
 class SavableClass(metaclass=abc.ABCMeta):
 
@@ -24,7 +25,7 @@ class SavableDataClass(SavableClass):
         return asdict(self)
 
     @classmethod
-    def from_saved_state(cls, saved_state: dict) -> 'SavableDataClass':
+    def from_saved_state(cls, saved_state: dict) -> Self:
 
         expected_fields = [field.name for field in fields(cls)]
 
@@ -39,7 +40,10 @@ class SavableDataClass(SavableClass):
         )
 
 
-def get_all_subclasses[T](
+T = TypeVar('T', bound=type)
+
+
+def get_all_subclasses(
         cls: T
 ) -> list[T]:
 
@@ -49,20 +53,13 @@ def get_all_subclasses[T](
 
 
 SavableSettings = TypeVar('SavableSettings', bound=SavableDataClass)
-T = TypeVar('T', bound=SavableClass)
 
 
-# TODO: Relation to constructors...?
-
-# We're not showing that it's the superclass in type[T] but a subclass in the return
-#   - Not sure if this is a problem or not?
-
-
-def rehydrate_object(
-        superclass: type[T],
+def rehydrate_object[S: SavableClass](
+        superclass: type[S],
         name: str,
         saved_state: dict,
-) -> T:
+) -> S:
 
     subclasses = get_all_subclasses(superclass)
 

@@ -1,15 +1,12 @@
 import pytest
 
-from veropt.optimiser.model import GPyTorchSingleModel
+from veropt.optimiser.model import MaternSingleModel
 
 
 def test_gpy_torch_single_model_init_mandatory_name() -> None:
 
-    class TestModel(GPyTorchSingleModel):
-        def __init__(self) -> None:
-            super().__init__(
-                n_variables=3
-            )
+    class TestModel(MaternSingleModel):
+        pass
 
     with pytest.raises(AssertionError):
-        test_model = TestModel()
+        _ = TestModel(n_variables=3)

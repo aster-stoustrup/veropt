@@ -15,14 +15,6 @@ from veropt.optimiser.utility import (
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
 
 
-# TODO: Decide on architecture
-#   - How is data shared between acq func and its optimiser
-#   - How do we implement dist punish stuff
-
-
-# TODO: Implement distance punishment optimiser
-
-
 def _check_input_dimensions[T, **P](
         function: Callable[P, T]
 ) -> Callable[P, T]:
@@ -66,23 +58,21 @@ def _check_input_dimensions[T, **P](
 class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
 
     name: str
+    multi_objective: bool
 
     def __init__(
             self,
             n_variables: int,
-            n_objectives: int,
-            multi_objective: bool
+            n_objectives: int
     ) -> None:
 
         self.n_variables = n_variables
         self.n_objectives = n_objectives
 
-        self.multi_objective = multi_objective
-
         self.function: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
 
         if 'settings' not in self.__dict__:
-            self.settings: Optional[Any] = None  # type: ignore[explicit-any]  # Dataclass defined in subclass >:(
+            self.settings: Optional[Any] = None
 
         if self.multi_objective:
             assert self.n_objectives > 1, (
@@ -163,6 +153,7 @@ class BotorchAcquisitionFunction(AcquisitionFunction, metaclass=abc.ABCMeta):
 class QLogExpectedHyperVolumeImprovement(BotorchAcquisitionFunction):
 
     name = 'qlogehvi'
+    multi_objective = True
 
     def __init__(
             self,
@@ -172,8 +163,7 @@ class QLogExpectedHyperVolumeImprovement(BotorchAcquisitionFunction):
 
         super().__init__(
             n_variables=n_variables,
-            n_objectives=n_objectives,
-            multi_objective=True
+            n_objectives=n_objectives
         )
 
     def _refresh(
@@ -213,6 +203,7 @@ class UpperConfidenceBoundOptions(SavableDataClass):
 class UpperConfidenceBound(BotorchAcquisitionFunction):
 
     name = 'ucb'
+    multi_objective = False
 
     def __init__(
             self,
@@ -227,8 +218,7 @@ class UpperConfidenceBound(BotorchAcquisitionFunction):
 
         super().__init__(
             n_variables=n_variables,
-            n_objectives=n_objectives,
-            multi_objective=False
+            n_objectives=n_objectives
         )
 
     def _refresh(

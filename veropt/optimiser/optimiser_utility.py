@@ -1,13 +1,14 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from typing import Literal, Optional, TypedDict, Union
+from typing import Optional, TypedDict, Union
 
 import torch
 
+from veropt.optimiser.initial_points import InitialPointsChoice
 from veropt.optimiser.initial_points import InitialPointsGenerationMode
-from veropt.optimiser.utility import DataShape, PredictionDict, TensorWithNormalisationFlag
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
+from veropt.optimiser.utility import DataShape, PredictionDict, TensorWithNormalisationFlag
 
 
 class OptimisationMode(StrEnum):
@@ -24,7 +25,7 @@ class OptimiserSettings(SavableClass):
             n_bayesian_points: int,
             n_objectives: int,
             n_evaluations_per_step: int,
-            initial_points_generator: Literal['random'] = 'random',  # TODO: Link typehint to list
+            initial_points_generator: InitialPointsChoice = 'random',  # TODO: Link typehint to list
             normalise: bool = True,
             verbose: bool = True,
             renormalise_each_step: Optional[bool] = None,
@@ -84,7 +85,7 @@ class OptimiserSettingsInputDict(TypedDict, total=False):
     n_points_before_fitting: int
     verbose: bool
     renormalise_each_step: bool
-    initial_points_generator: InitialPointsGenerationMode
+    initial_points_generator: InitialPointsChoice
     mask_nans: bool
 
 

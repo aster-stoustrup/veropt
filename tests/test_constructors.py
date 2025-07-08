@@ -21,7 +21,7 @@ def test_gpytorch_model() -> None:
             )
         )
 
-    model = GPyTorchFullModel(
+    model = GPyTorchFullModel.from_the_beginning(
         n_variables=n_variables,
         n_objectives=n_objectives,
         single_model_list=single_model_list,

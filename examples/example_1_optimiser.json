@@ -1,0 +1,26 @@
+{
+  "n_initial_points": 12,
+  "n_bayesian_points": 28,
+  "n_evaluations_per_step": 4,
+  "model": {
+    "kernels": "matern",
+    "kernel_settings": {
+      "lengthscale_upper_bound": 5.0
+    },
+    "training_settings": {
+      "max_iter": 15000
+    }
+  },
+  "acquisition_function": {
+    "function": "ucb",
+    "parameters": {
+      "beta": 3.0
+    }
+  },
+  "acquisition_optimiser": {
+    "optimiser": "dual_annealing",
+    "proximity_punish_settings": {
+      "alpha": 0.5
+    }
+  }
+}

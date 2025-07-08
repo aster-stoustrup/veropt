@@ -80,7 +80,7 @@ def test_standard_normaliser_transform_input_output_shapes() -> None:
     ])
     test_matrix = test_matrix.T  # Making the columns columns here
 
-    normaliser = NormaliserZeroMeanUnitVariance(tensor=test_matrix)
+    normaliser = NormaliserZeroMeanUnitVariance.from_tensor(tensor=test_matrix)
     normed_test_matrix = normaliser.transform(test_matrix)
 
     assert normed_test_matrix.shape == test_matrix.shape

@@ -16,6 +16,7 @@ from veropt.optimiser.objective import CallableObjective, InterfaceObjective
 from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.optimiser_utility import OptimiserSettingsInputDict
 from veropt.optimiser.prediction import BotorchPredictor
+from veropt.optimiser.saver_loader_utility import get_all_subclasses
 from veropt.optimiser.utility import _validate_typed_dict
 
 SingleKernelOptions = Literal['matern']
@@ -322,21 +323,6 @@ def gpytorch_single_model_list(
     return single_model_list
 
 
-class KernelDict(TypedDict):
-    kernel_class: type[GPyTorchSingleModel]
-    settings: type
-
-# TODO: Consider location, maybe move to models?
-matern_dict = {
-    'kernel_class': MaternSingleModel,
-    'settings': MaternParametersInputDict
-}
-
-# TODO: Consider if we can let a user give one of these...?!
-#   - might fix saving issue :))))
-kernel_collections: list[KernelDict] = [matern_dict]
-
-
 def gpytorch_single_model(
         n_variables: int,
         kernel: Optional[SingleKernelOptions] = None,
@@ -354,13 +340,15 @@ def gpytorch_single_model(
             settings=settings
         )
 
-    for kernel_dict in kernel_collections:
+    subclasses = get_all_subclasses(
+        cls=GPyTorchSingleModel
+    )
 
-        # TODO: Change the collections system
+    for subclass in subclasses:
 
-        if kernel == kernel_dict["kernel_class"].name:
+        if kernel == subclass.name:
 
-            return kernel_dict['kernel_class'].from_n_variables_and_settings(
+            return subclass.from_n_variables_and_settings(
                 n_variables=n_variables,
                 settings=settings
             )
@@ -410,7 +398,6 @@ def botorch_acquisition_function(
             )
 
         elif n_objectives == 1:
-
 
             return botorch_acquisition_function(
                 n_variables=n_variables,

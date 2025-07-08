@@ -235,7 +235,7 @@ class TensorWithNormalisationFlag:
     def __repr__(self) -> str:
         return f"TensorWithNormalisationFlag(normalised={self.normalised}, \n{self.tensor}\n)"
 
-    def __getitem__(  # type: ignore[explicit-any]  # mypy is seeing things apparently
+    def __getitem__(
             self,
             item: Union[int, slice, tuple[Union[int, slice], ...]]  # type-hint should technically be as in torch.Tensor
     ) -> 'TensorWithNormalisationFlag':
@@ -260,7 +260,7 @@ class MetaClassWithMandatoryAttributes:
     pass
 
 
-def _validate_typed_dict(  # type: ignore[explicit-any]
+def _validate_typed_dict(
         typed_dict: Mapping[str, Any],
         expected_typed_dict_class: type,
         object_name: str

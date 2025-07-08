@@ -34,7 +34,7 @@ optimiser = bayesian_optimiser(
     }
 )
 
-from veropt.optimiser.optimiser_saver_loader import load_optimiser_from_json, save_to_json
+from veropt.optimiser.optimiser_saver_loader import load_optimiser_from_state, save_to_json
 
 optimiser.run_optimisation_step()
 optimiser.run_optimisation_step()
@@ -44,7 +44,7 @@ save_to_json(
     file_name='test'
 )
 
-reloaded_optimiser = load_optimiser_from_json(
+reloaded_optimiser = load_optimiser_from_state(
     file_name='test'
 )
 

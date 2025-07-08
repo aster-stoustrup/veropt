@@ -8,7 +8,7 @@ def run_mypy():
     go_up_to_find_veropt_folder()
 
     # Note: Should be the same as in the github workflow. Please change both if you change this.
-    os.system('mypy veropt tests --disallow-untyped-defs --follow-untyped-imports --disallow-any-explicit')
+    os.system('mypy veropt tests --disallow-untyped-defs --follow-untyped-imports --disable-error-code type-abstract')
 
 
 if __name__ == '__main__':

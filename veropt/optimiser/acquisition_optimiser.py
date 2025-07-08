@@ -1,7 +1,6 @@
 import abc
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Callable, Literal, Optional, Self, TypedDict, Unpack
+from typing import Any, Callable, Literal, Optional, TypedDict, Unpack
 
 import numpy as np
 import scipy
@@ -10,8 +9,8 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
-from veropt.optimiser.utility import DataShape
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
+from veropt.optimiser.utility import DataShape
 
 
 class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
@@ -28,7 +27,7 @@ class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
         self.bounds = bounds
         self.n_evaluations_per_step = n_evaluations_per_step
 
-        self.settings: Any  # type: ignore[explicit-any]  # Defined in subclass >:(
+        self.settings: Any
 
         # TODO: Do this in all classes that uses this weird set-up...?
         #   - Otherwise, code might just fail in methods that reference this :(

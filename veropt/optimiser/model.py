@@ -3,7 +3,7 @@ import functools
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Iterator, Optional, Self, TypedDict, Union, Unpack
+from typing import Any, Callable, Iterator, Mapping, Optional, Self, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
@@ -71,7 +71,7 @@ class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorc
 # TODO: Move to different file
 def format_json_state_dict(
         state_dict: dict,
-):
+) -> dict:
     formatted_dict = {}
 
     for key, value in state_dict.items():
@@ -125,7 +125,7 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
     def from_n_variables_and_settings(
             cls,
             n_variables: int,
-            settings: dict
+            settings: Mapping[str, Any]
     ) -> 'GPyTorchSingleModel':
         pass
 
@@ -180,14 +180,14 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             train_inputs: torch.Tensor,
             train_targets: torch.Tensor,
             state_dict: dict
-    ):
+    ) -> None:
 
         self.initialise_model_with_data(
             train_inputs=train_inputs,
             train_targets=train_targets
         )
 
-        self.model_with_data.load_state_dict(
+        self.model_with_data.load_state_dict(  # type: ignore[union-attr]  # model initialised just before calling this
             state_dict=state_dict
         )
 
@@ -201,8 +201,8 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
 
         else:
             state_dict = {}
-            train_inputs = {}
-            train_targets = {}
+            train_inputs = None
+            train_targets = None
 
         return {
             'name': self.name,
@@ -350,7 +350,7 @@ class MaternSingleModel(GPyTorchSingleModel):
     def from_n_variables_and_settings(
             cls,
             n_variables: int,
-            settings: dict
+            settings: Mapping[str, Any]
     ) -> 'MaternSingleModel':
 
         _validate_typed_dict(
@@ -799,7 +799,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         return self._model
 
     @property
-    def model_has_been_trained(self):
+    def model_has_been_trained(self) -> bool:
         if self._model is None:
             return False
         else:
