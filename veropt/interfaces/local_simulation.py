@@ -6,7 +6,7 @@ import subprocess
 from typing import Optional, Unpack, Union, TypedDict, Literal, Dict, List
 from veropt.interfaces.simulation import SimulationRunnerConfig, SimulationResult, Simulation, SimulationRunner
 from veropt.interfaces.veros_utility import edit_veros_run_script
-from veropt.interfaces.utility import Config
+from veropt.interfaces.utility import Config, run_subprocess
 
 import torch
 from pydantic import BaseModel
@@ -20,11 +20,8 @@ class VirtualEnvironmentManager(ABC):
     def activate_virtual_environment(self) -> None:
         source = self.make_activation_command()
         dump = 'python -c "import os, json;print(json.dumps(dict(os.environ)))"'
-        pipe = subprocess.Popen(
-            args=['/bin/bash', '-c', '%s && %s' %(source,dump)], 
-            stdout=subprocess.PIPE)
-        env = json.loads(s=pipe.stdout.read())
-        os.environ = env
+        output, _, _ = run_subprocess(command_arguments=['/bin/bash', '-c', '%s && %s' %(source,dump)])
+        os.environ = json.loads(s=output)
 
     def run_in_virtual_environment(
             self,
@@ -34,17 +31,11 @@ class VirtualEnvironmentManager(ABC):
         self.activate_virtual_environment()
         os.chdir(directory)
         env_copy = os.environ.copy()
-        pipe = subprocess.Popen(
-            args=command_arguments,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=env_copy)
         
-        output, error = pipe.communicate()
-        return_code = pipe.returncode
-        
-        return output, error, return_code
+        return run_subprocess(
+            command_arguments=command_arguments,
+            environment=env_copy
+        )
 
 
 class Conda(VirtualEnvironmentManager):

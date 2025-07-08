@@ -87,7 +87,7 @@ class SlurmSimulation(Simulation):
         
         assert os.path.isfile(self.batch_script_file), "Batch script not found."
 
-        stdout, stderr = run_subprocess(
+        output, error, _ = run_subprocess(
             command_arguments=self.command_arguments,
             directory=self.run_script_directory)
 
@@ -95,10 +95,10 @@ class SlurmSimulation(Simulation):
         stderr_file = os.path.join(self.run_script_directory, f"{self.id}.err")
 
         with open(stdout_file, "w") as f_out:
-            f_out.write(stdout)
+            f_out.write(output)
 
         with open(stderr_file, "w") as f_err:
-            f_err.write(stderr)
+            f_err.write(error)
 
         return SimulationResult(
             simulation_id=self.id,

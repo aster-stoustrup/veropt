@@ -10,19 +10,23 @@ from abc import abstractmethod
 
 def run_subprocess(
         command_arguments: list[str],
-        directory: str
-) -> tuple[str, str]:
+        environment: Optional[str] = None,
+        directory: Optional[str] = None
+) -> tuple[str, str, str]:
     
-    pipe = subprocess.Popen(args=command_arguments,
-                            cwd=directory,
-                            stdout=subprocess.PIPE, 
-                            stderr=subprocess.PIPE,
-                            text=True)
+    pipe = subprocess.Popen(
+        args=command_arguments,
+        cwd=directory,
+        env=environment,
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.PIPE,
+        text=True)
         
-    stdout = pipe.stdout.read()
-    stderr = pipe.stderr.read()
+    output = pipe.stdout.read()
+    error = pipe.stderr.read()
+    return_code = pipe.returncode.read()
 
-    return stdout, stderr
+    return output, error, return_code
 
 
 def create_directory(path: str) -> None:

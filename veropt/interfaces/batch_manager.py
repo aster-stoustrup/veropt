@@ -94,7 +94,8 @@ class BatchManager(ABC, Generic[SR]):
             results_directory: str,
             output_filename: str,
             check_job_status_sleep_time: Optional[int],
-            remote: bool = False
+            remote: bool = False,
+            hostname: Optional[str] = None
     ):
         self.simulation_runner = simulation_runner
         self.run_script_filename = run_script_filename
@@ -104,6 +105,11 @@ class BatchManager(ABC, Generic[SR]):
         self.check_job_status_sleep_time = 60 if check_job_status_sleep_time is None \
             else check_job_status_sleep_time 
         self.remote = remote
+
+        if self.remote:
+            assert hostname is not None, "Hostname is required for remote experiments."
+
+        self.hostname = hostname
 
     @abstractmethod
     def run_batch(
@@ -163,14 +169,16 @@ class BatchManager(ABC, Generic[SR]):
     def _check_job_status(
             self,
             job_id: int,
-            state: str,
-            remote: bool
+            state: str
     ) -> str:
         
-        stdout, stderr = run_subprocess(
-            command=f"scontrol show job {job_id}",
-            remote=remote
-            )
+        command = f"scontrol show job {job_id}"
+        if not self.remote:
+            command_arguments = command.split(" ")
+        else:
+            command_arguments = ['ssh', self.hostname, command.split(" ")]
+        
+        stdout, stderr, _ = run_subprocess(command_arguments=command_arguments)
 
         if stdout:
             job_status_dict = _get_job_status_dict(output=stdout)
@@ -189,14 +197,55 @@ class BatchManager(ABC, Generic[SR]):
                 print(f"{job_id} status: RUNNING")
                 state = "Simulation running"
 
-
         elif stderr and "slurm_load_jobs error: Invalid job id specified" not in stderr:
             print(f"Error checking job {job_id}: {stderr}")
             print(f"Continuing in 60 seconds.")  # TODO: Move to config; what name?
             time.sleep(60)
 
         return state
-   
+    
+    def _check_pending_jobs(
+            self,
+            experimental_state: ExperimentalState
+    ) -> None:
+        
+        pending_jobs = 0
+        points = experimental_state.points
+        submitted_points = [i for i in points
+                            if points[i].state == "Simulation running"
+                            or points[i].state == "Simulation started"]
+        submitted_jobs = [points[i].job_id for i in points]
+
+        for i in range(len(submitted_jobs)):
+            pending_jobs |= (1 << i)
+
+        while pending_jobs:
+            for i in range(len(submitted_jobs)):
+                point_id, job_id = submitted_points[i], submitted_jobs[i]
+
+                state = self._check_job_status(
+                    job_id=job_id,
+                    state=experimental_state.points[point_id].state,
+                    )
+                
+                experimental_state.points[point_id].state = state
+                
+                if state == "Simulation completed":
+                    pending_jobs &= ~(1 << i)
+                else:
+                    continue
+
+            if pending_jobs:
+                print("\nThe following jobs are still pending or running: ")
+                for i in range(len(submitted_jobs)):
+                    if pending_jobs & (1 << i):
+                        print(f"Point {submitted_points[i]}, Slurm Job ID {submitted_jobs[i]}")
+
+                experimental_state.save_to_json(experimental_state.state_json)
+
+                for i in tqdm.tqdm(range(self.check_job_status_sleep_time), "Time until next server poll"):
+                    time.sleep(1)
+
 
 def batch_manager(
             experiment_mode: str,
@@ -303,42 +352,7 @@ class LocalSlurmBatchManager(BatchManager):
         
         experimental_state.save_to_json(experimental_state.state_json)
 
-        pending_jobs = 0
-        points = experimental_state.points
-        submitted_points = [i for i in points
-                            if points[i].state == "Simulation running"
-                            or points[i].state == "Simulation started"]
-        submitted_jobs = [points[i].job_id for i in points]
-
-        for i in range(len(submitted_jobs)):
-            pending_jobs |= (1 << i)
-
-        while pending_jobs:
-            for i in range(len(submitted_jobs)):
-                point_id, job_id = submitted_points[i], submitted_jobs[i]
-
-                state = self._check_job_status(
-                    job_id=job_id,
-                    state=experimental_state.points[point_id].state,
-                    remote=self.remote
-                    )
-                
-                experimental_state.points[point_id].state = state
-                if state == "Simulation completed":
-                    pending_jobs &= ~(1 << i)
-                else:
-                    continue
-
-            if pending_jobs:
-                print("\nThe following jobs are still pending or running: ")
-                for i in range(len(submitted_jobs)):
-                    if pending_jobs & (1 << i):
-                        print(f"Point {submitted_points[i]}, Slurm Job ID {submitted_jobs[i]}")
-
-                experimental_state.save_to_json(experimental_state.state_json)
-
-                for i in tqdm.tqdm(range(self.check_job_status_sleep_time), "Time until next server poll"):
-                    time.sleep(1)
+        self._check_pending_jobs(experimental_state=experimental_state)
 
         experimental_state.save_to_json(experimental_state.state_json)
 
@@ -352,4 +366,4 @@ class RemoteSlurmBatchManager(BatchManager):
             experimental_state: ExperimentalState
     ) -> SimulationResultsDict:
         # TODO: Implement
-        raise NotImplementedError
+        raise NotImplementedError("Remote slurm experiments are not supported yet.")

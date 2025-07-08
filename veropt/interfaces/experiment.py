@@ -156,12 +156,11 @@ class Experiment:
             config=self.batch_manager_config
             )
 
-    # TODO: is this redundant?
     def _check_initialisation(self) -> None:
 
-        assert isinstance(self.simulation_runner, SimulationRunner)
-        assert isinstance(self.batch_manager, BatchManager)
-        assert isinstance(self.result_processor, ResultProcessor)
+        assert isinstance(self.simulation_runner, SimulationRunner), "simulation_runner must be a SimulationRunner"
+        assert isinstance(self.batch_manager, BatchManager), "batch_manager must be a BatchManager"
+        assert isinstance(self.result_processor, ResultProcessor), "result_processor must be a ResultProcessor"
 
     def get_parameters_from_optimiser(self) -> dict[int, dict]:
 
