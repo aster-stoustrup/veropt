@@ -8,7 +8,7 @@ from typing import TypeVar, Generic, List, Dict, Literal, Union, Tuple, Optional
 from pydantic import BaseModel
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner, SimulationResultsDict
 from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
-from veropt.interfaces.utility import Config, create_directory, copy_files, shell_subprocess
+from veropt.interfaces.utility import Config, create_directory, copy_files, run_subprocess
 
 
 SR = TypeVar("SR", bound=SimulationRunner)
@@ -22,7 +22,7 @@ def _check_if_point_exists(
 ) -> None:
     
     try:
-        state = experimental_state.point[i].state
+        _ = experimental_state.point[i].state
     except:
         _initialise_point(
             i=i,
@@ -42,9 +42,12 @@ def _initialise_point(
         parameters=parameters
     )
 
-    experimental_state.points[i] = point
+    if experimental_state.next_point == i:
+        experimental_state.update(point)
+    else:
+        experimental_state.points[i] = point  # Warning here?
 
-    Warning(f"Point {i} not found; initialising with batch manager.")
+    print(f"Point {i} not found; initialising with batch manager.")
 
 
 def _get_job_status_dict(
@@ -164,7 +167,7 @@ class BatchManager(ABC, Generic[SR]):
             remote: bool
     ) -> str:
         
-        stdout, stderr = shell_subprocess(
+        stdout, stderr = run_subprocess(
             command=f"scontrol show job {job_id}",
             remote=remote
             )

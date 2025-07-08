@@ -20,7 +20,6 @@ class OptimiserConfig(Config):
     n_evaluations_per_step: int
 
 
-# TODO: Should include timestamps?
 class ExperimentalState(Config):
     experiment_name: str
     experiment_directory: str

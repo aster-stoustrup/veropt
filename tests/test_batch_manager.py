@@ -1,40 +1,41 @@
 from veropt.interfaces.local_simulation import MockSimulationRunner, MockSimulationConfig
-from veropt.interfaces.batch_manager import LocalBatchManager, LocalBatchManagerConfig
-from veropt.interfaces.experiment_utility import ExperimentalState, Point
+from veropt.interfaces.batch_manager import batch_manager, ExperimentMode
+from veropt.interfaces.experiment_utility import ExperimentalState
+
+
+experiment_name = "test_experiment"
+experiment_directory = f"/Users/martamrozowska/Desktop/veropt_testing/exp_{experiment_name}"
+results_directory = f"{experiment_directory}/results"
+state_json = f"{experiment_directory}/experimental_state.json"
+run_script_root_directory = f"{experiment_directory}/{experiment_name}_setup"
 
 
 parameters = {0: {"c_k": 0.05, "c_eps": 1.0},
               1: {"c_k": 0.1,  "c_eps": 0.5},
-              2: {"c_k": 0.2,  "c_eps": 0.1}}
+              2: {"c_k": 0.2,  "c_eps": 0.1}
+              }
 
-points = {i: Point(
-    parameters=val,
-    state="Received points from core"
-) for i, val in parameters.items()}
-
-simulation_config = MockSimulationConfig.load('configs/local_veros_config.json')
-batch_config = LocalBatchManagerConfig.load('configs/local_batch_manager_config.json')
+simulation_config = MockSimulationConfig.load("/Users/martamrozowska/Desktop/veropt/tests/configs/mock_simulation_config.json")
 experimental_state = ExperimentalState.make_fresh_state(
-    experiment_name="test_experiment",
-    experiment_directory="/Users/martamrozowska/Desktop/veropt_testing/exp_test_experiment",
-    state_json="/Users/martamrozowska/Desktop/veropt_testing/exp_test_experiment/experimental_state.json",
-    points=points,
-    next_point=3,
-)
+    experiment_name=experiment_name,
+    experiment_directory=experiment_directory,
+    state_json=state_json
+    )
 
 runner = MockSimulationRunner(config=simulation_config)
-batch_manager = LocalBatchManager(
-    config=batch_config,
+my_batch_manager = batch_manager(
+    experiment_mode=ExperimentMode.LOCAL,
     simulation_runner=runner,
-)
+    run_script_filename=experiment_name,
+    run_script_root_directory=run_script_root_directory,
+    results_directory=results_directory,
+    output_filename=""
+    )
 
-results = batch_manager.run_batch(
+results = my_batch_manager.run_batch(
     dict_of_parameters=parameters,
     experimental_state=experimental_state
-)
+    )
 
 for result in results.values():
-    print("Output dict:", result.model_dump())
-    print("Return code:", result.return_code)
-    print("Stdout file:", result.stdout_file)
-    print("Stderr file:", result.stderr_file)
+    print("Output dict:", [r.model_dump() for r in result])
