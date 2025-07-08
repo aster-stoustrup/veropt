@@ -1,9 +1,7 @@
-from typing import Any, Dict, List, TypeVar, Optional, Literal, Union
-import time
+from typing import TypeVar, Optional, Union, Generic, Self
 import json
-import os
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner
-from veropt.interfaces.batch_manager import BatchManager, BatchManagerFactory, ExperimentMode
+from veropt.interfaces.batch_manager import BatchManager, batch_manager
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
 from veropt.interfaces.experiment_utility import (
     ExperimentConfig, OptimiserConfig, ExperimentalState, PathManager, Point
@@ -15,59 +13,48 @@ from veropt.optimiser.objective import InterfaceObjective
 from veropt.optimiser.constructors import bayesian_optimiser
 
 import torch
-from pydantic import BaseModel
+
+torch.set_default_dtype(torch.float64)
 
 
 SR = TypeVar("SR", bound=SimulationRunner)
-ConfigType = TypeVar("ConfigType", bound=Config)
+RP = TypeVar("RP", bound=ResultProcessor)
+BM = TypeVar("BM", bound=BatchManager)
 
 
-# TODO: Aster, how to handle nan inputs? 
-# TODO: Aster, do we implement an option to minimise or maximise in the experiment 
-#       (and maximise in VerOpt core by default)?
-# TODO: Aster, should VerOpt core be able to read in pre-simulated initial points?
-# TODO: Aster, how to ensure that the objectives passed on to the optimiser
-#       are in the correct order?    
-# TODO: Should the console output be saved when experiment is finished or stopped?
-#       - save optimizer object with experiment
-# TODO: Aster, here is the list of what experiment wants from the optimiser:
-#       - At minimum, what info do I have to pass to the optimiser to initialise it?
-#       - Default hyperparameter options for default models
-#       - Should Experiment take in the optimiser object in order to change the hyperparameters easily?
-#       - How to run a single optimisation step?
-#       - How to access objective functions vals and coords in order to sanity check?
-#       - If possible, a log of what optimiser does per optimisation step
-
-
-# TODO: This class could actually take in veropt core structure of the candidates and evaluated points
-#       transform + save them, and then load them back in the same structure.
-#       Consider if the json files should be temporary.
 class ExperimentObjective(InterfaceObjective):
     def __init__(
             self,
-            bounds: list[list[float]],
+            bounds_lower: list[float],
+            bounds_upper: list[float],
             n_variables: int,
             n_objectives: int,
+            variable_names: list[str],
+            objective_names: list[str],
             suggested_parameters_json: str,
-            evaluated_objectives_json: str,
-            variable_names: Optional[list[str]] = None,
-            objective_names: Optional[list[str]] = None
+            evaluated_objectives_json: str
     ):
 
-        self.bounds = torch.tensor(bounds)
-        self.n_variables = n_variables
-        self.n_objectives = n_objectives
         self.suggested_parameters_json = suggested_parameters_json
         self.evaluated_objectives_json = evaluated_objectives_json
-        self.variable_names = variable_names
-        self.objective_names = objective_names
+
+        super().__init__(
+            bounds_lower=bounds_lower,
+            bounds_upper=bounds_upper,
+            n_variables=n_variables,
+            n_objectives=n_objectives,
+            variable_names=variable_names,
+            objective_names=objective_names
+            )
 
     def save_candidates(
             self,
             suggested_variables: dict[str, torch.Tensor],
     ) -> None:
+
+        print(suggested_variables)
         
-        suggested_variables_np = {name: value.numpy() for name, value in suggested_variables.items()}
+        suggested_variables_np = {name: value.tolist() for name, value in suggested_variables.items()}
 
         with open(self.suggested_parameters_json, 'w') as f:
             json.dump(suggested_variables_np, f)
@@ -83,17 +70,26 @@ class ExperimentObjective(InterfaceObjective):
         suggested_variables = {name: torch.tensor(value) for name, value in suggested_variables_np.items()}
         evaluated_objectives = {name: torch.tensor(value) for name, value in evaluated_objectives_np.items()}
 
+        print(suggested_variables)
+        print(evaluated_objectives)
+
         return suggested_variables, evaluated_objectives
+    
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+        pass
 
 
-class Experiment:
+class Experiment(Generic[SR, RP, BM]):
     def __init__(
             self, 
-            simulation_runner: SimulationRunner,
-            result_processor: ResultProcessor,
+            simulation_runner: SR,
+            result_processor: RP,
             experiment_config: Union[str, ExperimentConfig],
             optimiser_config: Union[str, OptimiserConfig],
-            batch_manager: Optional[BatchManager] = None,
+            batch_manager: Optional[BM] = None,
             state: Optional[Union[str, ExperimentalState]] = None
     ):
 
@@ -112,19 +108,21 @@ class Experiment:
         self.batch_manager = batch_manager
         self.result_processor = result_processor
 
-        self.initialise_experimental_set_up()
-
-    def _initialise_optimiser(self) -> None:
         self.n_parameters = len(self.experiment_config.parameter_names)
         self.n_objectives = len(self.experiment_config.objective_names)
 
-        # TODO: This is awkward; make not awkward?
-        bounds_lower = [bounds[0] for bounds in self.experiment_config.parameter_bounds.values()]
-        bounds_upper = [bounds[1] for bounds in self.experiment_config.parameter_bounds.values()]
-        self.parameter_bounds = [bounds_lower, bounds_upper]
+        self.initialise_experimental_set_up()
+
+    def _initialise_optimiser(self) -> None:
+
+        bounds_lower = [self.experiment_config.parameter_bounds[name][0] \
+                        for name in self.experiment_config.parameter_names]
+        bounds_upper = [self.experiment_config.parameter_bounds[name][1] \
+                        for name in self.experiment_config.parameter_names]
 
         objective = ExperimentObjective(
-            bounds=self.parameter_bounds,
+            bounds_lower=bounds_lower,
+            bounds_upper=bounds_upper,
             n_variables=self.n_parameters,
             n_objectives=self.n_objectives,
             variable_names=self.experiment_config.parameter_names,
@@ -143,18 +141,25 @@ class Experiment:
 
     def _initialise_batch_manager(self) -> None:
 
-        self.batch_manager_config = BatchManagerFactory.make_batch_manager_config(
-            experiment_mode=self.experiment_config.experiment_mode,
-            run_script_filename=self.experiment_config.run_script_filename,
-            run_script_root_directory=self.path_manager.run_script_root_directory,
-            output_filename=self.experiment_config.output_filename
-            )
-
-        self.batch_manager = BatchManagerFactory.make_batch_manager(
+        self.batch_manager = batch_manager(
             experiment_mode=self.experiment_config.experiment_mode,
             simulation_runner=self.simulation_runner,
-            config=self.batch_manager_config
+            run_script_filename=self.experiment_config.run_script_filename,
+            run_script_root_directory=self.path_manager.run_script_root_directory,
+            results_directory=self.path_manager.results_directory,
+            output_filename=self.experiment_config.output_filename,
+            check_job_status_sleep_time=60,  # TODO: put in config
             )
+        
+    def _initialise_objective_jsons(self) -> None:
+        initial_parameter_dict = {name: [] for name in self.experiment_config.parameter_names}
+        initial_objectives_dict = {name: [] for name in self.experiment_config.objective_names}
+
+        with open(self.path_manager.suggested_parameters_json, "w") as file:
+            json.dump(initial_parameter_dict, file)
+
+        with open(self.path_manager.evaluated_objectives_json, "w") as file:
+            json.dump(initial_objectives_dict, file)
 
     def _check_initialisation(self) -> None:
 
@@ -168,8 +173,7 @@ class Experiment:
         with open(self.path_manager.suggested_parameters_json, 'r') as f:
             suggested_parameters = json.load(f)
 
-        # TODO: Is this really necessary and does it work?
-        assert suggested_parameters.keys() == self.experiment_config.parameter_names
+        assert [key for key in suggested_parameters.keys()] == self.experiment_config.parameter_names
 
         dict_of_parameters = {}
 
@@ -190,17 +194,29 @@ class Experiment:
 
         return dict_of_parameters
 
-    def save_objectives_to_state(self) -> None:
-        ...
+    def save_objectives_to_state(
+            self,
+            dict_of_objectives: ObjectivesDict) -> None:
+        
+        # TODO: consider naming
+        for i, objective_values in dict_of_objectives.items():
+            self.state.points[i].objective_values = objective_values
+
+        self.state.save_to_json(self.state.state_json)
 
     def send_objectives_to_optimiser(
             self,
-            objectives: ObjectivesDict
+            dict_of_parameters: dict[int, dict],
+            dict_of_objectives: ObjectivesDict
     ) -> None:
-    # TODO: Is running an opt step correct to do here?
-    #       Or should VerOpt automatically run an opt step when receiving objectives
-    #       with a loader method?
-        ...
+        
+        evaluated_objectives = {name: [dict_of_objectives[i][name] for i in dict_of_parameters.keys()] \
+                                for name in self.experiment_config.objective_names}
+        
+        print(evaluated_objectives)
+        
+        with open(self.path_manager.evaluated_objectives_json, "w") as file:
+            json.dump(evaluated_objectives, file)
 
     def _sanity_check(
             self,
@@ -218,6 +234,7 @@ class Experiment:
     def initialise_experimental_set_up(self) -> None:
 
         self._initialise_optimiser()
+        self._initialise_objective_jsons()
 
         if self.batch_manager is None:
             self._initialise_batch_manager()
@@ -226,19 +243,19 @@ class Experiment:
 
     def run_experiment_step(self) -> None:
 
-        # TODO: Naming here is poor
-        # TODO: Aster, how to evaluate the initial points?
         self.optimiser.run_optimisation_step()
         dict_of_parameters = self.get_parameters_from_optimiser()
         results = self.batch_manager.run_batch(
             dict_of_parameters=dict_of_parameters,
             experimental_state=self.state)
-        objectives = self.result_processor.process(results=results)
+        dict_of_objectives = self.result_processor.process(results=results)
 
-        self._sanity_check(dict_of_parameters, results, objectives)
+        # self._sanity_check(dict_of_parameters, results, objectives)
 
-        self.save_objectives_to_state(objectives)
-        self.send_objectives_to_optimiser(objectives)
+        self.save_objectives_to_state(dict_of_objectives=dict_of_objectives)
+        self.send_objectives_to_optimiser(
+            dict_of_parameters=dict_of_parameters,
+            dict_of_objectives=dict_of_objectives)
 
     def run_experiment(self) -> None:
 
@@ -251,3 +268,4 @@ class Experiment:
     def restart_experiment(self) -> None:
 
         raise NotImplementedError("Restarting an experiment is not implemented yet.")
+

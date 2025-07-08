@@ -1,0 +1,5 @@
+{
+    "n_initial_points" : 6,
+    "n_bayesian_points": 6,
+    "n_evaluations_per_step": 2
+}

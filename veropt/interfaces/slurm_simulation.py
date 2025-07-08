@@ -1,9 +1,8 @@
 import os
-import subprocess
 import stat
 import time
-from typing import Union, Literal
-from veropt.interfaces.simulation import Simulation, SimulationResult, SimulationResultsDict, SimulationRunner, SimulationRunnerConfig
+from typing import Literal
+from veropt.interfaces.simulation import Simulation, SimulationResult, SimulationRunner
 from veropt.interfaces.utility import Config, run_subprocess
 from veropt.interfaces.veros_utility import edit_veros_run_script
 

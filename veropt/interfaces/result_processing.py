@@ -63,9 +63,6 @@ class ResultProcessor(ABC):
         if result.return_code is not None and result.return_code != 0:
             return_nan = True
             print(f"Result {result.simulation_id} has a non-zero return code: {result.return_code}")
-        elif not os.path.isfile(result.output_file):
-            return_nan = True
-            print(f"Output file for result {result.simulation_id} does not exist: {result.output_file}")
         else:
             try:
                 self.open_output_file(result=result)
@@ -79,18 +76,17 @@ class ResultProcessor(ABC):
 class MockResultProcessor(ResultProcessor):
     def __init__(
             self,
-            objectives: dict[str, float],
             objective_names: list[str]
     ):
-        self.objectives = objectives
         self.objective_names = objective_names
+        self.counter = 1.0
 
     def open_output_file(
             self,
             result: SimulationResult
     ) -> None:
 
-        if "error_output" in result.output_file:
+        if "error_output" in result.output_filename:
             raise ValueError("Mock error opening output file.")
         else:
             pass
@@ -99,5 +95,6 @@ class MockResultProcessor(ResultProcessor):
             self,
             result: Union[SimulationResult, list[SimulationResult]]
     ) -> dict[str, float]:
-
-        return self.objectives
+        objectives = {name: self.counter for name in self.objective_names}
+        self.counter += 1
+        return objectives

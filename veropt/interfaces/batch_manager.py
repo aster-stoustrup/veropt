@@ -3,16 +3,13 @@ from enum import StrEnum
 import os
 import tqdm
 import time
-import subprocess
-from typing import TypeVar, Generic, List, Dict, Literal, Union, Tuple, Optional
-from pydantic import BaseModel
+from typing import TypeVar, Generic, Optional
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner, SimulationResultsDict
 from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
-from veropt.interfaces.utility import Config, create_directory, copy_files, run_subprocess
+from veropt.interfaces.utility import create_directory, copy_files, run_subprocess
 
 
 SR = TypeVar("SR", bound=SimulationRunner)
-ConfigType = TypeVar("ConfigType", bound=BaseModel)
 
 
 def _check_if_point_exists(
@@ -105,10 +102,6 @@ class BatchManager(ABC, Generic[SR]):
         self.check_job_status_sleep_time = 60 if check_job_status_sleep_time is None \
             else check_job_status_sleep_time 
         self.remote = remote
-
-        if self.remote:
-            assert hostname is not None, "Hostname is required for remote experiments."
-
         self.hostname = hostname
 
     @abstractmethod
@@ -255,7 +248,7 @@ def batch_manager(
             results_directory: str,
             output_filename: str,
             check_job_status_sleep_time: int = 60
-    ) -> BatchManager:
+    ) -> BatchManager[SR]:
         
         batch_manager_classes = {
             ExperimentMode.LOCAL: LocalBatchManager,
@@ -263,7 +256,8 @@ def batch_manager(
             ExperimentMode.REMOTE_SLURM: RemoteSlurmBatchManager
             }
         
-        assert experiment_mode in ExperimentMode, f"Unsupported experiment mode: {experiment_mode}."
+        assert experiment_mode in ExperimentMode, \
+            f"Unsupported experiment mode: {experiment_mode}; expected one of: {[mode.value for mode in ExperimentMode]}."
 
         remote = True if experiment_mode == ExperimentMode.REMOTE_SLURM else False
         
@@ -280,7 +274,7 @@ def batch_manager(
             )
 
 
-class LocalBatchManager(BatchManager):
+class LocalBatchManager(BatchManager[SR], Generic[SR]):
     def run_batch(
             self,
             dict_of_parameters: dict[int, dict],
@@ -290,16 +284,15 @@ class LocalBatchManager(BatchManager):
         results = {}
 
         # TODO: This is fine for now but could be done better; however it is important to check
-        #       - If use Process manager instead of for loop, does Simulation structure have to change?
         #       - Support for running simulation on GPUs!!!
         for i, parameters in dict_of_parameters.items():
             simulation_id, result_i_directory = self._set_up_directory(i=i)
 
-            _check_if_point_exists(
-                i=i,
-                parameters=parameters,
-                experimental_state=experimental_state
-                )
+            # _check_if_point_exists(
+            #     i=i,
+            #     parameters=parameters,
+            #     experimental_state=experimental_state
+            #     )
 
             experimental_state.points[i].state = "Simulation started"
             result = self.simulation_runner.save_set_up_and_run(
@@ -320,7 +313,7 @@ class LocalBatchManager(BatchManager):
         return results
 
 
-class LocalSlurmBatchManager(BatchManager):
+class LocalSlurmBatchManager(BatchManager[SR], Generic[SR]):
     def run_batch(
             self,
             dict_of_parameters: dict[int, dict],
@@ -359,7 +352,7 @@ class LocalSlurmBatchManager(BatchManager):
         return results
 
 
-class RemoteSlurmBatchManager(BatchManager):
+class RemoteSlurmBatchManager(BatchManager[SR], Generic[SR]):
     def run_batch(
             self,
             dict_of_parameters: dict[int, dict],

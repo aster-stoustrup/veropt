@@ -15,7 +15,7 @@ parameters = {0: {"c_k": 0.05, "c_eps": 1.0},
               2: {"c_k": 0.2,  "c_eps": 0.1}
               }
 
-simulation_config = MockSimulationConfig.load("/Users/martamrozowska/Desktop/veropt/tests/configs/mock_simulation_config.json")
+simulation_config = MockSimulationConfig.load("/Users/martamrozowska/Desktop/veropt/tests/interfaces/configs/mock_simulation_config.json")
 experimental_state = ExperimentalState.make_fresh_state(
     experiment_name=experiment_name,
     experiment_directory=experiment_directory,

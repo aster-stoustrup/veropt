@@ -1,4 +1,4 @@
-from typing import Dict, Union, Optional, List, Self, TypedDict
+from typing import Union, Optional, Self
 import os
 from veropt.interfaces.simulation import SimulationResult
 from veropt.interfaces.utility import Config, create_directory
@@ -11,7 +11,7 @@ class Point(BaseModel):
     state: str
     job_id: Optional[int] = None
     result: Optional[Union[SimulationResult, list[SimulationResult]]] = None
-    objective_value: Optional[dict[str, float]] = None
+    objective_values: Optional[dict[str, float]] = None
 
 
 class OptimiserConfig(Config):
