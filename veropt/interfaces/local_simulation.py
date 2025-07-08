@@ -7,72 +7,94 @@ from typing import Optional, Unpack, Union, TypedDict, Literal, Dict, List
 from veropt.interfaces.simulation import SimulationRunnerConfig, SimulationResult, Simulation, SimulationRunner
 from veropt.interfaces.veros_utility import edit_veros_run_script
 from veropt.interfaces.utility import Config
+
 import torch
 from pydantic import BaseModel
 
 
-class EnvManager(ABC):
+class VirtualEnvironmentManager(ABC):
+    @abstractmethod
+    def make_activation_command(self) -> str:
+        ...
+    
+    def activate_virtual_environment(self) -> None:
+        source = self.make_activation_command()
+        dump = 'python -c "import os, json;print(json.dumps(dict(os.environ)))"'
+        pipe = subprocess.Popen(
+            args=['/bin/bash', '-c', '%s && %s' %(source,dump)], 
+            stdout=subprocess.PIPE)
+        env = json.loads(s=pipe.stdout.read())
+        os.environ = env
+
+    def run_in_virtual_environment(
+            self,
+            command_arguments: list[str],
+            directory: str
+    ) -> tuple[str, str, str]:
+        self.activate_virtual_environment()
+        os.chdir(directory)
+        env_copy = os.environ.copy()
+        pipe = subprocess.Popen(
+            args=command_arguments,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env_copy)
+        
+        output, error = pipe.communicate()
+        return_code = pipe.returncode
+        
+        return output, error, return_code
+
+
+class Conda(VirtualEnvironmentManager):
     def __init__(
             self,
-            env_root: str,
-            env_name: str,
-            command_arguments: list[str]
+            path_to_conda: str,
+            env_name: str
     ):
-
-        self.env_root = env_root
+        self.path_to_conda = path_to_conda
         self.env_name = env_name
-        self.command_arguments = command_arguments
 
-    @abstractmethod
-    def run_in_env(
+    def make_activation_command(self):
+        return f"source {self.path_to_conda}/bin/activate {self.env_name}"
+
+
+class Venv(VirtualEnvironmentManager):
+    def __init__(
             self,
-            directory: str
-    ) -> subprocess.CompletedProcess:
-        ...
+            path_to_env: str
+    ):
+        self.path_to_env = path_to_env
 
+    def make_activation_command(self):
+        return f"source {self.path_to_env}/bin/activate"
+    
 
-class Venv(EnvManager):
-    def run_in_env(
-            self,
-            directory: str
-    ) -> subprocess.CompletedProcess:
-        python_exe = self.env_root / "bin" / "python"
-        command = [str(python_exe), *self.command_arguments]
-
-        env = os.environ.copy()
-        env["VIRTUAL_ENV"] = str(self.env_root)
-        env["PATH"] = f"{self.env_root/'bin'}:{env['PATH']}"
-
-        return subprocess.run(
-            args=command,
-            cwd=directory,
-            env=env,
-            capture_output=True,
-            text=True
-            )
-
-
-class Conda(EnvManager):
-    def run_in_env(
-            self,
-            directory: str
-    ) -> subprocess.CompletedProcess:
-        conda_env_path = self.env_root / "envs" / self.env_name
-        python_exe = conda_env_path / "bin" / "python"
-        command = [str(python_exe), *self.command_arguments]
-
-        env = os.environ.copy()
-        env["CONDA_PREFIX"] = str(conda_env_path)
-        env["PATH"] = f"{conda_env_path/'bin'}:{env['PATH']}"
-
-        return subprocess.run(
-            args=command,
-            cwd=directory,
-            env=env,
-            capture_output=True,
-            text=True
-            )
-
+def virtual_environment_manager(
+        manager: Literal["conda", "venv"],
+        path_to_conda: Optional[str] = None,
+        env_name: Optional[str] = None,
+        path_to_env: Optional[str] = None,
+) -> VirtualEnvironmentManager:
+    
+    if manager == "conda":
+        assert path_to_conda is not None, \
+            "Conda picked as virtual env manager, but path to conda is missing."
+        assert env_name is not None, \
+            "Conda picked as virtual env manager, but env name is missing."
+        
+        return Conda(
+            path_to_conda=path_to_conda,
+            env_name=env_name
+        )
+    
+    elif manager == "venv":
+        assert path_to_env is not None, \
+            "Venv picked as virtual env manager, but path to env is missing."
+        
+        return Venv(path_to_env=path_to_env)
+    
 
 class LocalSimulation(Simulation):
     """Run a simulation in a specified environment as a subprocess."""
@@ -80,40 +102,44 @@ class LocalSimulation(Simulation):
             self,
             simulation_id: str,
             run_script_directory: str,
-            env_manager: EnvManager,
-            output_file: str
+            run_command_arguments: list[str],
+            env_manager: VirtualEnvironmentManager,
+            output_filename: str
     ):
 
         self.id = simulation_id
         self.run_script_directory = run_script_directory
+        self.run_command_arguments = run_command_arguments
         self.env_manager = env_manager
-        self.output_file = output_file
+        self.output_filename = output_filename
 
-    # TODO: Should there be an option to supress output files?
     def run(
             self,
             parameters: dict[str, float]
     ) -> SimulationResult:
 
-        result = self.env_manager.run_in_env(directory=self.run_script_directory)
+        output, error, return_code = self.env_manager.run_in_virtual_environment(
+            command_arguments=self.run_command_arguments,
+            directory=self.run_script_directory
+        )
 
         stdout_file = os.path.join(self.run_script_directory, f"{self.id}.out")
         stderr_file = os.path.join(self.run_script_directory, f"{self.id}.err")
 
         with open(stdout_file, "w") as f_out:
-            f_out.write(result.stdout)
+            f_out.write(output)
 
         with open(stderr_file, "w") as f_err:
-            f_err.write(result.stderr)
+            f_err.write(error)
 
         return SimulationResult(
             simulation_id=self.id,
             parameters=parameters,
             stdout_file=stdout_file,
             stderr_file=stderr_file,
-            return_code=result.returncode,
+            return_code=return_code,
             output_directory=self.run_script_directory,
-            output_filename=self.output_file
+            output_filename=self.output_filename
             )
 
 
@@ -179,9 +205,10 @@ class MockSimulationRunner(SimulationRunner):
 
 class LocalVerosConfig(Config):
     env_manager: Literal["conda", "venv"]
-    env_name: str
-    env_root: str
-    veros_path: str
+    env_name: Optional[str]
+    path_to_conda: Optional[str]
+    path_to_env: Optional[str]
+    path_to_veros_executable: str
     backend: Literal["jax", "numpy"]
     device: Literal["cpu", "gpu"]
     float_type: Literal["float32", "float64"]
@@ -201,8 +228,7 @@ class LocalVerosRunner(SimulationRunner):
             run_script: str
     ) -> str:
         gpu_string = f"--backend {self.config.backend} --device {self.config.device}"
-        # TODO: Using "veros_path" here is misleading. It should be the path to the Veros executable.
-        command = f"{self.config.veros_path} run {gpu_string}" \
+        command = f"{self.config.path_to_veros_executable} run {gpu_string}" \
                   f" --float-type {self.config.float_type} {run_script}"
         return command
 
@@ -224,23 +250,17 @@ class LocalVerosRunner(SimulationRunner):
 
         command_arguments = self._make_command(run_script=run_script).split(" ")
 
-        # TODO: This is bad. It should be a factory method or similar?
-        env_manager_classes = {
-            "conda": Conda,
-            "venv": Venv,
-            }
-        
-        EnvManagerClass = env_manager_classes[self.config.env_manager]
-
-        env_manager = EnvManagerClass(
-            env_root=self.config.env_root,
+        env_manager = virtual_environment_manager(
+            manager=self.config.env_manager,
+            path_to_conda=self.config.path_to_conda,
             env_name=self.config.env_name,
-            command_arguments=command_arguments
-            )
+            path_to_env=self.config.path_to_env
+        )
 
         simulation = LocalSimulation(
             simulation_id=simulation_id,
             run_script_directory=run_script_directory,
+            run_command_arguments=command_arguments,
             env_manager=env_manager,
             output_filename=output_filename
             )

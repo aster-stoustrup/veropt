@@ -15,6 +15,38 @@ SR = TypeVar("SR", bound=SimulationRunner)
 ConfigType = TypeVar("ConfigType", bound=BaseModel)
 
 
+def _check_if_point_exists(
+        i: int,
+        parameters: dict[str, float],
+        experimental_state: ExperimentalState
+) -> None:
+    
+    try:
+        state = experimental_state.point[i].state
+    except:
+        _initialise_point(
+            i=i,
+            parameters=parameters,
+            experimental_state=experimental_state
+        )
+
+
+def _initialise_point(
+        i: int,
+        parameters: dict[str, float],
+        experimental_state: ExperimentalState
+) -> None:
+    
+    point = Point(
+        state="Initialised by batch manager",
+        parameters=parameters
+    )
+
+    experimental_state.points[i] = point
+
+    Warning(f"Point {i} not found; initialising with batch manager.")
+
+
 def _get_job_status_dict(
         output: str
 ) -> dict[str, str]:
@@ -161,7 +193,7 @@ class BatchManager(ABC, Generic[SR]):
             time.sleep(60)
 
         return state
-    
+   
 
 def batch_manager(
             experiment_mode: str,
@@ -211,6 +243,12 @@ class LocalBatchManager(BatchManager):
         for i, parameters in dict_of_parameters.items():
             simulation_id, result_i_directory = self._set_up_directory(i=i)
 
+            _check_if_point_exists(
+                i=i,
+                parameters=parameters,
+                experimental_state=experimental_state
+                )
+
             experimental_state.points[i].state = "Simulation started"
             result = self.simulation_runner.save_set_up_and_run(
                 simulation_id=simulation_id,
@@ -248,6 +286,12 @@ class LocalSlurmBatchManager(BatchManager):
                 )
 
             results[i] = result
+
+            _check_if_point_exists(
+                i=i,
+                parameters=parameters,
+                experimental_state=experimental_state
+                )
 
             experimental_state.points[i].state = "Simulation started" if job_id is not None \
                 else "Simulation failed to start"

@@ -15,7 +15,7 @@ parameters = {
     "c_k": 0.05,
     "c_eps": 1.0
 }
-local_config = LocalVerosConfig.load('configs/local_veros_config.json')
+local_config = LocalVerosConfig.load('/Users/martamrozowska/Desktop/veropt/tests/configs/local_veros_config.json')
 
 simulation_runner = LocalVerosRunner(config=local_config)
 result = simulation_runner.save_set_up_and_run(
@@ -23,8 +23,8 @@ result = simulation_runner.save_set_up_and_run(
     parameters=parameters,
     run_script_directory="/Users/martamrozowska/Desktop/veros/acc",
     run_script_filename="acc",
-    output_filename="acc.averages")
+    output_filename="acc")
 print("Output dict:", result.model_dump())
 
-ds = xr.open_dataset(result.output_file)
-print(ds)
+# ds = xr.open_dataset(result.output_filename)
+# print(ds)

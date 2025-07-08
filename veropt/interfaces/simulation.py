@@ -61,11 +61,13 @@ class SimulationRunner(ABC):
             output_filename=output_filename
         )
 
+        error = TypeError("Simulation must return a SimulationResult or a list of SimulationResults.")
+
         if isinstance(result, list):
             for r in result:
-                assert isinstance(r, SimulationResult)
+                assert isinstance(r, SimulationResult), error
         else:
-            assert isinstance(result, SimulationResult)
+            assert isinstance(result, SimulationResult), error
 
         return result
 
