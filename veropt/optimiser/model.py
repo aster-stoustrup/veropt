@@ -191,7 +191,6 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             state_dict=state_dict
         )
 
-
     def gather_dicts_to_save(self) -> dict:
 
         if self.model_with_data is not None:

@@ -351,7 +351,7 @@ def format_output_for_objective(
 ) -> dict[str, torch.Tensor]:
 
     suggested_variables_dict = {
-        name: suggested_variables[variable_number] for (variable_number, name) in enumerate(variable_names)
+        name: suggested_variables[:, variable_number] for (variable_number, name) in enumerate(variable_names)
     }
 
     return suggested_variables_dict

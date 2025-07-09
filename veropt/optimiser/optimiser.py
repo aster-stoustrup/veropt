@@ -174,7 +174,7 @@ class BayesianOptimiser(SavableClass):
             saved_state=saved_state['objective']['state']
         )
 
-        assert type(objective) is CallableObjective or type(objective) is InterfaceObjective
+        assert issubclass(type(objective), CallableObjective) or issubclass(type(objective), InterfaceObjective)
 
         predictor = rehydrate_object(
             superclass=Predictor,

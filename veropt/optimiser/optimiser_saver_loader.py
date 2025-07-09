@@ -64,6 +64,12 @@ def load_optimiser_from_settings(
         objective: Union[InterfaceObjective, CallableObjective],
 ) -> 'BayesianOptimiser':
 
+    # TODO: Add some checks to see if the file is okay
+    #   - Can partially rely on the nice errors from the constructor
+    #   - But need to check...
+    #           - presence of mandatory arguments
+    #           - that keyword arguments are correct for the top-level constructor
+
     with open(f'{file_name}.json', 'r') as json_file:
         saved_dict = json.load(json_file)
 
