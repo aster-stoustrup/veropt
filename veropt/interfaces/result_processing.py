@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import os
-from typing import Dict, Union, List
+import xarray as xr
+from typing import Union
 from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
 
 
@@ -18,7 +19,7 @@ class ResultProcessor(ABC):
     @abstractmethod
     def calculate_objectives(
             self,
-            result: Union[SimulationResult, list[SimulationResult]]
+            result: SimulationResult
     ) -> dict[str, float]:
         ...
 
@@ -38,18 +39,13 @@ class ResultProcessor(ABC):
 
         for i, result in results.items():
 
-            if isinstance(result, list):
-                filtered_results = [self._return_nan(result=r) for r in result]
-                if any(filtered_results):
-                    objectives_dict[i] = {name: float('nan') for name in self.objective_names}
-                else:
-                    objectives_dict[i] = self.calculate_objectives(result=result)
-
-            elif isinstance(result, SimulationResult):
-                if self._return_nan(result=result):
-                    objectives_dict[i] = {name: float('nan') for name in self.objective_names}
-                else:
-                    objectives_dict[i] = self.calculate_objectives(result=result)
+            if self._return_nan(result):
+                objectives_dict[i] = {name: float('nan') for name in self.objective_names}
+            else:
+                objectives = self.calculate_objectives(result=result)
+                assert [isinstance(objectives[name], float) for name in self.objective_names], \
+                    "Objective values must be floats."
+                objectives_dict[i] = objectives
 
         return objectives_dict
 
@@ -76,10 +72,12 @@ class ResultProcessor(ABC):
 class MockResultProcessor(ResultProcessor):
     def __init__(
             self,
-            objective_names: list[str]
+            objective_names: list[str],
+            objectives: dict[str, float]
     ):
         self.objective_names = objective_names
         self.counter = 1.0
+        self.objectives = objectives
 
     def open_output_file(
             self,
@@ -98,3 +96,26 @@ class MockResultProcessor(ResultProcessor):
         objectives = {name: self.counter for name in self.objective_names}
         self.counter += 1
         return objectives
+
+
+class TestVerosResultProcessor(ResultProcessor):
+    def open_output_file(
+            self, 
+            result: SimulationResult
+    ) -> None:
+        
+        filename = f"{result.output_filename}.overturning.nc"
+        dataset = os.path.join(result.output_directory, filename)
+        xr.open_dataset(dataset)
+
+    def calculate_objectives(
+            self, 
+            result: SimulationResult
+    ) -> dict[str, float]:
+
+        filename = f"{result.output_filename}.overturning.nc"
+        dataset = os.path.join(result.output_directory, filename)
+        ds = xr.open_dataset(dataset)
+        amoc_strength = abs(ds.sel(zt=-1000, method="nearest").vsf_depth.min().values * 1e-6)
+
+        return {self.objective_names[0]: amoc_strength}

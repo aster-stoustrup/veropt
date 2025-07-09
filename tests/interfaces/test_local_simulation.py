@@ -15,7 +15,7 @@ parameters = {
     "c_k": 0.05,
     "c_eps": 1.0
 }
-local_config = LocalVerosConfig.load('/Users/martamrozowska/Desktop/veropt/tests/configs/local_veros_config.json')
+local_config = LocalVerosConfig.load('tests/interfaces/configs/local_veros_config.json')
 
 simulation_runner = LocalVerosRunner(config=local_config)
 result = simulation_runner.save_set_up_and_run(

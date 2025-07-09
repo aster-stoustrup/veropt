@@ -17,7 +17,7 @@ class SimulationResult(BaseModel):
     slurm_log_file: Optional[str] = None
 
 
-SimulationResultsDict = Union[dict[int, SimulationResult], dict[int, list[SimulationResult]]]
+SimulationResultsDict = dict[int, SimulationResult]
 
 
 class Simulation(ABC):
@@ -35,6 +35,17 @@ class SimulationRunnerConfig:
 
 class SimulationRunner(ABC):
 
+    @abstractmethod
+    def set_up_and_run(
+            self,
+            simulation_id: str,
+            parameters: dict[str, float],
+            run_script_directory: str,
+            run_script_filename: str,
+            output_filename: str
+    ) -> SimulationResult:
+        ...
+
     def save_set_up_and_run(
             self,
             simulation_id: str,
@@ -42,7 +53,7 @@ class SimulationRunner(ABC):
             run_script_directory: str,
             run_script_filename: str,
             output_filename: str
-    ) -> Union[SimulationResult, list[SimulationResult]]:
+    ) -> SimulationResult:
 
         parameters_json_filename = f"{simulation_id}_parameters.json"
         parameters_json = os.path.join(run_script_directory, parameters_json_filename)
@@ -60,13 +71,7 @@ class SimulationRunner(ABC):
             output_filename=output_filename
         )
 
-        error = TypeError("Simulation must return a SimulationResult or a list of SimulationResults.")
-
-        if isinstance(result, list):
-            for r in result:
-                assert isinstance(r, SimulationResult), error
-        else:
-            assert isinstance(result, SimulationResult), error
+        assert isinstance(result, SimulationResult), "Simulation must return a SimulationResult."
 
         return result
 
@@ -76,16 +81,5 @@ class SimulationRunner(ABC):
             parameters_json: str
     ) -> None:
 
-        with open(parameters_json, 'w') as fp:
-            json.dump(parameters, fp)
-
-    @abstractmethod
-    def set_up_and_run(
-            self,
-            simulation_id: str,
-            parameters: dict[str, float],
-            run_script_directory: str,
-            run_script_filename: str,
-            output_filename: str
-    ) -> Union[SimulationResult, list[SimulationResult]]:
-        ...
+        with open(parameters_json, 'w') as f:
+            json.dump(parameters, f)

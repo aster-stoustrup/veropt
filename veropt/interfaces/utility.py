@@ -3,28 +3,7 @@ import subprocess
 import os
 import shutil
 import sys
-from typing import Self, Union, Optional
-
-
-def run_subprocess(
-        command_arguments: list[str],
-        environment: Optional[str] = None,
-        directory: Optional[str] = None
-) -> tuple[str, str, str]:
-    
-    pipe = subprocess.Popen(
-        args=command_arguments,
-        cwd=directory,
-        env=environment,
-        stdout=subprocess.PIPE, 
-        stderr=subprocess.PIPE,
-        text=True)
-        
-    output = pipe.stdout.read()
-    error = pipe.stderr.read()
-    return_code = pipe.returncode.read()
-
-    return output, error, return_code
+from typing import Self, Union
 
 
 def create_directory(path: str) -> None:
@@ -53,12 +32,8 @@ def copy_files(
             if not os.path.exists(destination_file):
                 shutil.copy(source_file, destination_directory)
                 print(f"Copied {source_file} to {destination_directory}")
-
             else:
                 print(f"File already exists: {destination_file}")
-
-        else:  # This is wrong; source directories containing supporting files should also be copied!
-            print(f"Skipping non-file: {source_file}")
 
 
 class Config(BaseModel):
@@ -66,7 +41,7 @@ class Config(BaseModel):
     @classmethod
     def load(
             cls,
-            source: Optional[Union[str, Self]] = None
+            source: Union[str, Self]
     ) -> Self:
 
         if isinstance(source, str):
@@ -95,6 +70,6 @@ class Config(BaseModel):
                 loaded_class = cls.model_validate_json(f.read())
         except Exception as e:
             print(f"While reading {path}: {e}")
-            sys.exit(1)
+            sys.exit()
 
         return loaded_class

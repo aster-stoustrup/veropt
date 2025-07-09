@@ -7,5 +7,5 @@
     "backend": "numpy",
     "device": "cpu",
     "float_type": "float64",
-    "keep_old_params": 1
+    "keep_old_params": 0
 }

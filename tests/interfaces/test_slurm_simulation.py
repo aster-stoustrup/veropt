@@ -1,6 +1,6 @@
 from veropt.interfaces.slurm_simulation import SlurmSimulation, SlurmVerosConfig, SlurmVerosRunner
 
-config = SlurmVerosConfig.load("/groups/ocean/mmroz/veropt_dev/veropt/tests/configs/slurm_veros_config.json")
+config = SlurmVerosConfig.load("configs/slurm_veros_config.json")
 
 simulation_runner = SlurmVerosRunner(config=config)
 

@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 import json
+import subprocess
 import os
 from typing import Optional, Union, Literal
 from veropt.interfaces.simulation import SimulationResult, Simulation, SimulationRunner
 from veropt.interfaces.veros_utility import edit_veros_run_script
-from veropt.interfaces.utility import Config, run_subprocess
+from veropt.interfaces.utility import Config
 
 
 class VirtualEnvironmentManager(ABC):
@@ -15,21 +16,27 @@ class VirtualEnvironmentManager(ABC):
     def activate_virtual_environment(self) -> None:
         source = self.make_activation_command()
         dump = 'python -c "import os, json;print(json.dumps(dict(os.environ)))"'
-        output, _, _ = run_subprocess(command_arguments=['/bin/bash', '-c', '%s && %s' %(source,dump)])
-        os.environ = json.loads(s=output)
+        pipe = subprocess.Popen(
+            args=['/bin/bash', '-c', '%s && %s' %(source,dump)], 
+            stdout=subprocess.PIPE)
+
+        os.environ = json.loads(s=pipe.stdout.read())
 
     def run_in_virtual_environment(
             self,
             command_arguments: list[str],
             directory: str
-    ) -> tuple[str, str, str]:
+    ) -> subprocess.CompletedProcess:
         self.activate_virtual_environment()
         os.chdir(directory)
         env_copy = os.environ.copy()
         
-        return run_subprocess(
-            command_arguments=command_arguments,
-            environment=env_copy
+        return subprocess.run(
+            args=command_arguments,
+            cwd=directory,
+            env=env_copy,
+            capture_output=True,
+            text=True
         )
 
 
@@ -42,7 +49,7 @@ class Conda(VirtualEnvironmentManager):
         self.path_to_conda = path_to_conda
         self.env_name = env_name
 
-    def make_activation_command(self):
+    def make_activation_command(self) -> str:
         return f"source {self.path_to_conda}/bin/activate {self.env_name}"
 
 
@@ -53,7 +60,7 @@ class Venv(VirtualEnvironmentManager):
     ):
         self.path_to_env = path_to_env
 
-    def make_activation_command(self):
+    def make_activation_command(self) -> str:
         return f"source {self.path_to_env}/bin/activate"
     
 
@@ -92,7 +99,7 @@ class LocalSimulation(Simulation):
             env_manager: VirtualEnvironmentManager,
             output_filename: str
     ):
-
+        
         self.id = simulation_id
         self.run_script_directory = run_script_directory
         self.run_command_arguments = run_command_arguments
@@ -104,7 +111,7 @@ class LocalSimulation(Simulation):
             parameters: dict[str, float]
     ) -> SimulationResult:
 
-        output, error, return_code = self.env_manager.run_in_virtual_environment(
+        result = self.env_manager.run_in_virtual_environment(
             command_arguments=self.run_command_arguments,
             directory=self.run_script_directory
         )
@@ -112,29 +119,29 @@ class LocalSimulation(Simulation):
         stdout_file = os.path.join(self.run_script_directory, f"{self.id}.out")
         stderr_file = os.path.join(self.run_script_directory, f"{self.id}.err")
 
-        with open(stdout_file, "w") as f_out:
-            f_out.write(output)
+        with open(stdout_file, "w") as f:
+            f.write(result.stdout)
 
-        with open(stderr_file, "w") as f_err:
-            f_err.write(error)
+        with open(stderr_file, "w") as f:
+            f.write(result.stderr)
 
         return SimulationResult(
             simulation_id=self.id,
             parameters=parameters,
             stdout_file=stdout_file,
             stderr_file=stderr_file,
-            return_code=return_code,
+            return_code=result.returncode,
             output_directory=self.run_script_directory,
             output_filename=self.output_filename
-            )
+        )
 
 
 class MockSimulationConfig(Config):
-    stdout_file: list[str] = ["test_stdout.txt"]
-    stderr_file: list[str] = ["test_stderr.txt"]
-    return_code: list[int] = [0]
-    output_filename: list[str] = ["test_output.nc"]
-    return_list: bool = False
+    stdout_file: str = "test_stdout.txt"
+    stderr_file: str = "test_stderr.txt"
+    return_code: int = 0
+    output_filename: str = "test_output.nc"
+    output_directory: str = ""
 
 
 class MockSimulationRunner(SimulationRunner):
@@ -152,41 +159,19 @@ class MockSimulationRunner(SimulationRunner):
             run_script_directory: str = "",
             run_script_filename: str = "",
             output_filename: str = ""
-    ) -> Union[SimulationResult, list[SimulationResult]]:
+    ) -> SimulationResult:
 
         print(f"Running test simulation with parameters: {parameters} and config: {self.config.model_dump()}")
 
-        if self.config.return_list:
-
-            stdout_files = self.config.stdout_file
-            stderr_files = self.config.stderr_file
-            return_codes = self.config.return_code
-            output_filenames = self.config.output_filename
-
-            zipped_lists = zip(stdout_files, stderr_files, return_codes, output_filenames)
-
-            results = [SimulationResult(
-                simulation_id=simulation_id,
-                parameters=parameters,
-                stdout_file=out_file,
-                stderr_file=err_file,
-                output_directory="",
-                output_filename=output_filename,
-                return_code=return_code
-                ) for out_file, err_file, return_code, output_filename in zipped_lists]
-
-            return results
-
-        else:
-            return SimulationResult(
-                simulation_id=simulation_id,
-                parameters=parameters,
-                stdout_file=self.config.stdout_file[0],
-                stderr_file=self.config.stderr_file[0],
-                output_directory="",
-                output_filename=self.config.output_filename[0],
-                return_code=self.config.return_code[0]
-                )
+        return SimulationResult(
+            simulation_id=simulation_id,
+            parameters=parameters,
+            stdout_file=self.config.stdout_file,
+            stderr_file=self.config.stderr_file,
+            output_directory=self.config.output_directory,
+            output_filename=self.config.output_filename,
+            return_code=self.config.return_code
+        )
 
 
 class LocalVerosConfig(Config):
@@ -232,7 +217,7 @@ class LocalVerosRunner(SimulationRunner):
         edit_veros_run_script(
             run_script=run_script, 
             parameters=parameters
-            ) if not self.config.keep_old_params else None
+        ) if not self.config.keep_old_params else None
 
         command_arguments = self._make_command(run_script=run_script).split(" ")
 
@@ -249,7 +234,7 @@ class LocalVerosRunner(SimulationRunner):
             run_command_arguments=command_arguments,
             env_manager=env_manager,
             output_filename=output_filename
-            )
+        )
 
         result = simulation.run(parameters=parameters)
 

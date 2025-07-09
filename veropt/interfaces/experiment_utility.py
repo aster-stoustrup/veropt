@@ -10,7 +10,7 @@ class Point(BaseModel):
     parameters: dict[str, float]
     state: str
     job_id: Optional[int] = None
-    result: Optional[Union[SimulationResult, list[SimulationResult]]] = None
+    result: Optional[SimulationResult] = None
     objective_values: Optional[dict[str, float]] = None
 
 
@@ -51,7 +51,7 @@ class ExperimentalState(Config):
             state_json=state_json,
             points=points,
             next_point=next_point
-            )
+        )
 
 
 class ExperimentConfig(Config):
@@ -89,13 +89,13 @@ class PathManager:
             path = os.path.join(
                 self.experiment_config.path_to_experiment,
                 self.experiment_config.experiment_directory_name
-                )
+            )
 
         else:
             path = os.path.join(
                 self.experiment_config.path_to_experiment,
                 self.experiment_config.experiment_name
-                )
+            )
 
         create_directory(path)
         return path
@@ -109,7 +109,7 @@ class PathManager:
             path = os.path.join(
                 self.experiment_directory,
                 f"{self.experiment_config.experiment_name}_setup"  # better name?
-                )
+            )
 
         assert os.path.isdir(path), "Run script root directory not found."
         return path
@@ -127,16 +127,16 @@ class PathManager:
         return os.path.join(
             self.results_directory,
             f"{self.experiment_config.experiment_name}_experimental_state.json"
-            )
+        )
 
     def make_suggested_parameters_json(self) -> str:
         return os.path.join(
             self.results_directory,
             f"{self.experiment_config.experiment_name}_suggested_parameters.json"
-            )
+        )
 
     def make_evaluated_objectives_json(self) -> str:
         return os.path.join(
             self.results_directory,
             f"{self.experiment_config.experiment_name}_evaluated_objectives.json"
-            )
+        )

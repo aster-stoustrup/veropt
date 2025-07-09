@@ -1,7 +1,0 @@
-{
-    "run_script_filename": "acc",
-    "run_script_root_directory": "/groups/ocean/mmroz/veropt_dev/test_sbatch/source",
-    "results_directory": "/groups/ocean/mmroz/veropt_dev/test_sbatch/results",
-    "output_filename": "test",
-    "check_job_status_sleep_time": 10
-}

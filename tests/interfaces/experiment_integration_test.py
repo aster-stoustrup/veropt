@@ -3,11 +3,12 @@ from veropt.interfaces.local_simulation import MockSimulationRunner, MockSimulat
 from veropt.interfaces.result_processing import MockResultProcessor
 
 objective_names = ["objective1"]
+objectives = {"objective1": 1.}
 
 simulation_config = MockSimulationConfig.load("/Users/martamrozowska/Desktop/veropt/tests/interfaces/configs/mock_simulation_config.json")
 simulation_runner = MockSimulationRunner(config=simulation_config)
 
-result_processor = MockResultProcessor(objective_names=objective_names)
+result_processor = MockResultProcessor(objective_names=objective_names, objectives=objectives)
 
 optimiser_config = "/Users/martamrozowska/Desktop/veropt/tests/interfaces/configs/optimiser_config.json"
 experiment_config = "/Users/martamrozowska/Desktop/veropt/tests/interfaces/configs/experiment_config.json"

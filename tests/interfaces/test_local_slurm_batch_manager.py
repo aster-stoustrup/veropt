@@ -2,7 +2,7 @@ from veropt.interfaces.slurm_simulation import SlurmVerosConfig, SlurmVerosRunne
 from veropt.interfaces.batch_manager import LocalSlurmBatchManager
 from veropt.interfaces.experiment_utility import ExperimentalState, Point
 
-runner_config = SlurmVerosConfig.load("/groups/ocean/mmroz/veropt_dev/veropt/tests/configs/slurm_veros_config.json")
+runner_config = SlurmVerosConfig.load("tests/configs/slurm_veros_config.json")
 simulation_runner = SlurmVerosRunner(config=runner_config)
 
 batch_manager = LocalSlurmBatchManager(
