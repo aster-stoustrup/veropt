@@ -1,6 +1,6 @@
 import abc
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Optional, TypedDict, Unpack
+from typing import Any, Callable, Literal, Optional, Self, TypedDict, Unpack
 
 import numpy as np
 import scipy
@@ -9,13 +9,13 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
-from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
+from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass, rehydrate_object
 from veropt.optimiser.utility import DataShape
 
 
 class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
 
-    name: str
+    name: str = 'meta'
     maximum_evaluations_per_step: int | None
 
     def __init__(
@@ -82,16 +82,24 @@ class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
     def gather_dicts_to_save(self) -> dict:
         return {
             'name': self.name,
-            'settings': self.settings.gather_dicts_to_save()
+            'state': {
+                'bounds': self.bounds,
+                'n_evaluations_per_step': self.n_evaluations_per_step,
+                'settings': self.settings.gather_dicts_to_save()
+            }
         }
 
     @classmethod
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'AcquisitionOptimiser':
+    ) -> Self:
 
-        raise NotImplementedError
+        return cls(
+            bounds=saved_state['bounds'],
+            n_evaluations_per_step=saved_state['n_evaluations_per_step'],
+            **saved_state['settings']
+        )
 
 
 class TorchNumpyWrapper:
@@ -377,10 +385,26 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
 
         self.scaling = 2 * float(np.sqrt(best_fitter.covariances_[top_cluster_ind]))
 
-
     def gather_dicts_to_save(self) -> dict:
-        return {
-            'name': self.name,
-            'settings': self.settings.gather_dicts_to_save(),
-            'single_step_optimiser': self.single_step_optimiser.gather_dicts_to_save()
-        }
+        save_dict = super().gather_dicts_to_save()
+        save_dict['state']['single_step_optimiser'] = self.single_step_optimiser.gather_dicts_to_save()
+
+        return save_dict
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+
+        single_step_optimiser = rehydrate_object(
+            superclass=AcquisitionOptimiser,
+            name=saved_state['single_step_optimiser']['name'],
+            saved_state=saved_state['single_step_optimiser']['state']
+        )
+
+        return cls(
+            bounds=saved_state['bounds'],
+            n_evaluations_per_step=saved_state['n_evaluations_per_step'],
+            single_step_optimiser=single_step_optimiser
+        )

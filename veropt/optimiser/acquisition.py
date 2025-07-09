@@ -57,7 +57,7 @@ def _check_input_dimensions[T, **P](
 
 class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
 
-    name: str
+    name: str = 'meta'
     multi_objective: bool
 
     def __init__(
@@ -109,16 +109,24 @@ class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
 
         return {
             'name': self.name,
-            'settings': settings_dict
+            'state': {
+                'n_variables': self.n_variables,
+                'n_objectives': self.n_objectives,
+                'settings': settings_dict
+            }
         }
 
     @classmethod
     def from_saved_state(
             cls,
             saved_state: dict
-    )-> 'AcquisitionFunction':
+    )-> Self:
 
-        raise NotImplementedError
+        return cls(
+            n_variables=saved_state['n_variables'],
+            n_objectives=saved_state['n_objectives'],
+            **saved_state['settings']
+        )
 
 
 class BotorchAcquisitionFunction(AcquisitionFunction, metaclass=abc.ABCMeta):

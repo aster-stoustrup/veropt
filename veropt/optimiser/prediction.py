@@ -15,7 +15,7 @@ from veropt.optimiser.saver_loader_utility import SavableClass, rehydrate_object
 
 class Predictor(SavableClass, metaclass=abc.ABCMeta):
 
-    name: str
+    name: str = 'meta'
 
     @abc.abstractmethod
     def predict_values(
@@ -216,7 +216,7 @@ class BotorchPredictor(Predictor):
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'BotorchPredictor':
+    ) -> Self:
 
         model = rehydrate_object(
             superclass=GPyTorchFullModel,

@@ -1,4 +1,5 @@
 import abc
+from typing import Self
 
 import torch
 
@@ -8,7 +9,7 @@ from veropt.optimiser.saver_loader_utility import SavableClass
 
 class Normaliser(SavableClass, metaclass=abc.ABCMeta):
 
-    name: str
+    name: str = 'meta'
 
     @classmethod
     @abc.abstractmethod
@@ -68,9 +69,9 @@ class NormaliserZeroMeanUnitVariance(Normaliser):
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'NormaliserZeroMeanUnitVariance':
-        means = saved_state['means']
-        variances = saved_state['variances']
+    ) -> Self:
+        means = torch.tensor(saved_state['means'])
+        variances = torch.tensor(saved_state['variances'])
 
         return cls(
             means=means,

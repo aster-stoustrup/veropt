@@ -166,7 +166,7 @@ class BayesianOptimiser(SavableClass):
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'BayesianOptimiser':
+    ) -> Self:
 
         objective = rehydrate_object(
             superclass=Objective,
@@ -206,9 +206,12 @@ class BayesianOptimiser(SavableClass):
 
         assert initial_points_real_units.normalised is False
 
-        suggested_points = SuggestedPoints.from_saved_state(
-            saved_state=saved_state['suggested_points']
-        )
+        if len(saved_state['suggested_points']) == 0:
+            suggested_points = None
+        else:
+            suggested_points = SuggestedPoints.from_saved_state(
+                saved_state=saved_state['suggested_points']
+            )
 
         suggested_points_history = [
             SuggestedPoints.from_saved_state(suggested_point_state)
@@ -230,7 +233,7 @@ class BayesianOptimiser(SavableClass):
         assert evaluated_objective_values.normalised is False
 
         settings = OptimiserSettings.from_saved_state(
-            saved_state['optimiser']['settings']
+            saved_state['settings']
         )
 
         return cls(
@@ -307,16 +310,16 @@ class BayesianOptimiser(SavableClass):
                 },
                 'normaliser_variables': normaliser_variables_dict,
                 'normaliser_objectives': normaliser_objectives_dict,
-                'evaluated_variable_values': {
+                'evaluated_variables': {
                     'values': self.evaluated_variables_real_units,
                     'normalised': False,
                 },
-                'evaluated_objective_values': {
+                'evaluated_objectives': {
                     'values': self.evaluated_objectives_real_units,
                     'normalised': False,
                 },
                 'suggested_points': self.suggested_points.gather_dicts_to_save() if self.suggested_points else {},
-                'suggsted_points_history': [
+                'suggested_points_history': [
                     suggested_point.gather_dicts_to_save() for suggested_point in self.suggested_points_history
                 ],
                 'settings': self.settings.gather_dicts_to_save()

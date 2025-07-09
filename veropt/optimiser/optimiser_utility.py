@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from typing import Optional, TypedDict, Union
+from typing import Optional, Self, TypedDict, Union
 
 import torch
 
@@ -72,7 +72,7 @@ class OptimiserSettings(SavableClass):
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'OptimiserSettings':
+    ) -> Self:
 
         return cls(
             **saved_state

@@ -81,7 +81,10 @@ def test_add_new_points_interface_objective() -> None:
             )
 
         @classmethod
-        def from_saved_state(cls, saved_state: dict) -> Self:
+        def from_saved_state(
+                cls,
+                saved_state: dict
+        ) -> Self:
             raise NotImplementedError
 
     var_1_tensor = torch.tensor([0.4, 0.1, 0.7, 0.3])
@@ -161,7 +164,10 @@ def test_add_new_points_empty_tensors() -> None:
             )
 
         @classmethod
-        def from_saved_state(cls, saved_state: dict) -> Self:
+        def from_saved_state(
+                cls,
+                saved_state: dict
+        ) -> Self:
             raise NotImplementedError
 
     objective = TestObjective()
@@ -221,7 +227,10 @@ def test_save_points_interface_objectives() -> None:
             )
 
         @classmethod
-        def from_saved_state(cls, saved_state: dict) -> Self:
+        def from_saved_state(
+                cls,
+                saved_state: dict
+        ) -> Self:
             raise NotImplementedError
 
     objective = TestObjective()

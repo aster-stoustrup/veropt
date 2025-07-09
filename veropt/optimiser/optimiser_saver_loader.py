@@ -1,40 +1,10 @@
 import json
-from json import JSONEncoder
 from typing import Union
 
-import torch
-from torch.utils.data import Dataset
-
 from veropt.optimiser import bayesian_optimiser
-from veropt.optimiser.objective import CallableObjective, InterfaceObjective, Objective
+from veropt.optimiser.objective import CallableObjective, InterfaceObjective
 from veropt.optimiser.optimiser import BayesianOptimiser
-from veropt.optimiser.saver_loader_utility import SavableClass
-
-
-class TensorsAsListsEncoder(JSONEncoder, Dataset):
-
-    def default[T](
-            self,
-            dict_item: T
-    ) -> T | list | str:
-
-        if isinstance(dict_item, torch.Tensor):
-
-            converted_tensor = dict_item.detach().tolist()
-
-            if type(converted_tensor) is list:
-                converted_tensor = [
-                    str(item) if item in [float('inf'), float('-inf')] else item for item in converted_tensor
-                ]
-
-            elif type(converted_tensor) is float:
-                converted_tensor = (
-                    str(converted_tensor) if converted_tensor in [float('inf'), float('-inf')] else converted_tensor
-                )
-
-            return converted_tensor
-
-        return super(TensorsAsListsEncoder, self).default(dict_item)
+from veropt.optimiser.saver_loader_utility import SavableClass, TensorsAsListsEncoder
 
 
 def save_to_json(
