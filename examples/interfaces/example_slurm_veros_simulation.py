@@ -1,4 +1,4 @@
-from veropt.interfaces.slurm_simulation import SlurmSimulation, SlurmVerosConfig, SlurmVerosRunner
+from veropt.interfaces.slurm_simulation import SlurmVerosConfig, SlurmVerosRunner
 
 config = SlurmVerosConfig.load("configs/slurm_veros_config.json")
 

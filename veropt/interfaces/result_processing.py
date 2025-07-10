@@ -21,6 +21,7 @@ class ResultProcessor(ABC):
             self,
             result: SimulationResult
     ) -> dict[str, float]:
+        """Method to calculate objective values from simulation output."""
         ...
 
     @abstractmethod
@@ -28,6 +29,7 @@ class ResultProcessor(ABC):
             self,
             result: SimulationResult
     ) -> None:
+        """Method to open the output file to check if it exists and can be opened."""
         ...
 
     def process(
@@ -73,28 +75,38 @@ class MockResultProcessor(ResultProcessor):
     def __init__(
             self,
             objective_names: list[str],
-            objectives: dict[str, float]
+            objectives: dict[str, float],
+            fixed_objective: bool = False
     ):
+
         self.objective_names = objective_names
         self.counter = 1.0
         self.objectives = objectives
+        self.fixed_objective = fixed_objective
 
     def open_output_file(
             self,
             result: SimulationResult
     ) -> None:
+        
+        result_file = f"{result.output_directory}/{result.output_filename}.txt"
 
         if "error_output" in result.output_filename:
             raise ValueError("Mock error opening output file.")
         else:
-            pass
+            with open(result_file, "r") as f:
+                f.read()
 
     def calculate_objectives(
             self,
-            result: Union[SimulationResult, list[SimulationResult]]
+            result: SimulationResult
     ) -> dict[str, float]:
-        objectives = {name: self.counter for name in self.objective_names}
-        self.counter += 1
+        
+        if self.fixed_objective:
+            objectives = self.objectives
+        else:
+            objectives = {name: self.counter for name in self.objective_names}
+            self.counter += 1
         return objectives
 
 

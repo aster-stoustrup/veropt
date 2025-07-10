@@ -1,5 +1,5 @@
 {
-    "batch_script_template": "interfaces/slurm/dev_veros_batch_script_template.sh",
+    "batch_script_template": "interfaces/slurm/veros_batch_script_template.sh",
     "partition_name": "aegir",
     "group_name": "ocean",
     "constraint": "v1",

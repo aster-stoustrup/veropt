@@ -141,7 +141,6 @@ class MockSimulationConfig(Config):
     stderr_file: str = "test_stderr.txt"
     return_code: int = 0
     output_filename: str = "test_output.nc"
-    output_directory: str = ""
 
 
 class MockSimulationRunner(SimulationRunner):
@@ -156,7 +155,7 @@ class MockSimulationRunner(SimulationRunner):
             self,
             simulation_id: str,
             parameters: dict[str, float],
-            run_script_directory: str = "",
+            run_script_directory: str,
             run_script_filename: str = "",
             output_filename: str = ""
     ) -> SimulationResult:
@@ -168,7 +167,7 @@ class MockSimulationRunner(SimulationRunner):
             parameters=parameters,
             stdout_file=self.config.stdout_file,
             stderr_file=self.config.stderr_file,
-            output_directory=self.config.output_directory,
+            output_directory=run_script_directory,
             output_filename=self.config.output_filename,
             return_code=self.config.return_code
         )

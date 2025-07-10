@@ -3,7 +3,7 @@
     "parameter_names": ["param1"],
     "parameter_bounds": {"param1": [0,1]},
     "objective_names": ["objective1"],
-    "path_to_experiment": "/Users/martamrozowska/Desktop/veropt_testing/",
+    "path_to_experiment": "path/to/experiment",
     "experiment_mode": "local",
     "run_script_filename": "test_experiment",
     "output_filename": "output"

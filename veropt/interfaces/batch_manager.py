@@ -40,7 +40,7 @@ def _initialise_point(
     if experimental_state.next_point == i:
         experimental_state.update(point)
     else:
-        experimental_state.points[i] = point  # Warning here?
+        experimental_state.points[i] = point  # TODO: Warning here?
 
     print(f"Point {i} not found; initialising with batch manager.")
 
@@ -67,7 +67,7 @@ def _check_if_job_completed(
         completed = True
     
     elif "slurm_load_jobs error: Invalid job id specified" in error:
-        completed = True  # TODO: IF RESUBMITTING, THIS IS WRONG!!!
+        completed = True  # TODO: IF RESUBMITTING WITH NEW JOB_ID, THIS IS WRONG!!!
 
     return completed
     
@@ -163,7 +163,7 @@ class BatchManager(ABC):
     ) -> str:
 
         command = f"scontrol show job {job_id}"
-        command_arguments = ['ssh', self.hostname, command.split(" ")] if self.remote else command.split(" ")
+        command_arguments = command.split(" ")
 
         process = subprocess.run(
             args=command_arguments,
@@ -283,8 +283,6 @@ class LocalBatchManager(BatchManager):
 
         results = {}
 
-        # TODO: This is fine for now but could be done better; however it is important to check
-        #       - Support for running simulation on GPUs!!!
         for i, parameters in dict_of_parameters.items():
             simulation_id, result_i_directory = self._set_up_directory(i=i)
 
@@ -343,9 +341,7 @@ class LocalSlurmBatchManager(BatchManager):
             experimental_state.points[i].result = result
         
         experimental_state.save_to_json(experimental_state.state_json)
-
         self._check_pending_jobs(experimental_state=experimental_state)
-
         experimental_state.save_to_json(experimental_state.state_json)
 
         return results

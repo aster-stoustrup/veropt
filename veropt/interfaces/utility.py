@@ -35,6 +35,8 @@ def copy_files(
             else:
                 print(f"File already exists: {destination_file}")
 
+        else:
+            print(f"Skipping non-file: {source_file}")
 
 class Config(BaseModel):
 
