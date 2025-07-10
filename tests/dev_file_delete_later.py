@@ -1,10 +1,6 @@
-# TODO: Fix in project
-import torch
 
 from veropt.optimiser import bayesian_optimiser
 from veropt.optimiser.constructors import botorch_acquisition_function, gpytorch_model
-
-torch.set_default_dtype(torch.float64)
 
 from veropt.optimiser.practice_objectives import Hartmann
 
@@ -18,10 +14,6 @@ objective = Hartmann(
 )
 
 
-# TODO: Make tests for various calls to this and sub-functions
-#   - Probably especially really smart to see if it fails in all the right ways
-#       - I.e. what if I call it with prox punish settings but allow=False
-#       - And do we get told the options for anything if we e.g. misspell
 optimiser = bayesian_optimiser(
     n_initial_points=n_initial_points,
     n_bayesian_points=n_bayesian_points,
@@ -29,7 +21,13 @@ optimiser = bayesian_optimiser(
     objective=objective,
     model={
         'training_settings': {
-            'max_iter': 1_000  # This is just to develop faster, probably not enough to train well
+            'max_iter': 500  # This is just to develop faster, probably not enough to train well
+        }
+    },
+    acquisition_optimiser={
+        'optimiser': 'dual_annealing',
+        'optimiser_settings': {
+            'max_iter': 300
         }
     }
 )
@@ -38,15 +36,26 @@ from veropt.optimiser.optimiser_saver_loader import load_optimiser_from_state, s
 
 optimiser.run_optimisation_step()
 optimiser.run_optimisation_step()
+optimiser.run_optimisation_step()
+optimiser.run_optimisation_step()
+optimiser.suggest_candidates()
 
-save_to_json(
-    object_to_save=optimiser,
-    file_name='test'
-)
+# from veropt.graphical.visualisation import plot_prediction_grid_from_optimiser
+#
+# plot_prediction_grid_from_optimiser(optimiser)
 
-reloaded_optimiser = load_optimiser_from_state(
-    file_name='test'
-)
+# optimiser.run_optimisation_step()
+# optimiser.run_optimisation_step()
+# optimiser.run_optimisation_step()
+
+# save_to_json(
+#     object_to_save=optimiser,
+#     file_name='test'
+# )
+#
+# reloaded_optimiser = load_optimiser_from_state(
+#     file_name='test'
+# )
 
 
 # optimiser = bayesian_optimiser(

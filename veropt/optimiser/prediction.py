@@ -26,6 +26,14 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
+    def get_acquisition_values(
+            self,
+            *,
+            variable_values: torch.Tensor,
+    ) -> torch.Tensor:
+        pass
+
+    @abc.abstractmethod
     def suggest_points(
             self,
             verbose: bool
@@ -155,6 +163,16 @@ class BotorchPredictor(Predictor):
             'lower': model_lower,
             'upper': model_upper
         }
+
+    def get_acquisition_values(
+            self,
+            *,
+            variable_values: torch.Tensor,
+    ) -> torch.Tensor:
+
+        return self.acquisition_function(
+            variable_values=variable_values
+        )
 
     def suggest_points(
             self,

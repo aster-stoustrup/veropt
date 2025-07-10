@@ -557,8 +557,12 @@ class BayesianOptimiser(SavableClass):
 
     def _set_up_settings(self) -> None:
 
-        if self.settings.mask_nans:
-            gpytorch.settings.observation_nan_policy('mask')
+        # TODO: Make nan policy work
+        #   - Need to handle in model but also in e.g. get_best_points and the like
+        # if self.settings.mask_nans:
+        #     gpytorch.settings.observation_nan_policy._set_value('mask')
+
+        pass
 
     def _reset_suggested_points(self) -> None:
 
@@ -658,9 +662,11 @@ class BayesianOptimiser(SavableClass):
 
         newest_variables_string = list_with_floats_to_string(self.evaluated_variable_values[-1, :].tensor.tolist())
 
+        total_steps = (self.n_initial_points + self.n_bayesian_points) // self.n_evaluations_per_step
+
         status_string = (
             f"Optimisation running in {self.optimisation_mode.name} mode "
-            f"at step {self.current_step} out of {self.n_points_evaluated} \n"
+            f"at step {self.current_step} out of {total_steps} \n"
             f"Best objective value(s): {best_values_string} at variable values {best_values_variables_string} \n"
             f"Newest objective value(s): {newest_value_string} at variable values {newest_variables_string} \n"
         )

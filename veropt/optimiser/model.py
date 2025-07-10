@@ -146,7 +146,7 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             cls,
             n_variables: int,
             settings: Mapping[str, Any]
-    ) -> 'GPyTorchSingleModel':
+    ) -> Self:
         pass
 
     @classmethod
@@ -813,7 +813,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
         self._initialise_model_likelihood_lists()
 
-    def _initialise_model_likelihood_lists(self):
+    def _initialise_model_likelihood_lists(self) -> None:
 
         for model in self._model_list:
             assert model.model_with_data is not None, "Single models must be trained to use this function"

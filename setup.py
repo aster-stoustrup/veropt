@@ -2,20 +2,17 @@ from setuptools import setup, find_packages
 
 install_requires = [
     "numpy",
-    "xarray",
     "torch",
     "gpytorch",
     "botorch",
     "dill",
-    "click",
     "scipy",
-    "scikit-learn"
+    "scikit-learn",
+    "plotly",
+    "dash"
 ]
 
 extras_require = {
-    "gui": ["PySide6"],
-    "multi_processing_smp": ["pathos"],
-    "mpi": ["mpi4py"]
 }
 
 with open("README.md", "r") as fh:

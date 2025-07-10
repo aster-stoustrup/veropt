@@ -9,7 +9,7 @@ from botorch.utils.multi_objective.box_decompositions.non_dominated import FastN
 
 from veropt.optimiser.optimiser_utility import get_nadir_point
 from veropt.optimiser.utility import (
-    check_variable_and_objective_shapes, check_variable_objective_values_matching,
+    DataShape, check_variable_and_objective_shapes, check_variable_objective_values_matching,
     enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 )
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
@@ -130,6 +130,34 @@ class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
 
 
 class BotorchAcquisitionFunction(AcquisitionFunction, metaclass=abc.ABCMeta):
+
+    def __call__(
+            self,
+            *,
+            variable_values: torch.Tensor
+    ) -> torch.Tensor:
+
+        n_points_in_call = variable_values.shape[DataShape.index_points]
+
+        # TODO: See if we can make this run without a for loop (botorch complains atm)
+        if n_points_in_call > 1:
+
+            acquisition_values = torch.zeros(n_points_in_call)
+
+            for point_no in range(n_points_in_call):
+                acquisition_values[point_no] = super().__call__(
+                    variable_values=variable_values[point_no:point_no+1, :]
+                )
+
+            return acquisition_values
+
+        else:
+            return super().__call__(
+                variable_values=variable_values
+            )
+
+
+
 
     @check_variable_objective_values_matching
     @_check_input_dimensions
