@@ -503,7 +503,7 @@ def acquisition_optimiser_with_proximity_punishment(
 
                     single_step_optimiser = subclass.from_bounds_n_evaluations_per_step_and_settings(
                         bounds=torch.tensor(bounds),
-                        n_evaluations_per_step=n_evaluations_per_step,
+                        n_evaluations_per_step=1,
                         settings=optimiser_settings or {}
                     )
 

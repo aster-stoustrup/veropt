@@ -24,7 +24,6 @@ from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.optimiser_utility import SuggestedPoints, get_best_points
 
 
-# TODO: Decide on location
 def plot_point_overview_from_optimiser(
         optimiser: BayesianOptimiser,
         points: Literal['all', 'bayes', 'suggested', 'best'] = 'all'
@@ -317,6 +316,9 @@ def _add_pareto_traces_2d(
                 "(If the model is trained, the optimiser should do this automatically)."
             )
 
+            upper_diff = prediction['upper'] - prediction['mean']
+            lower_diff = prediction['mean'] - prediction['lower']
+
             figure.add_trace(
                 go.Scatter(
                     x=prediction['mean'][objective_index_x].detach().numpy(),
@@ -324,15 +326,15 @@ def _add_pareto_traces_2d(
                     error_x={
                         'type': 'data',
                         'symmetric': False,
-                        'array': prediction['upper'][objective_index_x].detach().numpy(),
-                        'arrayminus': prediction['lower'][objective_index_x].detach().numpy(),
+                        'array': upper_diff[objective_index_x].detach().numpy(),
+                        'arrayminus': lower_diff[objective_index_x].detach().numpy(),
                         'color': suggested_point_color
                     },
                     error_y={
                         'type': 'data',
                         'symmetric': False,
-                        'array': prediction['upper'][objective_index_y].detach().numpy(),
-                        'arrayminus': prediction['lower'][objective_index_y].detach().numpy(),
+                        'array': upper_diff[objective_index_y].detach().numpy(),
+                        'arrayminus': lower_diff[objective_index_y].detach().numpy(),
                         'color': suggested_point_color
                     },
                     mode='markers',
@@ -649,7 +651,6 @@ def fill_model_prediction_from_optimiser(
     )
 
 
-# TODO: Decide on location
 def plot_prediction_grid_from_optimiser(
         optimiser: BayesianOptimiser,
         return_figure: bool = False,
@@ -746,9 +747,10 @@ def _add_model_traces(
         objective_index: int,
         legend_group: str
 ) -> None:
-    predicted_values_mean = model_prediction.predicted_values_mean[objective_index]
-    predicted_values_lower = model_prediction.predicted_values_lower[objective_index]
-    predicted_values_upper = model_prediction.predicted_values_upper[objective_index]
+
+    predicted_values_mean = model_prediction.predicted_values_mean[:, objective_index]
+    predicted_values_lower = model_prediction.predicted_values_lower[:, objective_index]
+    predicted_values_upper = model_prediction.predicted_values_upper[:, objective_index]
 
     figure.add_trace(
         go.Scatter(
@@ -794,7 +796,7 @@ def opacity_for_multidimensional_points(
         variable_values: torch.Tensor,
         evaluated_point: torch.Tensor,
         alpha_min: float = 0.1,
-        alpha_max: float = 0.6
+        alpha_max: float = 0.8
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
     distances_list = []
@@ -894,6 +896,7 @@ def plot_prediction_grid(
 
         if evaluated_point_ind >= n_evaluated_points:
             evaluated_suggested_point_ind = evaluated_point_ind - n_evaluated_points
+
         else:
             evaluated_suggested_point_ind = None
 
@@ -908,9 +911,9 @@ def plot_prediction_grid(
                 for point_no in range(n_suggested_points)
             ]
 
-        for obj_ind in range(n_objectives):
+        for objective_index in range(n_objectives):
 
-            row_no = n_objectives - obj_ind  # Placing these backwards to make the "y axes" of subplots go positive upwards
+            row_no = n_objectives - objective_index  # Placing these backwards to make the "y axes" of subplots go positive upwards
             col_no = variable_index + 1
 
             # Quick scaling as long as we're just jamming it into this plot
@@ -922,7 +925,7 @@ def plot_prediction_grid(
                 model_prediction=model_prediction,
                 row_no=row_no,
                 col_no=col_no,
-                objective_index=obj_ind,
+                objective_index=objective_index,
                 legend_group='model'
             )
 
@@ -957,7 +960,7 @@ def plot_prediction_grid(
             figure.add_trace(
             go.Scatter(
                 x=variable_values[:, variable_index],
-                y=objective_values[:, obj_ind],
+                y=objective_values[:, objective_index],
                 mode='markers',
                 marker={
                     'color': color_list_w_opacity,
@@ -991,15 +994,18 @@ def plot_prediction_grid(
                         "(If the model is trained, the optimiser should do this automatically)."
                     )
 
+                    upper_diff = prediction['upper'] - prediction['mean']
+                    lower_diff = prediction['mean'] - prediction['lower']
+
                     figure.add_trace(
                         go.Scatter(
                             x=point.variable_values[variable_index].detach().numpy(),
-                            y=prediction['mean'][obj_ind].detach().numpy(),
+                            y=prediction['mean'][objective_index].detach().numpy(),
                             error_y={
                                 'type': 'data',
                                 'symmetric': False,
-                                'array': prediction['upper'][obj_ind].detach().numpy(),
-                                'arrayminus': prediction['lower'][obj_ind].detach().numpy(),
+                                'array': upper_diff[objective_index].detach().numpy(),
+                                'arrayminus': lower_diff[objective_index].detach().numpy(),
                                 'color': suggested_point_color_list_wo[suggested_point_no]
                             },
                             mode='markers',
@@ -1013,8 +1019,8 @@ def plot_prediction_grid(
                             customdata=np.dstack([
                                 [suggested_point_no],
                                 [suggested_point_distance_list[suggested_point_no]],
-                                [prediction['upper'][obj_ind].detach().numpy()],
-                                [prediction['lower'][obj_ind].detach().numpy()]
+                                [upper_diff[objective_index].detach().numpy()],
+                                [lower_diff[objective_index].detach().numpy()]
                             ])[0],
                             # TODO: Super sweet feature would be to check if upper and lower are equal and then do pm
                             hovertemplate="Param. value: %{x:.3f} <br>"
@@ -1034,7 +1040,7 @@ def plot_prediction_grid(
             )
 
             if col_no == 1:
-                figure.update_yaxes(title_text=objective_names[obj_ind], row=row_no, col=col_no)
+                figure.update_yaxes(title_text=objective_names[objective_index], row=row_no, col=col_no)
 
             if row_no == n_objectives:
                 figure.update_xaxes(title_text=variable_names[variable_index], row=row_no, col=col_no)

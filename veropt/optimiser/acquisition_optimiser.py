@@ -31,11 +31,10 @@ class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'maximum_evaluations_per_step'."
         )
 
-        if self.maximum_evaluations_per_step is not None:
-            assert n_evaluations_per_step == self.maximum_evaluations_per_step, (
-                f"This optimiser can only find {self.maximum_evaluations_per_step} point(s) at a time "
-                f"but received a setting of {n_evaluations_per_step} evaluations per step."
-            )
+        assert n_evaluations_per_step <= self.maximum_evaluations_per_step, (
+            f"This optimiser can only find {self.maximum_evaluations_per_step} point(s) at a time "
+            f"but received a setting of {n_evaluations_per_step} evaluations per step."
+        )
 
         assert 'name' in self.__class__.__dict__, (
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."

@@ -1,7 +1,7 @@
 from veropt.optimiser.practice_objectives import DTLZ1, VehicleSafety
 from veropt.optimiser.constructors import bayesian_optimiser
 
-
+from veropt.graphical.visualisation import plot_prediction_grid_from_optimiser
 # objective = DTLZ1()
 objective = VehicleSafety()
 
@@ -14,7 +14,7 @@ optimiser = bayesian_optimiser(
     objective=objective,
     model={
         'training_settings': {
-            'max_iter': 500  # This is just to develop faster, probably not enough to train well
+            'max_iter': 500  # This is just to develop faster, might not be enough to train well
         }
     },
     acquisition_optimiser={
@@ -23,4 +23,13 @@ optimiser = bayesian_optimiser(
             'max_iter': 300
         }
     }
+)
+
+for i in range(4):
+    optimiser.run_optimisation_step()
+
+optimiser.suggest_candidates()
+
+plot_prediction_grid_from_optimiser(
+    optimiser=optimiser
 )
