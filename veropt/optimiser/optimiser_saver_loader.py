@@ -15,6 +15,8 @@ def save_to_json(
 
     save_dict = object_to_save.gather_dicts_to_save()
 
+    # TODO: Check if file_name has .json ending or not, add if not
+
     with open(f'{file_name}.json', 'w') as json_file:
         json.dump(save_dict, json_file, cls=TensorsAsListsEncoder)
 
@@ -23,7 +25,7 @@ def load_optimiser_from_state(
         file_name: str
 ) -> 'BayesianOptimiser':
 
-    with open(f'{file_name}.json', 'r') as json_file:
+    with open(file_name, 'r') as json_file:
         saved_dict = json.load(json_file)
 
     return BayesianOptimiser.from_saved_state(saved_dict['optimiser'])
@@ -40,7 +42,7 @@ def load_optimiser_from_settings(
     #           - presence of mandatory arguments
     #           - that keyword arguments are correct for the top-level constructor
 
-    with open(f'{file_name}.json', 'r') as json_file:
+    with open(file_name, 'r') as json_file:
         saved_dict = json.load(json_file)
 
     return bayesian_optimiser(

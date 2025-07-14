@@ -1,6 +1,6 @@
 import abc
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Optional, Self, TypedDict, Unpack
+from typing import Any, Callable, Literal, Mapping, Optional, Self, TypedDict, Unpack
 
 import numpy as np
 import scipy
@@ -10,13 +10,13 @@ from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass, rehydrate_object
-from veropt.optimiser.utility import DataShape
+from veropt.optimiser.utility import DataShape, _validate_typed_dict
 
 
 class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
 
     name: str = 'meta'
-    maximum_evaluations_per_step: int | None
+    maximum_evaluations_per_step: int
 
     def __init__(
             self,
@@ -26,16 +26,6 @@ class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
 
         self.bounds = bounds
         self.n_evaluations_per_step = n_evaluations_per_step
-
-        self.settings: Any
-
-        # TODO: Do this in all classes that uses this weird set-up...?
-        #   - Otherwise, code might just fail in methods that reference this :(
-        #   - Write better error msg
-        #   - Could also do a superclass that does all this automatically...?
-        #       - That might be rad actually!
-        #       - Maybe wait until we get further with the loader and haven't found something better
-        assert 'settings' in self.__dict__, "Must define settings in subclass"
 
         assert 'maximum_evaluations_per_step' in self.__class__.__dict__, (
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'maximum_evaluations_per_step'."
@@ -85,7 +75,7 @@ class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
             'state': {
                 'bounds': self.bounds,
                 'n_evaluations_per_step': self.n_evaluations_per_step,
-                'settings': self.settings.gather_dicts_to_save()
+                'settings': self.get_settings().gather_dicts_to_save()
             }
         }
 
@@ -95,11 +85,25 @@ class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
             saved_state: dict
     ) -> Self:
 
-        return cls(
+        return cls.from_bounds_n_evaluations_per_step_and_settings(
             bounds=saved_state['bounds'],
             n_evaluations_per_step=saved_state['n_evaluations_per_step'],
-            **saved_state['settings']
+            settings=saved_state['settings']
         )
+
+    @classmethod
+    @abc.abstractmethod
+    def from_bounds_n_evaluations_per_step_and_settings(
+            cls,
+            bounds: torch.Tensor,
+            n_evaluations_per_step: int,
+            settings: Mapping[str, Any],
+    ) -> Self:
+        pass
+
+    @abc.abstractmethod
+    def get_settings(self) -> SavableDataClass:
+        pass
 
 
 class TorchNumpyWrapper:
@@ -178,6 +182,29 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
 
         return candidates
 
+    @classmethod
+    def from_bounds_n_evaluations_per_step_and_settings(
+            cls,
+            bounds: torch.Tensor,
+            n_evaluations_per_step: int,
+            settings: Mapping[str, Any]
+    ) -> Self:
+
+        _validate_typed_dict(
+            typed_dict=settings,
+            expected_typed_dict_class=DualAnnealingSettingsInputDict,
+            object_name=cls.name
+        )
+
+        return cls(
+            bounds=bounds,
+            n_evaluations_per_step=n_evaluations_per_step,
+            **settings
+        )
+
+    def get_settings(self) -> SavableDataClass:
+        return self.settings
+
 
 class ProximityPunishAcquisitionFunction(AcquisitionFunction):
     name = 'proximity_punish'
@@ -202,6 +229,32 @@ class ProximityPunishAcquisitionFunction(AcquisitionFunction):
         super().__init__(
             n_variables=self.original_acquisition_function.n_variables,
             n_objectives=self.original_acquisition_function.n_objectives
+        )
+
+    @classmethod
+    def from_n_variables_n_objectives_and_settings(
+            cls,
+            n_variables: int,
+            n_objectives: int,
+            settings: Mapping[str, Any]
+    ) -> Self:
+        # Not expecting to need this since this class is just constructed right before it's needed
+        raise NotImplementedError()
+
+    def get_settings(self) -> SavableDataClass:
+
+        # Might not need this but safer to have it since it's a required method
+
+        @dataclass()
+        class ProximityPunishFunctionSettings(SavableDataClass):
+            scaling: float
+            alpha: float
+            omega: float
+
+        return ProximityPunishFunctionSettings(
+            scaling=self.scaling,
+            alpha=self.alpha,
+            omega=self.omega
         )
 
     def _add_proximity_punishment(
@@ -230,7 +283,7 @@ class ProximityPunishAcquisitionFunction(AcquisitionFunction):
     def update_points(
             self,
             new_points: list[torch.Tensor]
-    ):
+    ) -> None:
         self.other_points = new_points
 
     def __call__(
@@ -267,7 +320,7 @@ class ProximityPunishSettings(SavableDataClass):
 class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
 
     name = 'proximity_punishment'
-    maximum_evaluations_per_step = None
+    maximum_evaluations_per_step = 1_000_000
 
     def __init__(
             self,
@@ -297,6 +350,8 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             self,
             acquisition_function: AcquisitionFunction,
     ) -> torch.Tensor:
+
+        assert self.scaling is not None, "Attribute 'scaling' must be computed before calling this function."
 
         punishing_acquisition_function = ProximityPunishAcquisitionFunction(
             original_acquisition_function=acquisition_function,
@@ -459,3 +514,17 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             n_evaluations_per_step=saved_state['n_evaluations_per_step'],
             single_step_optimiser=single_step_optimiser
         )
+
+    @classmethod
+    def from_bounds_n_evaluations_per_step_and_settings(
+            cls,
+            bounds: torch.Tensor,
+            n_evaluations_per_step: int,
+            settings: Mapping[str, Any],
+    ) -> Self:
+        raise RuntimeError(
+            "This acquisition optimiser can't be constructed just from bounds, n_evaluations_per_step and settings."
+        )
+
+    def get_settings(self) -> SavableDataClass:
+        return self.settings

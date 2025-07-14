@@ -50,19 +50,17 @@ class SavableDataClass(SavableClass):
         )
 
 
-T = TypeVar('T', bound=type)
+class EmptyDataClass(SavableDataClass):
+    pass
 
 
-def get_all_subclasses(
+def get_all_subclasses[T: type](
         cls: T
 ) -> list[T]:
 
     return cls.__subclasses__() + (
         [subclass for class_ in cls.__subclasses__() for subclass in get_all_subclasses(class_)]
     )
-
-
-SavableSettings = TypeVar('SavableSettings', bound=SavableDataClass)
 
 
 def rehydrate_object[S: SavableClass](

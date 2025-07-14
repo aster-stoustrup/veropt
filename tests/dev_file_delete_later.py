@@ -54,7 +54,7 @@ optimiser.suggest_candidates()
 # )
 #
 # reloaded_optimiser = load_optimiser_from_state(
-#     file_name='test'
+#     file_name='test.json'
 # )
 
 

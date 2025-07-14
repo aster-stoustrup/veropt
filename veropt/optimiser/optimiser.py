@@ -237,7 +237,7 @@ class BayesianOptimiser(SavableClass):
         )
 
         return cls(
-            objective=objective,
+            objective=objective,  # type: ignore[arg-type]  # this is checked above
             predictor=predictor,
             normaliser_class=normaliser_class,
             normaliser_variables=normaliser_variables,

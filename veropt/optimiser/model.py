@@ -108,7 +108,6 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             mean_module: gpytorch.means.Mean,
             kernel: gpytorch.kernels.Kernel,
             n_variables: int,
-            settings_class: SavableDataClass
     ) -> None:
 
         self.likelihood = likelihood
@@ -116,8 +115,6 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
         self.kernel = kernel
 
         self.n_variables = n_variables
-
-        self.settings = settings_class
 
         self.model_with_data: Optional[GPyTorchDataModel] = None
 
@@ -131,12 +128,12 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
         )
 
-
     def __repr__(self) -> str:
+
         return (
             f"{self.__class__.__name__}("
-            f"trained: {'yes' if self.model_with_data else 'no'}, "
-            f"settings: {self.settings}"
+            f"trained: {'yes' if self.model_with_data else 'no'}"
+            f", settings: {self.get_settings()}"
             f")"
         )
 
@@ -168,6 +165,10 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             )
 
         return model
+
+    @abc.abstractmethod
+    def get_settings(self) -> SavableDataClass:
+        pass
 
     @abc.abstractmethod
     def _set_up_trained_parameters(self) -> None:
@@ -230,7 +231,7 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
                 'train_inputs': train_inputs,
                 'train_targets': train_targets,
                 'n_variables': self.n_variables,
-                'settings': self.settings.gather_dicts_to_save()
+                'settings': self.get_settings().gather_dicts_to_save()
             }
         }
 
@@ -353,7 +354,7 @@ class MaternSingleModel(GPyTorchSingleModel):
             batch_shape=torch.Size([])
         )
 
-        settings_class = MaternParameters(
+        self.settings = MaternParameters(
             **settings
         )
 
@@ -361,8 +362,7 @@ class MaternSingleModel(GPyTorchSingleModel):
             likelihood=likelihood,
             mean_module=mean_module,
             kernel=kernel,
-            n_variables=n_variables,
-            settings_class=settings_class
+            n_variables=n_variables
         )
 
     @classmethod
@@ -473,6 +473,9 @@ class MaternSingleModel(GPyTorchSingleModel):
             module='likelihood',
             second_module='noise_covar'
         )
+
+    def get_settings(self) -> SavableDataClass:
+        return self.settings
 
 
 class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):

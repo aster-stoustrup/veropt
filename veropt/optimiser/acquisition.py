@@ -1,7 +1,7 @@
 import abc
 import functools
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Self, TypedDict, Unpack
+from typing import Any, Callable, Mapping, Optional, Self, TypedDict, Unpack
 
 import botorch
 import torch
@@ -9,10 +9,10 @@ from botorch.utils.multi_objective.box_decompositions.non_dominated import FastN
 
 from veropt.optimiser.optimiser_utility import get_nadir_point
 from veropt.optimiser.utility import (
-    DataShape, check_variable_and_objective_shapes, check_variable_objective_values_matching,
+    DataShape, _validate_typed_dict, check_variable_and_objective_shapes, check_variable_objective_values_matching,
     enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
 )
-from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
+from veropt.optimiser.saver_loader_utility import EmptyDataClass, SavableClass, SavableDataClass
 
 
 def _check_input_dimensions[T, **P](
@@ -71,9 +71,6 @@ class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
 
         self.function: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
 
-        if 'settings' not in self.__dict__:
-            self.settings: Optional[Any] = None
-
         if self.multi_objective:
             assert self.n_objectives > 1, (
                 f"This acquisition function ({self.__class__.__name__}) is meant for multi-objective problems but "
@@ -89,6 +86,20 @@ class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
         )
 
+    @abc.abstractmethod
+    def get_settings(self) -> SavableDataClass:
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def from_n_variables_n_objectives_and_settings(
+            cls,
+            n_variables: int,
+            n_objectives: int,
+            settings: Mapping[str, Any]
+    ) -> Self:
+        pass
+
     @_check_input_dimensions
     def __call__(
             self,
@@ -102,8 +113,8 @@ class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
 
     def gather_dicts_to_save(self) -> dict:
 
-        if self.settings is not None:
-            settings_dict = self.settings.gather_dicts_to_save()
+        if self.get_settings() is not None:
+            settings_dict = self.get_settings().gather_dicts_to_save()
         else:
             settings_dict = {}
 
@@ -122,10 +133,10 @@ class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
             saved_state: dict
     )-> Self:
 
-        return cls(
+        return cls.from_n_variables_n_objectives_and_settings(
             n_variables=saved_state['n_variables'],
             n_objectives=saved_state['n_objectives'],
-            **saved_state['settings']
+            settings=saved_state['settings']
         )
 
 
@@ -202,6 +213,23 @@ class QLogExpectedHyperVolumeImprovement(BotorchAcquisitionFunction):
             n_objectives=n_objectives
         )
 
+    @classmethod
+    def from_n_variables_n_objectives_and_settings(
+            cls,
+            n_variables: int,
+            n_objectives: int,
+            settings: Mapping[str, Any]
+    ) -> Self:
+        assert len(settings) == 0, f"{cls.name} doesn't use any settings but received {settings}"
+
+        return cls(
+            n_variables=n_variables,
+            n_objectives=n_objectives
+        )
+
+    def get_settings(self) -> SavableDataClass:
+        return EmptyDataClass()
+
     def _refresh(
             self,
             model: botorch.models.model.Model,
@@ -267,4 +295,27 @@ class UpperConfidenceBound(BotorchAcquisitionFunction):
         self.function = botorch.acquisition.analytic.UpperConfidenceBound(
             model=model,
             beta=self.settings.beta
+        )
+
+    def get_settings(self) -> SavableDataClass:
+        return self.settings
+
+    @classmethod
+    def from_n_variables_n_objectives_and_settings(
+            cls,
+            n_variables: int,
+            n_objectives: int,
+            settings: Mapping[str, Any]
+    ) -> Self:
+
+        _validate_typed_dict(
+            typed_dict=settings,
+            expected_typed_dict_class=UpperConfidenceBoundOptionsInputDict,
+            object_name=cls.name
+        )
+
+        return cls(
+            n_variables=n_variables,
+            n_objectives=n_objectives,
+            **settings
         )

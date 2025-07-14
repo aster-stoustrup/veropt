@@ -203,40 +203,43 @@ def gpytorch_model(
     )
 
 
-@overload
-def gpytorch_single_model_list(
-        n_variables: int,
-        n_objectives: int,
-        kernels: list[GPyTorchSingleModel] = ...,
-        kernel_settings: None = ...
-) -> list[GPyTorchSingleModel]: ...
-
-
-@overload
-def gpytorch_single_model_list(
-        n_variables: int,
-        n_objectives: int,
-        kernels: 'SingleKernelOptions' = ...,
-        kernel_settings: Union['KernelInputDict', None] = ...
-) -> list[GPyTorchSingleModel]: ...
-
-
-@overload
-def gpytorch_single_model_list(
-        n_variables: int,
-        n_objectives: int,
-        kernels: list['SingleKernelOptions'] = ...,
-        kernel_settings: Union[list['KernelInputDict'], None] = ...
-) -> list[GPyTorchSingleModel]: ...
-
-
-@overload
-def gpytorch_single_model_list(
-        n_variables: int,
-        n_objectives: int,
-        kernels: None = ...,
-        kernel_settings: None = ...
-) -> list[GPyTorchSingleModel]: ...
+# TODO: Make this work?
+#   - Thought it was pretty cool but currently just raises weird mypy errors
+#   - Should ideally live in a different file maybe?
+# @overload
+# def gpytorch_single_model_list(
+#         n_variables: int,
+#         n_objectives: int,
+#         kernels: list[GPyTorchSingleModel] = ...,
+#         kernel_settings: None = ...
+# ) -> list[GPyTorchSingleModel]: ...
+#
+#
+# @overload
+# def gpytorch_single_model_list(
+#         n_variables: int,
+#         n_objectives: int,
+#         kernels: 'SingleKernelOptions' = ...,
+#         kernel_settings: Union['KernelInputDict', None] = ...
+# ) -> list[GPyTorchSingleModel]: ...
+#
+#
+# @overload
+# def gpytorch_single_model_list(
+#         n_variables: int,
+#         n_objectives: int,
+#         kernels: list['SingleKernelOptions'] = ...,
+#         kernel_settings: Union[list['KernelInputDict'], None] = ...
+# ) -> list[GPyTorchSingleModel]: ...
+#
+#
+# @overload
+# def gpytorch_single_model_list(
+#         n_variables: int,
+#         n_objectives: int,
+#         kernels: None = ...,
+#         kernel_settings: None = ...
+# ) -> list[GPyTorchSingleModel]: ...
 
 
 def gpytorch_single_model_list(
@@ -363,6 +366,8 @@ def torch_model_optimiser(
         kernel_optimiser: Optional[KernelOptimiserOptions] = None,
 ) -> TorchModelOptimiser:
 
+    # TODO: Should maybe add settings here as well
+
     if kernel_optimiser == 'adam':
         return AdamModelOptimiser()
 
@@ -408,33 +413,21 @@ def botorch_acquisition_function(
         else:
             raise ValueError("'n_objectives' must be a positive integer above 0.")
 
-    elif function == 'qlogehvi':
+    subclasses = get_all_subclasses(
+        cls=BotorchAcquisitionFunction
+    )
 
-        assert parameters is None or parameters == {}, "'qlogehvi' does not take any parameters."
+    for subclass in subclasses:
 
-        return QLogExpectedHyperVolumeImprovement(
-            n_variables=n_variables,
-            n_objectives=n_objectives
-        )
-        
-    elif function == 'ucb':
+        if function == subclass.name:
 
-        if parameters is not None:
-
-            _validate_typed_dict(
-                typed_dict=parameters,
-                expected_typed_dict_class=AcquisitionSettings,
-                object_name=function
+            return subclass.from_n_variables_n_objectives_and_settings(
+                n_variables=n_variables,
+                n_objectives=n_objectives,
+                settings=parameters or {}
             )
 
-        return UpperConfidenceBound(
-            n_variables=n_variables,
-            n_objectives=n_objectives,
-            **parameters or {}
-        )
-
-    else:
-        raise ValueError(f"acquisition_choice must be None or {get_args(AcquisitionOptions)}")
+    raise ValueError(f"acquisition_choice must be None or {get_args(AcquisitionOptions)}")
 
 
 def acquisition_optimiser_with_proximity_punishment(
@@ -464,7 +457,7 @@ def acquisition_optimiser_with_proximity_punishment(
             f"Options are {get_args(AcquisitionOptimiserOptions)}."
         )
 
-        # Could support this in the future
+        # Could support this being False in the future
         assert allow_proximity_punishment is True, (
             "Must allow proximity punishment if using default optimiser."
         )
@@ -478,76 +471,72 @@ def acquisition_optimiser_with_proximity_punishment(
             proximity_punish_settings=proximity_punish_settings
         )
 
-    elif optimiser == 'dual_annealing':
-
-        if n_evaluations_per_step == 1:
-
-            if optimiser_settings is not None:
-                _validate_typed_dict(
-                    typed_dict=optimiser_settings,
-                    expected_typed_dict_class=DualAnnealingSettingsInputDict,
-                    object_name=optimiser
-                )
-
-            return DualAnnealingOptimiser(
-                bounds=torch.tensor(bounds),
-                n_evaluations_per_step=n_evaluations_per_step,
-                **optimiser_settings or {}
-            )
-
-        elif n_evaluations_per_step > 1 and allow_proximity_punishment is True:
-
-            if optimiser_settings is not None:
-                _validate_typed_dict(
-                    typed_dict=optimiser_settings,
-                    expected_typed_dict_class=DualAnnealingSettingsInputDict,
-                    object_name=optimiser
-                )
-
-            single_step_optimiser = DualAnnealingOptimiser(
-                bounds=torch.tensor(bounds),
-                n_evaluations_per_step=1,
-                **optimiser_settings or {}
-            )
-
-            if proximity_punish_settings is not None:
-                _validate_typed_dict(
-                    typed_dict=proximity_punish_settings,
-                    expected_typed_dict_class=ProximityPunishSettingsInputDict,
-                    object_name='proximity_punish'
-                )
-
-            return ProximityPunishmentSequentialOptimiser(
-                bounds=torch.tensor(bounds),
-                n_evaluations_per_step=n_evaluations_per_step,
-                single_step_optimiser=single_step_optimiser,
-                **proximity_punish_settings or {}
-            )
-
-        elif n_evaluations_per_step > 1 and allow_proximity_punishment is False:
-
-            raise ValueError(
-                f"Acquisition Optimiser '{optimiser}' can only find one point per step."
-                "Either allow using proximity punish or choose a different acquisition function optimiser."
-            )
-
-        else:
-            raise RuntimeError()  # Is it possible to end up here? Probably not. GLHF if you did :))
-
-    else:
-        raise NotImplementedError(
-            f"Acquisition optimiser '{optimiser}' not recognised. Options are {get_args(AcquisitionOptimiserOptions)}."
+    if optimiser == 'proximity_punish':
+        raise ValueError(
+            f"Can't choose 'proximity_punish' here. Options are {get_args(AcquisitionOptimiserOptions)}."
         )
+
+    subclasses = get_all_subclasses(
+        cls=AcquisitionOptimiser
+    )
+
+    for subclass_no, subclass in enumerate(subclasses):
+        # Probably not necessary but more correct
+        if subclass == ProximityPunishmentSequentialOptimiser:
+            del subclasses[subclass_no]
+
+    for subclass in subclasses:
+
+        if optimiser == subclass.name:
+
+            if n_evaluations_per_step <= subclass.maximum_evaluations_per_step:
+
+                return subclass.from_bounds_n_evaluations_per_step_and_settings(
+                    bounds=torch.tensor(bounds),
+                    n_evaluations_per_step=n_evaluations_per_step,
+                    settings=optimiser_settings or {}
+                )
+
+            else:
+
+                if allow_proximity_punishment is True:
+
+                    single_step_optimiser = subclass.from_bounds_n_evaluations_per_step_and_settings(
+                        bounds=torch.tensor(bounds),
+                        n_evaluations_per_step=n_evaluations_per_step,
+                        settings=optimiser_settings or {}
+                    )
+
+                    _validate_typed_dict(
+                        typed_dict=proximity_punish_settings or {},
+                        expected_typed_dict_class=ProximityPunishSettingsInputDict,
+                        object_name='proximity_punish'
+                    )
+
+                    return ProximityPunishmentSequentialOptimiser(
+                        bounds=torch.tensor(bounds),
+                        n_evaluations_per_step=n_evaluations_per_step,
+                        single_step_optimiser=single_step_optimiser,
+                        **proximity_punish_settings or {}
+                    )
+
+                else:
+                    raise ValueError(
+                        f"Acquisition Optimiser '{subclass.name}' can only find "
+                        f"{subclass.maximum_evaluations_per_step} point(s) per step. Either allow using proximity "
+                        f"punish or choose a different acquisition function optimiser."
+                    )
+
+    raise NotImplementedError(
+        f"Acquisition optimiser '{optimiser}' not recognised. Options are {get_args(AcquisitionOptimiserOptions)}."
+    )
 
 
 def build_normaliser(
         normaliser_choice: Union[NormaliserChoice, None]
 ) -> type[Normaliser]:
 
-    if normaliser_choice == 'zero_mean_unit_variance':
-        return NormaliserZeroMeanUnitVariance
-
-    elif normaliser_choice is None:
+    if normaliser_choice is None:
 
         defaults = _load_defaults()
 
@@ -555,8 +544,15 @@ def build_normaliser(
             normaliser_choice=defaults['normaliser']
         )
 
-    else:
-        raise ValueError(f"Unknown normaliser type: {normaliser_choice}")
+    subclasses = get_all_subclasses(
+        cls=Normaliser
+    )
+
+    for subclass in subclasses:
+        if normaliser_choice == subclass.name:
+            return subclass
+
+    raise ValueError(f"Unknown normaliser type: {normaliser_choice}")
 
 
 def _load_defaults() -> dict:
