@@ -12,9 +12,4 @@ def run_pytest():
 
 
 if __name__ == '__main__':
-
-    # TODO: Test for coverage too?
-    #   - Would require deciding on desired coverage rate
-    #   - Should be added to github workflow ofc
-
     run_pytest()
