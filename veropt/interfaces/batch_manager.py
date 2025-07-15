@@ -87,7 +87,7 @@ class BatchManager(ABC):
             run_script_root_directory: str,
             results_directory: str,
             output_filename: str,
-            check_job_status_sleep_time: Optional[int],
+            check_job_status_frequency: Optional[int],
             remote: bool = False,
             hostname: Optional[str] = None
     ):
@@ -96,8 +96,8 @@ class BatchManager(ABC):
         self.run_script_root_directory = run_script_root_directory
         self.results_directory = results_directory
         self.output_filename = output_filename
-        self.check_job_status_sleep_time = 60 if check_job_status_sleep_time is None \
-            else check_job_status_sleep_time
+        self.check_job_status_frequency = 60 if check_job_status_frequency is None \
+            else check_job_status_frequency
         self.remote = remote
         self.hostname = hostname
 
@@ -192,6 +192,10 @@ class BatchManager(ABC):
                 print(f"{job_id} status: RUNNING")
                 state = "Simulation running"
 
+            elif job_status_dict["JobState"] == "FAILED":
+                print(f"{job_id} status: FAILED")
+                state = "Simulation failed"  # TODO: Extra check for slurm log file
+
         elif error and "slurm_load_jobs error: Invalid job id specified" not in error:
             print(f"Error checking job {job_id}: {error}")
             print("Continuing in 60 seconds.")  # TODO: Move to config; what name?
@@ -227,6 +231,8 @@ class BatchManager(ABC):
 
                 if state == "Simulation completed":
                     pending_jobs &= ~(1 << i)
+                elif state == "Simulation failed":
+                    pending_jobs &= ~(1 << i)
                 else:
                     continue
 
@@ -238,7 +244,7 @@ class BatchManager(ABC):
 
                 experimental_state.save_to_json(experimental_state.state_json)
 
-                for i in tqdm.tqdm(range(self.check_job_status_sleep_time), "Time until next server poll"):
+                for i in tqdm.tqdm(range(self.check_job_status_frequency), "Time until next server poll"):
                     time.sleep(1)
 
 
@@ -249,7 +255,7 @@ def batch_manager(
         run_script_root_directory: str,
         results_directory: str,
         output_filename: str,
-        check_job_status_sleep_time: int = 60
+        check_job_status_frequency: int = 60
 ) -> BatchManager:
 
     batch_manager_classes = {
@@ -272,7 +278,7 @@ def batch_manager(
         run_script_root_directory=run_script_root_directory,
         results_directory=results_directory,
         output_filename=output_filename,
-        check_job_status_sleep_time=check_job_status_sleep_time,
+        check_job_status_frequency=check_job_status_frequency,
         remote=remote
     )
 

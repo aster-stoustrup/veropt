@@ -6,7 +6,7 @@ from veropt.interfaces.batch_manager import BatchManager, batch_manager
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
 from veropt.interfaces.experiment_utility import (
     ExperimentConfig, OptimiserConfig, ExperimentalState, PathManager, Point
-    )
+)
 from veropt.optimiser.objective import InterfaceObjective
 from veropt.optimiser.constructors import bayesian_optimiser
 
@@ -160,7 +160,7 @@ class Experiment:
             run_script_root_directory=self.path_manager.run_script_root_directory,
             results_directory=self.path_manager.results_directory,
             output_filename=self.experiment_config.output_filename,
-            check_job_status_sleep_time=60,  # TODO: put in config
+            check_job_status_frequency=60  # TODO: put in server config
         )
 
     def _initialise_objective_jsons(self) -> None:

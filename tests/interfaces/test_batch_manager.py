@@ -2,8 +2,12 @@ import tempfile
 import os
 
 from veropt.interfaces.local_simulation import MockSimulationRunner, MockSimulationConfig
-from veropt.interfaces.batch_manager import batch_manager, ExperimentMode
+from veropt.interfaces.slurm_simulation import SlurmVerosConfig, SlurmVerosRunner
+from veropt.interfaces.batch_manager import batch_manager, ExperimentMode, LocalSlurmBatchManager
 from veropt.interfaces.experiment_utility import ExperimentalState
+
+
+slurm = 0  # TODO: Make slurm batch manager test with workflows
 
 
 def test_local_batch_manager() -> None:
@@ -58,3 +62,36 @@ def test_local_batch_manager() -> None:
         loaded_experimental_state = ExperimentalState.load(state_json)
 
         assert loaded_experimental_state.model_dump() == experimental_state.model_dump()
+
+
+def test_local_slurm_batch_manager() -> None:
+
+    if slurm:
+
+        runner_config = SlurmVerosConfig.load("veropt/interfaces/configs/slurm_veros_config.json")
+        simulation_runner = SlurmVerosRunner(config=runner_config)
+
+        batch_manager = LocalSlurmBatchManager(
+            simulation_runner=simulation_runner,
+            run_script_filename="acc",
+            run_script_root_directory="path/to/run/script/root",
+            results_directory="path/to/results",
+            output_filename="test",
+            check_job_status_sleep_time=10
+        )
+
+        dict_of_parameters = {
+            0: {"c_k": 0.8},
+            1: {"c_k": 0.3}
+        }
+
+        experimental_state = ExperimentalState.make_fresh_state(
+            experiment_name="test_experiment",
+            experiment_directory="path/to/experiment",
+            state_json="path/to/experiment/results/test_state.json"
+        )
+
+        batch_manager.run_batch(
+            dict_of_parameters=dict_of_parameters,
+            experimental_state=experimental_state
+        )
