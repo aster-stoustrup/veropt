@@ -9,6 +9,9 @@ install_requires = [
     "scipy",
     "scikit-learn",
     "matplotlib"
+    "scikit-learn",
+    "plotly",
+    "dash"
 ]
 
 extras_require = {
