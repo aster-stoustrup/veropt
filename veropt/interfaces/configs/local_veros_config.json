@@ -1,7 +1,7 @@
 {
     "env_manager": "conda",
     "env_name": "veros",
-    "path_to_conda": "/Users/martamrozowska/miniforge3",
+    "path_to_conda": "path/to/conda",
     "path_to_env": null,
     "path_to_veros_executable": "veros",
     "backend": "numpy",

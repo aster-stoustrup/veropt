@@ -3,6 +3,7 @@ import stat
 import time
 import subprocess
 from typing import Literal
+
 from veropt.interfaces.simulation import Simulation, SimulationResult, SimulationRunner
 from veropt.interfaces.utility import Config
 from veropt.interfaces.veros_utility import edit_veros_run_script
@@ -38,7 +39,7 @@ def try_to_run(
         parameters: dict[str, float],
         max_tries: int
 ) -> SimulationResult:
-        
+
     success = False
     tries = 0
 
@@ -60,7 +61,7 @@ def try_to_run(
 
             print(f"Retrying in {tries*60} seconds.")
             time.sleep(tries*60)
-    
+
     return result
 
 
@@ -79,12 +80,12 @@ class SlurmSimulation(Simulation):
         self.batch_script_file = batch_script_file
         command = f"sbatch --parsable {batch_script_file}"
         self.command_arguments = command.split(" ")
-        
+
     def run(
             self,
             parameters: dict[str, float]
     ) -> SimulationResult:
-        
+
         assert os.path.isfile(self.batch_script_file), "Batch script not found."
 
         process = subprocess.run(
@@ -152,7 +153,7 @@ class SlurmVerosRunner(SimulationRunner):
         slurm_log_file = os.path.join(run_script_directory, f"{slurm_log_filename}.out")
 
         edit_veros_run_script(
-            run_script=run_script_file, 
+            run_script=run_script_file,
             parameters=parameters
         ) if not self.config.keep_old_params else None
 

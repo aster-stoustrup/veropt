@@ -1,11 +1,10 @@
 from veropt.interfaces.result_processing import MockResultProcessor
 from veropt.interfaces.simulation import SimulationResult
 import tempfile
-import os
 import numpy as np
 
 
-def test_process():
+def test_process() -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
 
         ids = ["point=0", "point=1", "point=2", "point=3"]

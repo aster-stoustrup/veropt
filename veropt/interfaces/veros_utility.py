@@ -8,7 +8,7 @@ def edit_veros_run_script(
         data = file.readlines()
 
     # TODO: This is not robust. Need to figure out how to handle the indentation.
-    #       Regular expression match /\w+settings\.([a-zA-Z0-9_]+)\w*=/, for all matches look up key 
+    #       Regular expression match /\w+settings\.([a-zA-Z0-9_]+)\w*=/, for all matches look up key
     #       and set value; gather all keys in file, complement with assigned keys, add new lines.
     # TODO: How to introduce new parameters that are not already in the setup file?
     # TODO: Check if the parameters are already overwritten in the setup file.

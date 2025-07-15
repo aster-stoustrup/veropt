@@ -1,13 +1,12 @@
 from typing import Optional, Union, Self
 import json
-import copy
+
 from veropt.interfaces.simulation import SimulationRunner
 from veropt.interfaces.batch_manager import BatchManager, batch_manager
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
 from veropt.interfaces.experiment_utility import (
     ExperimentConfig, OptimiserConfig, ExperimentalState, PathManager, Point
     )
-
 from veropt.optimiser.objective import InterfaceObjective
 from veropt.optimiser.constructors import bayesian_optimiser
 
@@ -15,6 +14,25 @@ import torch
 import numpy as np
 
 torch.set_default_dtype(torch.float64)
+
+
+def _mask_nans(
+        dict_of_objectives: ObjectivesDict,
+        experimental_state: ExperimentalState
+) -> None:  # TODO: Remove when veropt core supports nan imputs
+
+    current_minima: dict[str, float] = {}
+    current_stds: dict[str, float] = {}
+
+    for name in dict_of_objectives[0].keys():
+        current_minima[name] = np.nanmin([experimental_state.points[i].objective_values[name] 
+                                          for i in range(experimental_state.next_point)])
+        current_stds[name] = np.std([experimental_state.points[i].objective_values[name] 
+                                          for i in range(experimental_state.next_point)])
+
+    for i, objectives in dict_of_objectives.items():
+        dict_of_objectives[i] = {name: value if not np.isnan(value) else current_minima[name]-2*current_stds[name]
+                                 for name, value in objectives.items()}
 
 
 class ExperimentObjective(InterfaceObjective):
@@ -43,13 +61,13 @@ class ExperimentObjective(InterfaceObjective):
             n_objectives=n_objectives,
             variable_names=variable_names,
             objective_names=objective_names
-            )
+        )
 
     def save_candidates(
             self,
             suggested_variables: dict[str, torch.Tensor],
     ) -> None:
-        
+
         suggested_variables_np = {name: value.tolist() for name, value in suggested_variables.items()}
 
         with open(self.suggested_parameters_json, 'w') as f:
@@ -67,7 +85,7 @@ class ExperimentObjective(InterfaceObjective):
         evaluated_objectives = {name: torch.tensor(value) for name, value in evaluated_objectives_np.items()}
 
         return suggested_variables, evaluated_objectives
-    
+
     @classmethod
     def from_saved_state(
             cls,
@@ -78,7 +96,7 @@ class ExperimentObjective(InterfaceObjective):
 
 class Experiment:
     def __init__(
-            self, 
+            self,
             simulation_runner: SimulationRunner,
             result_processor: ResultProcessor,
             experiment_config: Union[str, ExperimentConfig],
@@ -109,9 +127,9 @@ class Experiment:
 
     def _initialise_optimiser(self) -> None:
 
-        bounds_lower = [self.experiment_config.parameter_bounds[name][0] \
+        bounds_lower = [self.experiment_config.parameter_bounds[name][0]
                         for name in self.experiment_config.parameter_names]
-        bounds_upper = [self.experiment_config.parameter_bounds[name][1] \
+        bounds_upper = [self.experiment_config.parameter_bounds[name][1]
                         for name in self.experiment_config.parameter_names]
 
         objective = ExperimentObjective(
@@ -162,36 +180,6 @@ class Experiment:
         assert isinstance(self.batch_manager, BatchManager), "batch_manager must be a BatchManager"
         assert isinstance(self.result_processor, ResultProcessor), "result_processor must be a ResultProcessor"
 
-    def _clear_nans(
-            self,
-            dict_of_parameters: dict[int, dict],
-            dict_of_objectives: ObjectivesDict
-    ) -> None:  # TODO: Remove when veropt core supports nan imputs
-
-        dict_of_objectives_copy = copy.deepcopy(dict_of_objectives)
-
-        for i, objectives in dict_of_objectives_copy.items():
-            val_array = np.array([val for val in objectives.values()])
-            if np.isnan(val_array).any():
-                dict_of_parameters.pop(i)
-                dict_of_objectives.pop(i)
-            else:
-                continue
-
-        if not dict_of_parameters:
-            self._initialise_objective_jsons()
-        else:
-            suggested_parameters = {name: [dict_of_parameters[i][name] for i in dict_of_parameters.keys()] \
-                                for name in self.experiment_config.parameter_names}
-            evaluated_objectives = {name: [dict_of_objectives[i][name] for i in dict_of_parameters.keys()] \
-                                for name in self.experiment_config.objective_names}
-            
-            with open(self.path_manager.suggested_parameters_json, "w") as f:
-                json.dump(suggested_parameters, f)
-
-            with open(self.path_manager.evaluated_objectives_json, "w") as f:
-                json.dump(evaluated_objectives, f)
-
     def get_parameters_from_optimiser(self) -> dict[int, dict]:
 
         with open(self.path_manager.suggested_parameters_json, 'r') as f:
@@ -231,7 +219,12 @@ class Experiment:
             dict_of_objectives: ObjectivesDict
     ) -> None:
 
-        evaluated_objectives = {name: [dict_of_objectives[i][name] for i in dict_of_parameters.keys()] \
+        _mask_nans(
+            dict_of_objectives=dict_of_objectives, 
+            experimental_state=self.state
+        )
+
+        evaluated_objectives = {name: [dict_of_objectives[i][name] for i in dict_of_parameters.keys()]
                                 for name in self.experiment_config.objective_names}
 
         with open(self.path_manager.evaluated_objectives_json, "w") as f:
@@ -265,11 +258,6 @@ class Experiment:
             dict_of_parameters=dict_of_parameters,
             dict_of_objectives=dict_of_objectives
         )
-
-        # self._clear_nans(
-        #     dict_of_parameters=dict_of_parameters,
-        #     dict_of_objectives=dict_of_objectives
-        # )  # TODO: Remove when veropt core supports nan imputs
 
     def run_experiment(self) -> None:
 

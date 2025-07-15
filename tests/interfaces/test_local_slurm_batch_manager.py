@@ -4,7 +4,7 @@ from veropt.interfaces.batch_manager import LocalSlurmBatchManager
 from veropt.interfaces.experiment_utility import ExperimentalState
 
 
-def test_local_slurm_batch_manager():
+def test_local_slurm_batch_manager() -> None:
 
     if "SLURM_JOB_ID" in os.environ:
 

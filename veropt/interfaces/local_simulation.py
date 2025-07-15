@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 import json
 import subprocess
 import os
-from typing import Optional, Union, Literal
+from typing import Optional, Literal
+
 from veropt.interfaces.simulation import SimulationResult, Simulation, SimulationRunner
 from veropt.interfaces.veros_utility import edit_veros_run_script
 from veropt.interfaces.utility import Config
@@ -12,12 +13,12 @@ class VirtualEnvironmentManager(ABC):
     @abstractmethod
     def make_activation_command(self) -> str:
         ...
-    
+
     def activate_virtual_environment(self) -> None:
         source = self.make_activation_command()
         dump = 'python -c "import os, json;print(json.dumps(dict(os.environ)))"'
         pipe = subprocess.Popen(
-            args=['/bin/bash', '-c', '%s && %s' %(source,dump)], 
+            args=['/bin/bash', '-c', '%s && %s' % (source, dump)],
             stdout=subprocess.PIPE)
 
         os.environ = json.loads(s=pipe.stdout.read())
@@ -30,7 +31,7 @@ class VirtualEnvironmentManager(ABC):
         self.activate_virtual_environment()
         os.chdir(directory)
         env_copy = os.environ.copy()
-        
+
         return subprocess.run(
             args=command_arguments,
             cwd=directory,
@@ -62,7 +63,7 @@ class Venv(VirtualEnvironmentManager):
 
     def make_activation_command(self) -> str:
         return f"source {self.path_to_env}/bin/activate"
-    
+
 
 def virtual_environment_manager(
         manager: Literal["conda", "venv"],
@@ -70,24 +71,24 @@ def virtual_environment_manager(
         env_name: Optional[str] = None,
         path_to_env: Optional[str] = None,
 ) -> VirtualEnvironmentManager:
-    
+
     if manager == "conda":
         assert path_to_conda is not None, \
             "Conda picked as virtual env manager, but path to conda is missing."
         assert env_name is not None, \
             "Conda picked as virtual env manager, but env name is missing."
-        
+
         return Conda(
             path_to_conda=path_to_conda,
             env_name=env_name
         )
-    
+
     elif manager == "venv":
         assert path_to_env is not None, \
             "Venv picked as virtual env manager, but path to env is missing."
-        
+
         return Venv(path_to_env=path_to_env)
-    
+
 
 class LocalSimulation(Simulation):
     """Run a simulation in a specified environment as a subprocess."""
@@ -99,7 +100,7 @@ class LocalSimulation(Simulation):
             env_manager: VirtualEnvironmentManager,
             output_filename: str
     ):
-        
+
         self.id = simulation_id
         self.run_script_directory = run_script_directory
         self.run_command_arguments = run_command_arguments
@@ -210,11 +211,11 @@ class LocalVerosRunner(SimulationRunner):
             run_script_filename: str,
             output_filename: str
     ) -> SimulationResult:
-        
+
         run_script = os.path.join(run_script_directory, f"{run_script_filename}.py")
 
         edit_veros_run_script(
-            run_script=run_script, 
+            run_script=run_script,
             parameters=parameters
         ) if not self.config.keep_old_params else None
 

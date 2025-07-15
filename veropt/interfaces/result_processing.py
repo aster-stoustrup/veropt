@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 import os
-import xarray as xr
-from typing import Union
+
 from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
+
+import xarray as xr
 
 
 ObjectivesDict = dict[int, dict[str, float]]
@@ -88,7 +89,7 @@ class MockResultProcessor(ResultProcessor):
             self,
             result: SimulationResult
     ) -> None:
-        
+
         result_file = f"{result.output_directory}/{result.output_filename}.txt"
 
         if "error_output" in result.output_filename:
@@ -101,7 +102,7 @@ class MockResultProcessor(ResultProcessor):
             self,
             result: SimulationResult
     ) -> dict[str, float]:
-        
+
         if self.fixed_objective:
             objectives = self.objectives
         else:
@@ -112,16 +113,16 @@ class MockResultProcessor(ResultProcessor):
 
 class TestVerosResultProcessor(ResultProcessor):
     def open_output_file(
-            self, 
+            self,
             result: SimulationResult
     ) -> None:
-        
+
         filename = f"{result.output_filename}.overturning.nc"
         dataset = os.path.join(result.output_directory, filename)
         xr.open_dataset(dataset)
 
     def calculate_objectives(
-            self, 
+            self,
             result: SimulationResult
     ) -> dict[str, float]:
 

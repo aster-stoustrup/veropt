@@ -1,5 +1,6 @@
-from typing import Union, Optional, Self
+from typing import Optional, Self
 import os
+
 from veropt.interfaces.simulation import SimulationResult
 from veropt.interfaces.utility import Config, create_directory
 
@@ -117,7 +118,7 @@ class PathManager:
     @staticmethod
     def make_simulation_id(i: int) -> str:
         return f"point={i}"
-    
+
     def make_results_directory(self) -> str:
         path = os.path.join(self.experiment_directory, "results")
         create_directory(path)

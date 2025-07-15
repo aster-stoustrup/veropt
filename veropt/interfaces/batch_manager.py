@@ -5,6 +5,7 @@ import tqdm
 import subprocess
 import time
 from typing import Optional
+
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner, SimulationResultsDict
 from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
 from veropt.interfaces.utility import create_directory, copy_files
@@ -18,7 +19,7 @@ def _check_if_point_exists(
 
     try:
         _ = experimental_state.points[i].state
-    except:
+    except KeyError:
         _initialise_point(
             i=i,
             parameters=parameters,
@@ -31,7 +32,7 @@ def _initialise_point(
         parameters: dict[str, float],
         experimental_state: ExperimentalState
 ) -> None:
-    
+
     point = Point(
         state="Initialised by batch manager",
         parameters=parameters
@@ -59,18 +60,18 @@ def _check_if_job_completed(
         error: str
 ) -> bool:
     completed = False
-    
+
     if job_status_dict['JobState'] == "COMPLETED":
         completed = True
 
     elif job_status_dict['JobState'] == "COMPLETING":
         completed = True
-    
+
     elif "slurm_load_jobs error: Invalid job id specified" in error:
         completed = True  # TODO: IF RESUBMITTING WITH NEW JOB_ID, THIS IS WRONG!!!
 
     return completed
-    
+
 
 class ExperimentMode(StrEnum):
     LOCAL = "local"
@@ -96,7 +97,7 @@ class BatchManager(ABC):
         self.results_directory = results_directory
         self.output_filename = output_filename
         self.check_job_status_sleep_time = 60 if check_job_status_sleep_time is None \
-            else check_job_status_sleep_time 
+            else check_job_status_sleep_time
         self.remote = remote
         self.hostname = hostname
 
@@ -112,7 +113,7 @@ class BatchManager(ABC):
             self,
             i: int
     ) -> tuple[str, str]:
-        
+
         simulation_id = PathManager.make_simulation_id(i=i)
         result_i_directory = os.path.join(
             self.results_directory,
@@ -125,7 +126,7 @@ class BatchManager(ABC):
             source_directory=self.run_script_root_directory,
             destination_directory=result_i_directory
         )
-        
+
         return simulation_id, result_i_directory
 
     def _submit_job(
@@ -134,7 +135,7 @@ class BatchManager(ABC):
             simulation_id: str,
             result_i_directory: str
     ) -> tuple[Optional[int], SimulationResult]:
-        
+
         result = self.simulation_runner.save_set_up_and_run(
             simulation_id=simulation_id,
             parameters=parameters,
@@ -142,10 +143,10 @@ class BatchManager(ABC):
             run_script_filename=self.run_script_filename,
             output_filename=self.output_filename
         )
-        
+
         with open(result.stdout_file, "r") as f:
             output = f.read()
-        
+
         if os.path.getsize(result.stderr_file) == 0 and output.strip().isdigit():
             job_id = int(output.strip())
 
@@ -175,7 +176,8 @@ class BatchManager(ABC):
 
         if output:
             job_status_dict = _get_job_status_dict(output=output)
-            print("Job {jd[JobId]}/{jd[JobName]} status: {jd[JobState]} (Reason: {jd[Reason]}).".format(jd=job_status_dict))
+            status_message = "Job {jd[JobId]}/{jd[JobName]} status: {jd[JobState]} (Reason: {jd[Reason]})."
+            print(status_message.format(jd=job_status_dict))
 
             completed = _check_if_job_completed(
                 job_status_dict=job_status_dict,
@@ -192,22 +194,22 @@ class BatchManager(ABC):
 
         elif error and "slurm_load_jobs error: Invalid job id specified" not in error:
             print(f"Error checking job {job_id}: {error}")
-            print(f"Continuing in 60 seconds.")  # TODO: Move to config; what name?
+            print("Continuing in 60 seconds.")  # TODO: Move to config; what name?
             time.sleep(60)
 
         return state
-    
+
     def _check_pending_jobs(
             self,
             experimental_state: ExperimentalState
     ) -> None:
-        
+
         pending_jobs = 0
         points = experimental_state.points
         submitted_points = [i for i in points
                             if points[i].state == "Simulation running"
                             or points[i].state == "Simulation started"]
-        submitted_jobs = [points[i].job_id for i in points]
+        submitted_jobs = [points[i].job_id for i in submitted_points]
 
         for i in range(len(submitted_jobs)):
             pending_jobs |= (1 << i)
@@ -220,9 +222,9 @@ class BatchManager(ABC):
                     job_id=job_id,
                     state=experimental_state.points[point_id].state,
                 )
-                
+
                 experimental_state.points[point_id].state = state
-                
+
                 if state == "Simulation completed":
                     pending_jobs &= ~(1 << i)
                 else:
@@ -241,37 +243,38 @@ class BatchManager(ABC):
 
 
 def batch_manager(
-            experiment_mode: str,
-            simulation_runner: SimulationRunner,
-            run_script_filename: str,
-            run_script_root_directory: str,
-            results_directory: str,
-            output_filename: str,
-            check_job_status_sleep_time: int = 60
-    ) -> BatchManager:
-        
-        batch_manager_classes = {
-            ExperimentMode.LOCAL: LocalBatchManager,
-            ExperimentMode.LOCAL_SLURM: LocalSlurmBatchManager,
-            ExperimentMode.REMOTE_SLURM: RemoteSlurmBatchManager
-        }
-        
-        assert experiment_mode in ExperimentMode, \
-            f"Unsupported experiment mode: {experiment_mode}; expected one of: {[mode.value for mode in ExperimentMode]}."
+        experiment_mode: str,
+        simulation_runner: SimulationRunner,
+        run_script_filename: str,
+        run_script_root_directory: str,
+        results_directory: str,
+        output_filename: str,
+        check_job_status_sleep_time: int = 60
+) -> BatchManager:
 
-        remote = True if experiment_mode == ExperimentMode.REMOTE_SLURM else False
-        
-        BatchManagerClass = batch_manager_classes[experiment_mode]
+    batch_manager_classes = {
+        ExperimentMode.LOCAL: LocalBatchManager,
+        ExperimentMode.LOCAL_SLURM: LocalSlurmBatchManager,
+        ExperimentMode.REMOTE_SLURM: RemoteSlurmBatchManager
+    }
 
-        return BatchManagerClass(
-            simulation_runner=simulation_runner,
-            run_script_filename=run_script_filename,
-            run_script_root_directory=run_script_root_directory,
-            results_directory=results_directory,
-            output_filename=output_filename,
-            check_job_status_sleep_time=check_job_status_sleep_time,
-            remote=remote
-        )
+    assert experiment_mode in ExperimentMode, \
+        f"Unsupported experiment mode: {experiment_mode};" \
+        f"expected one of: {[mode.value for mode in ExperimentMode]}."
+
+    remote = True if experiment_mode == ExperimentMode.REMOTE_SLURM else False
+
+    BatchManagerClass = batch_manager_classes[experiment_mode]
+
+    return BatchManagerClass(
+        simulation_runner=simulation_runner,
+        run_script_filename=run_script_filename,
+        run_script_root_directory=run_script_root_directory,
+        results_directory=results_directory,
+        output_filename=output_filename,
+        check_job_status_sleep_time=check_job_status_sleep_time,
+        remote=remote
+    )
 
 
 class LocalBatchManager(BatchManager):
@@ -339,7 +342,7 @@ class LocalSlurmBatchManager(BatchManager):
                 else "Simulation failed to start"
             experimental_state.points[i].job_id = job_id
             experimental_state.points[i].result = result
-        
+
         experimental_state.save_to_json(experimental_state.state_json)
         self._check_pending_jobs(experimental_state=experimental_state)
         experimental_state.save_to_json(experimental_state.state_json)

@@ -6,7 +6,7 @@ from veropt.interfaces.batch_manager import batch_manager, ExperimentMode
 from veropt.interfaces.experiment_utility import ExperimentalState
 
 
-def test_local_batch_manager():
+def test_local_batch_manager() -> None:
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         experiment_name = "test_experiment"

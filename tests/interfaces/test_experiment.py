@@ -6,7 +6,7 @@ from veropt.interfaces.result_processing import MockResultProcessor
 from veropt.interfaces.experiment_utility import OptimiserConfig, ExperimentConfig
 
 
-def test_experiment():
+def test_experiment() -> None:
 
     optimiser_config = OptimiserConfig(
         n_initial_points=1,
@@ -48,5 +48,6 @@ def test_experiment():
         )
 
         experiment.run_experiment()
+
 
 test_experiment()
