@@ -1,6 +1,24 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 15-07-2025
+Refactor of the entire project! 
+
+### Added
+- New interfaces folder for setting up optimisation problems on e.g. slurm
+- It is possible to save the optimiser again, now in a readable, stable json file
+- New setting file (also json) where optimiser configuration can be saved
+- New constructor functions that can be called instead of creating classes directly
+- veropt is now typed and checked by mypy
+
+### Changed
+- Internal structure
+- Interfaces
+- Examples
+
+### Removed
+- The GUI is not currently available but will hopefully return in the future
+
 ## [0.6.0] - 28-02-2025
 ### Added
 - Changelog :))

@@ -1,4 +1,4 @@
-name: veropt
+name: veropt_testing
 channels:
   - conda-forge
   - gpytorch
@@ -10,8 +10,9 @@ dependencies:
   - botorch
   - dill
   - scipy
-  - plotly
-  - dash
+  - mypy
+  - flake8
+  - pytest
   - pip
   - pip:
     - -e .
