@@ -25,7 +25,7 @@ class OptimiserSettings(SavableClass):
             n_bayesian_points: int,
             n_objectives: int,
             n_evaluations_per_step: int,
-            initial_points_generator: InitialPointsChoice = 'random',  # TODO: Link typehint to list
+            initial_points_generator: InitialPointsChoice = 'random',
             normalise: bool = True,
             verbose: bool = True,
             renormalise_each_step: Optional[bool] = None,

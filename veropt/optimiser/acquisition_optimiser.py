@@ -1,6 +1,6 @@
 import abc
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Mapping, Optional, Self, TypedDict, Unpack
+from typing import Any, Literal, Mapping, Optional, Self, TypedDict, Unpack
 
 import numpy as np
 import scipy
@@ -51,15 +51,6 @@ class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
             new_bounds: torch.Tensor
     ) -> None:
         self.bounds = new_bounds
-
-    def refresh(
-            self,
-            acquisition_function: AcquisitionFunction,
-    ) -> None:
-
-        # Implement this in subclasses if needed, otherwise leave blank
-
-        pass
 
     @abc.abstractmethod
     def optimise(
@@ -307,6 +298,7 @@ class ProximityPunishSettingsInputDict(TypedDict, total=False):
     alpha: float
     omega: float
     refresh_setting: Literal['simple', 'advanced']
+    verbose: bool
 
 
 @dataclass
@@ -314,6 +306,7 @@ class ProximityPunishSettings(SavableDataClass):
     alpha: float = 0.7
     omega: float = 1.0
     refresh_setting: Literal['simple', 'advanced'] = 'advanced'
+    verbose: bool = True  # TODO: Should ideally inherit this from optimiser
 
 
 class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
@@ -350,7 +343,11 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             acquisition_function: AcquisitionFunction,
     ) -> torch.Tensor:
 
-        assert self.scaling is not None, "Attribute 'scaling' must be computed before calling this function."
+        self.refresh(
+            acquisition_function=acquisition_function,
+        )
+
+        assert self.scaling is not None, "'refresh' failed to set scaling attribute"
 
         punishing_acquisition_function = ProximityPunishAcquisitionFunction(
             original_acquisition_function=acquisition_function,
@@ -364,6 +361,12 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
 
         for candidate_no in range(self.n_evaluations_per_step):
 
+            if self.settings.verbose and candidate_no == 0:
+                print(
+                    "Optimising acquisition function... ",
+                    end="\r"
+                )
+
             candidates.append(self.single_step_optimiser(
                 acquisition_function=punishing_acquisition_function
             ))
@@ -372,8 +375,15 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
                 new_points=candidates
             )
 
-            # TODO: Add verbosity flag here
-            print(f"Found point {candidate_no + 1} of {self.n_evaluations_per_step}.")
+            if self.settings.verbose:
+                print(
+                    f"Optimising acquisition function... "
+                    f"Found point {candidate_no + 1} of {self.n_evaluations_per_step}.",
+                    end="\r"
+                )
+
+        if self.settings.verbose:
+            print("\n")
 
         candidates_tensor = torch.cat(
             tensors=candidates,
@@ -387,11 +397,20 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             acquisition_function: AcquisitionFunction,
     ) -> None:
 
+        if self.settings.verbose:
+            print(
+                "Finding scale for the acquisition optimiser...",
+                end="\r"
+            )
+
         if self.settings.refresh_setting == 'simple':
             self._refresh_scaling_simple(acquisition_function=acquisition_function)
 
         elif self.settings.refresh_setting == 'advanced':
             self._refresh_scaling_advanced(acquisition_function=acquisition_function)
+
+        if self.settings.verbose:
+            print("Found scale for the acquisition optimiser. \n")
 
     def update_bounds(
             self,

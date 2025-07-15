@@ -1,32 +1,29 @@
-import json
-from importlib import resources
-from typing import Literal, Optional, TypedDict, Union, Unpack, get_args, overload
+from typing import Literal, Optional, TypedDict, Union, Unpack, get_args
 
 import torch
 
-from veropt.optimiser.acquisition import BotorchAcquisitionFunction, QLogExpectedHyperVolumeImprovement, \
-    UpperConfidenceBound, UpperConfidenceBoundOptionsInputDict
-from veropt.optimiser.acquisition_optimiser import AcquisitionOptimiser, DualAnnealingOptimiser, DualAnnealingSettingsInputDict, \
+from veropt.optimiser.acquisition import BotorchAcquisitionFunction, UpperConfidenceBoundOptionsInputDict
+from veropt.optimiser.acquisition_optimiser import (
+    AcquisitionOptimiser, DualAnnealingSettingsInputDict,
     ProximityPunishSettingsInputDict, ProximityPunishmentSequentialOptimiser
-from veropt.optimiser.model import AdamModelOptimiser, GPyTorchFullModel, GPyTorchSingleModel, \
-    GPyTorchTrainingParametersInputDict, MaternParametersInputDict, MaternSingleModel, \
-    TorchModelOptimiser
-from veropt.optimiser.normalisation import Normaliser, NormaliserZeroMeanUnitVariance
+)
+from veropt.optimiser.model import (
+    AdamModelOptimiser, GPyTorchFullModel, GPyTorchSingleModel,
+    GPyTorchTrainingParametersInputDict, MaternParametersInputDict, TorchModelOptimiser
+)
+from veropt.optimiser.normalisation import Normaliser, NormaliserChoice, get_normaliser_class
 from veropt.optimiser.objective import CallableObjective, InterfaceObjective
 from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.optimiser_utility import OptimiserSettingsInputDict
 from veropt.optimiser.prediction import BotorchPredictor
 from veropt.optimiser.saver_loader_utility import get_all_subclasses
-from veropt.optimiser.utility import _validate_typed_dict
+from veropt.optimiser.utility import _load_defaults, _validate_typed_dict
 
 SingleKernelOptions = Literal['matern']
 KernelOptimiserOptions = Literal['adam']
 
 AcquisitionOptions = Literal['qlogehvi', 'ucb']
 AcquisitionOptimiserOptions = Literal['dual_annealing']
-
-NormaliserChoice = Literal['zero_mean_unit_variance']
-
 
 KernelInputDict = MaternParametersInputDict  # To be expanded when more kernels are added
 AcquisitionSettings = UpperConfidenceBoundOptionsInputDict  # expand with more options when adding acq_funcs
@@ -105,7 +102,7 @@ def bayesian_optimiser(
 
     else:
 
-        normaliser_class = build_normaliser(
+        normaliser_class = get_normaliser_class(
             normaliser_choice=normaliser  # type: ignore[arg-type]  # checked above with 'issubclass'
         )
 
@@ -261,7 +258,7 @@ def gpytorch_single_model_list(
             f"Received {n_objectives} objectives but {len(kernels)} kernels."
         )
 
-        if kernels[0] == str:
+        if type(kernels[0]) is str:
 
             for kernel in kernels:
                 assert type(kernel) is str, wrong_kernel_input_message
@@ -356,7 +353,7 @@ def gpytorch_single_model(
                 settings=settings
             )
 
-   # Shouldn't reach this point if kernel is recognised
+    # Shouldn't reach this point if kernel is recognised
     raise ValueError(
         f"Kernel '{kernel}' not recognised. Implemented kernels are: {get_args(SingleKernelOptions)}"
     )
@@ -390,7 +387,7 @@ def botorch_acquisition_function(
         parameters: Optional[AcquisitionSettings] = None
 ) -> BotorchAcquisitionFunction:
 
-    if function  is None:
+    if function is None:
 
         defaults = _load_defaults()
 
@@ -530,35 +527,3 @@ def acquisition_optimiser_with_proximity_punishment(
     raise NotImplementedError(
         f"Acquisition optimiser '{optimiser}' not recognised. Options are {get_args(AcquisitionOptimiserOptions)}."
     )
-
-
-def build_normaliser(
-        normaliser_choice: Union[NormaliserChoice, None]
-) -> type[Normaliser]:
-
-    if normaliser_choice is None:
-
-        defaults = _load_defaults()
-
-        return build_normaliser(
-            normaliser_choice=defaults['normaliser']
-        )
-
-    subclasses = get_all_subclasses(
-        cls=Normaliser
-    )
-
-    for subclass in subclasses:
-        if normaliser_choice == subclass.name:
-            return subclass
-
-    raise ValueError(f"Unknown normaliser type: {normaliser_choice}")
-
-
-def _load_defaults() -> dict:
-
-    with resources.open_text(
-            'veropt',
-            'optimiser/default_settings.json'
-    ) as defaults_file:
-        return json.load(defaults_file)

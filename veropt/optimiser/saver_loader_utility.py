@@ -1,8 +1,8 @@
 import abc
 from dataclasses import asdict, dataclass, fields
-from json import JSONDecoder, JSONEncoder
-from typing import Self, TypeVar
 from inspect import isabstract
+from json import JSONEncoder
+from typing import Self
 
 import torch
 from torch.utils.data import Dataset

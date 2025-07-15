@@ -7,7 +7,6 @@ install_requires = [
     "botorch",
     "dill",
     "scipy",
-    "scikit-learn",
     "plotly",
     "dash"
 ]

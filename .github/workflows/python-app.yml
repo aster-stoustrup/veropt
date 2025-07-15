@@ -27,14 +27,12 @@ jobs:
     - name: Lint with flake8
       run: |
         pip install flake8
-        # Note: Should be the same as in the local workflow. Please change both if you change this.
-        flake8 . --max-line-length=120
+        flake8 .
 
     - name: Type checking with mypy
       run: |
         pip install mypy
-        # Note: Should be the same as in the local workflow. Please change both if you change this.
-        mypy veropt tests --disallow-untyped-defs --follow-untyped-imports
+        mypy veropt tests examples
 
     - name: Test with pytest
       run: |

@@ -3,7 +3,7 @@ import functools
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Iterator, Mapping, Optional, Self, TypedDict, Union, Unpack
+from typing import Any, Callable, Iterator, Mapping, Optional, Self, Sequence, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
@@ -39,7 +39,7 @@ class SurrogateModel(metaclass=abc.ABCMeta):
         pass
 
 
-class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorchModel):
+class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorchModel):  # type: ignore[misc]
     _num_outputs = 1
 
     def __init__(
@@ -93,7 +93,6 @@ def format_json_state_dict(
         elif isinstance(value, float):
 
             formatted_dict[key] = torch.tensor(value)
-
 
     return formatted_dict
 
@@ -574,7 +573,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             self,
             n_variables: int,
             n_objectives: int,
-            single_model_list: list[GPyTorchSingleModel],
+            single_model_list: Sequence[GPyTorchSingleModel],
             model_optimiser: TorchModelOptimiser,
             training_settings: GPyTorchTrainingParameters
     ) -> None:
@@ -614,7 +613,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             cls,
             n_variables: int,
             n_objectives: int,
-            single_model_list: list[GPyTorchSingleModel],
+            single_model_list: Sequence[GPyTorchSingleModel],
             model_optimiser: TorchModelOptimiser,
             **kwargs: Unpack[GPyTorchTrainingParametersInputDict]
     ) -> 'GPyTorchFullModel':

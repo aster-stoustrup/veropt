@@ -131,7 +131,7 @@ class AcquisitionFunction(SavableClass, metaclass=abc.ABCMeta):
     def from_saved_state(
             cls,
             saved_state: dict
-    )-> Self:
+    ) -> Self:
 
         return cls.from_n_variables_n_objectives_and_settings(
             n_variables=saved_state['n_variables'],
@@ -166,9 +166,6 @@ class BotorchAcquisitionFunction(AcquisitionFunction, metaclass=abc.ABCMeta):
             return super().__call__(
                 variable_values=variable_values
             )
-
-
-
 
     @check_variable_objective_values_matching
     @_check_input_dimensions
@@ -250,7 +247,7 @@ class QLogExpectedHyperVolumeImprovement(BotorchAcquisitionFunction):
         self.function = botorch.acquisition.multi_objective.logei.qLogExpectedHypervolumeImprovement(
             model=model,
             ref_point=nadir_point,
-            partitioning=partitioning
+            partitioning=partitioning  # type: ignore[arg-type]  # Seems like botorch needs to update their types?
         )
 
 
