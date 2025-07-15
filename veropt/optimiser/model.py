@@ -3,7 +3,7 @@ import functools
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Iterator, Mapping, Optional, Self, TypedDict, Union, Unpack
+from typing import Any, Callable, Iterator, Mapping, Optional, Self, Sequence, TypedDict, Union, Unpack
 
 import botorch
 import gpytorch
@@ -39,7 +39,7 @@ class SurrogateModel(metaclass=abc.ABCMeta):
         pass
 
 
-class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorchModel):
+class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorchModel):  # type: ignore[misc]
     _num_outputs = 1
 
     def __init__(
@@ -94,7 +94,6 @@ def format_json_state_dict(
 
             formatted_dict[key] = torch.tensor(value)
 
-
     return formatted_dict
 
 
@@ -108,7 +107,6 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             mean_module: gpytorch.means.Mean,
             kernel: gpytorch.kernels.Kernel,
             n_variables: int,
-            settings_class: SavableDataClass
     ) -> None:
 
         self.likelihood = likelihood
@@ -116,8 +114,6 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
         self.kernel = kernel
 
         self.n_variables = n_variables
-
-        self.settings = settings_class
 
         self.model_with_data: Optional[GPyTorchDataModel] = None
 
@@ -131,12 +127,12 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
         )
 
-
     def __repr__(self) -> str:
+
         return (
             f"{self.__class__.__name__}("
-            f"trained: {'yes' if self.model_with_data else 'no'}, "
-            f"settings: {self.settings}"
+            f"trained: {'yes' if self.model_with_data else 'no'}"
+            f", settings: {self.get_settings()}"
             f")"
         )
 
@@ -168,6 +164,10 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             )
 
         return model
+
+    @abc.abstractmethod
+    def get_settings(self) -> SavableDataClass:
+        pass
 
     @abc.abstractmethod
     def _set_up_trained_parameters(self) -> None:
@@ -230,7 +230,7 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
                 'train_inputs': train_inputs,
                 'train_targets': train_targets,
                 'n_variables': self.n_variables,
-                'settings': self.settings.gather_dicts_to_save()
+                'settings': self.get_settings().gather_dicts_to_save()
             }
         }
 
@@ -353,7 +353,7 @@ class MaternSingleModel(GPyTorchSingleModel):
             batch_shape=torch.Size([])
         )
 
-        settings_class = MaternParameters(
+        self.settings = MaternParameters(
             **settings
         )
 
@@ -361,8 +361,7 @@ class MaternSingleModel(GPyTorchSingleModel):
             likelihood=likelihood,
             mean_module=mean_module,
             kernel=kernel,
-            n_variables=n_variables,
-            settings_class=settings_class
+            n_variables=n_variables
         )
 
     @classmethod
@@ -474,6 +473,9 @@ class MaternSingleModel(GPyTorchSingleModel):
             second_module='noise_covar'
         )
 
+    def get_settings(self) -> SavableDataClass:
+        return self.settings
+
 
 class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):
 
@@ -571,7 +573,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             self,
             n_variables: int,
             n_objectives: int,
-            single_model_list: list[GPyTorchSingleModel],
+            single_model_list: Sequence[GPyTorchSingleModel],
             model_optimiser: TorchModelOptimiser,
             training_settings: GPyTorchTrainingParameters
     ) -> None:
@@ -611,7 +613,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             cls,
             n_variables: int,
             n_objectives: int,
-            single_model_list: list[GPyTorchSingleModel],
+            single_model_list: Sequence[GPyTorchSingleModel],
             model_optimiser: TorchModelOptimiser,
             **kwargs: Unpack[GPyTorchTrainingParametersInputDict]
     ) -> 'GPyTorchFullModel':

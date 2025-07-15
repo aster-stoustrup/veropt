@@ -1,11 +1,11 @@
 import abc
 from enum import Enum
-from typing import Optional, Self, Union
+from typing import Union
 
 import torch
 
-from veropt.optimiser.utility import check_incoming_objective_dimensions_fix_1d
 from veropt.optimiser.saver_loader_utility import SavableClass
+from veropt.optimiser.utility import check_incoming_objective_dimensions_fix_1d
 
 
 class Objective(SavableClass, metaclass=abc.ABCMeta):
@@ -34,7 +34,7 @@ class Objective(SavableClass, metaclass=abc.ABCMeta):
     def gather_dicts_to_save(self) -> dict:
         return {
             'name': self.name,
-            'state':{
+            'state': {
                 'bounds': self.bounds,
                 'n_variables': self.n_variables,
                 'n_objectives': self.n_objectives,
@@ -60,7 +60,6 @@ class CallableObjective(Objective, metaclass=abc.ABCMeta):
         )
 
         return objective_values
-
 
     @abc.abstractmethod
     def _run(self, parameter_values: torch.Tensor) -> torch.Tensor:

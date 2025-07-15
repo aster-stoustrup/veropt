@@ -1,8 +1,8 @@
 import abc
 from dataclasses import asdict, dataclass, fields
-from json import JSONDecoder, JSONEncoder
-from typing import Self, TypeVar
 from inspect import isabstract
+from json import JSONEncoder
+from typing import Self
 
 import torch
 from torch.utils.data import Dataset
@@ -50,19 +50,17 @@ class SavableDataClass(SavableClass):
         )
 
 
-T = TypeVar('T', bound=type)
+class EmptyDataClass(SavableDataClass):
+    pass
 
 
-def get_all_subclasses(
+def get_all_subclasses[T: type](
         cls: T
 ) -> list[T]:
 
     return cls.__subclasses__() + (
         [subclass for class_ in cls.__subclasses__() for subclass in get_all_subclasses(class_)]
     )
-
-
-SavableSettings = TypeVar('SavableSettings', bound=SavableDataClass)
 
 
 def rehydrate_object[S: SavableClass](

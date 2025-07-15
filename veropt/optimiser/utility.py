@@ -1,7 +1,9 @@
 import functools
 import inspect
+import json
 from copy import deepcopy
-from typing import Any, Callable, Mapping, Optional, TypedDict, Union
+from importlib import resources
+from typing import Any, Callable, Literal, Mapping, Optional, TypedDict, Union
 
 import torch
 
@@ -77,10 +79,12 @@ def count_positional_arguments_in_signature(function: Callable) -> int:
 
     signature = inspect.signature(function)
 
+    positional_only = inspect.Parameter.POSITIONAL_ONLY
+    positional_or_keyword = inspect.Parameter.POSITIONAL_OR_KEYWORD
+
     return len([
         parameter for parameter in signature.parameters.values() if (
-                parameter.kind == inspect.Parameter.POSITIONAL_ONLY
-                or parameter.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+            parameter.kind == positional_only or parameter.kind == positional_or_keyword
         )
     ])
 
@@ -97,6 +101,61 @@ def enforce_amount_of_positional_arguments[T, **P](
             f"{function.__name__}() takes {n_positional_arguments_orginal_function} positional argument "
             f"but {len(received_args)} were given"
         )
+
+
+def get_arguments_of_function(
+        function: Callable,
+        argument_type: Literal['all', 'required'] = 'all',
+        excluded_arguments: Optional[list[str]] = None
+) -> list[str]:
+
+    if argument_type == 'all':
+        arguments = _get_all_arguments_of_function(
+            function=function
+        )
+
+    elif argument_type == 'required':
+        arguments = _get_required_arguments_of_function(
+            function=function
+        )
+
+    else:
+        raise ValueError("'argument_type' must be 'all' or 'required'")
+
+    if excluded_arguments is not None:
+        for excluded_argument in excluded_arguments:
+            for argument_no, argument in enumerate(arguments):
+                if argument == excluded_argument:
+                    del arguments[argument_no]
+
+    return arguments
+
+
+def _get_required_arguments_of_function(
+        function: Callable
+) -> list[str]:
+
+    signature = inspect.signature(function)
+
+    required_arguments = []
+
+    for parameter in signature.parameters.values():
+        if parameter.name != 'kwargs':
+            if parameter.default is inspect.Parameter.empty:
+                required_arguments.append(
+                    parameter.name
+                )
+
+    return required_arguments
+
+
+def _get_all_arguments_of_function(
+        function: Callable
+) -> list[str]:
+
+    signature = inspect.signature(function)
+
+    return [parameter.name for parameter in signature.parameters.values()]
 
 
 def check_variable_objective_values_matching[T, **P](
@@ -270,3 +329,12 @@ def _validate_typed_dict(
         assert key in expected_keys, (
             f"Option '{key}' not recognised for '{object_name}'. Expected options: {expected_keys}."
         )
+
+
+def _load_defaults() -> dict:
+
+    with resources.open_text(
+            'veropt',
+            'optimiser/default_settings.json'
+    ) as defaults_file:
+        return json.load(defaults_file)

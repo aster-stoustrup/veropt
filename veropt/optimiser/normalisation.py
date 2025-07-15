@@ -1,10 +1,10 @@
 import abc
-from typing import Self
+from typing import Literal, Self, Union
 
 import torch
 
-from veropt.optimiser.utility import DataShape
-from veropt.optimiser.saver_loader_utility import SavableClass
+from veropt.optimiser.utility import DataShape, _load_defaults
+from veropt.optimiser.saver_loader_utility import SavableClass, get_all_subclasses
 
 
 class Normaliser(SavableClass, metaclass=abc.ABCMeta):
@@ -100,3 +100,29 @@ class NormaliserZeroMeanUnitVariance(Normaliser):
                 'variances': self.variances,
             }
         }
+
+
+NormaliserChoice = Literal['zero_mean_unit_variance']
+
+
+def get_normaliser_class(
+        normaliser_choice: Union[NormaliserChoice, None]
+) -> type[Normaliser]:
+
+    if normaliser_choice is None:
+
+        defaults = _load_defaults()
+
+        return get_normaliser_class(
+            normaliser_choice=defaults['normaliser']
+        )
+
+    subclasses = get_all_subclasses(
+        cls=Normaliser
+    )
+
+    for subclass in subclasses:
+        if normaliser_choice == subclass.name:
+            return subclass
+
+    raise ValueError(f"Unknown normaliser type: {normaliser_choice}")

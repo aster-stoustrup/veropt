@@ -5,19 +5,14 @@ channels:
 dependencies:
   - python
   - numpy
-  - xarray
   - pytorch
   - gpytorch
   - botorch
   - dill
-  - click
   - scipy
-  - scikit-learn
   - mypy
   - flake8
   - pytest
   - pip
   - pip:
-    - matplotlib
-    - pyside6
     - -e .

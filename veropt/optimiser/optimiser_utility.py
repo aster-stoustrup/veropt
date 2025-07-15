@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from typing import Optional, Self, TypedDict, Union
+from typing import Iterator, Optional, Self, TypedDict, Union
 
 import torch
 
@@ -25,7 +25,7 @@ class OptimiserSettings(SavableClass):
             n_bayesian_points: int,
             n_objectives: int,
             n_evaluations_per_step: int,
-            initial_points_generator: InitialPointsChoice = 'random',  # TODO: Link typehint to list
+            initial_points_generator: InitialPointsChoice = 'random',
             normalise: bool = True,
             verbose: bool = True,
             renormalise_each_step: Optional[bool] = None,
@@ -99,14 +99,19 @@ class SuggestedPoints(SavableDataClass):
             point_no: int
     ) -> 'SuggestedPoints':
 
-        predicted_objective_values = {
-            prediction_type: tensor[point_no, :]
-            for (prediction_type, tensor) in self.predicted_objective_values.items()
-        }
+        if self.predicted_objective_values is not None:
+
+            predicted_objective_values = {
+                prediction_type: tensor[point_no, :]  # type: ignore[index]  # should be well-defined
+                for (prediction_type, tensor) in self.predicted_objective_values.items()
+            }
+
+        else:
+            predicted_objective_values = None
 
         return SuggestedPoints(
             variable_values=self.variable_values[point_no, :],
-            predicted_objective_values=predicted_objective_values,
+            predicted_objective_values=predicted_objective_values,  # type: ignore[arg-type]  # Should be safe
             generated_at_step=self.generated_at_step,
             generated_with_mode=self.generated_with_mode,
             normalised=self.normalised,
@@ -114,6 +119,10 @@ class SuggestedPoints(SavableDataClass):
 
     def __len__(self) -> int:
         return self.variable_values.shape[DataShape.index_points]
+
+    def __iter__(self) -> Iterator['SuggestedPoints']:
+        for suggested_point_no in range(len(self)):
+            yield self[suggested_point_no]
 
     @property
     def variable_values_flagged(self) -> TensorWithNormalisationFlag:

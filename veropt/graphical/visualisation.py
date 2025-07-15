@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import warnings
 from copy import deepcopy
-from typing import Literal, Optional, TYPE_CHECKING
+from typing import Literal, Optional, Union
 
 import numpy as np
 import plotly.graph_objs as go
@@ -15,16 +14,14 @@ from plotly.subplots import make_subplots
 from veropt.optimiser.acquisition import AcquisitionFunction
 from veropt.optimiser.acquisition_optimiser import ProximityPunishAcquisitionFunction, \
     ProximityPunishmentSequentialOptimiser
-from veropt.optimiser.prediction import BotorchPredictor
-from veropt.optimiser.utility import DataShape, PredictionDict
-
 from veropt.optimiser.optimiser import BayesianOptimiser
 # from veropt.utility import opacity_for_multidimensional_points
 # ModelPrediction, ModelPredictionContainer
 from veropt.optimiser.optimiser_utility import SuggestedPoints, get_best_points
+from veropt.optimiser.prediction import BotorchPredictor
+from veropt.optimiser.utility import DataShape, PredictionDict
 
 
-# TODO: Decide on location
 def plot_point_overview_from_optimiser(
         optimiser: BayesianOptimiser,
         points: Literal['all', 'bayes', 'suggested', 'best'] = 'all'
@@ -43,7 +40,7 @@ def plot_point_overview_from_optimiser(
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
 
-        shown_inds = np.arange(optimiser.n_initial_points, optimiser.n_points_evaluated)
+        shown_inds = np.arange(optimiser.n_initial_points, optimiser.n_points_evaluated).tolist()
 
     elif points == 'suggested':
 
@@ -53,36 +50,50 @@ def plot_point_overview_from_optimiser(
 
         variable_values = suggested_points.variable_values
 
+        assert suggested_points.predicted_objective_values is not None, (
+            "Must have calculated predictions for the suggested points before calling this function to plot them."
+            "(If the model is trained, the optimiser should do this automatically)."
+        )
+
         objective_values = suggested_points.predicted_objective_values['mean']
 
     elif points == 'best':
 
         # TODO: Might be optimal to open all points but mark the best ones or make them visible or something
 
-        best_inds = []
+        best_indices = []
 
-        variable_values = optimiser.evaluated_variable_values
-        objective_values = optimiser.evaluated_objective_values
+        variable_values = optimiser.evaluated_variable_values.tensor
+        objective_values = optimiser.evaluated_objective_values.tensor
 
-        best_inds.append(get_best_points(
-            variable_values=variable_values.tensor,
-            objective_values=objective_values.tensor,
+        best_points_general = get_best_points(
+            variable_values=variable_values,
+            objective_values=objective_values,
             weights=optimiser.settings.objective_weights
-        )['index'])
+        )
 
-        for obj_ind in range(n_objectives):
+        assert best_points_general is not None, "Failed to find best points"
 
-            best_inds.append(
-                get_best_points(
-                    variable_values=variable_values.tensor,
-                    objective_values=objective_values.tensor,
-                    weights=optimiser.settings.objective_weights,
-                    best_for_objecive_index=obj_ind
-                )['index']
+        best_indices.append(best_points_general['index'])
+
+        for objective_index in range(n_objectives):
+
+            best_points_for_objective = get_best_points(
+                variable_values=variable_values,
+                objective_values=objective_values,
+                weights=optimiser.settings.objective_weights,
+                best_for_objecive_index=objective_index
             )
 
-        shown_inds = np.unique(best_inds)
+            assert best_points_for_objective is not None, f"Failed to find best points for objective {objective_index}"
 
+            best_indices.append(
+                best_points_for_objective['index']
+            )
+
+        shown_inds = np.unique(best_indices).tolist()  # type: ignore[assignment]  # checking below
+        assert type(shown_inds) is list
+        assert type(shown_inds[0]) is str
 
     else:
         raise ValueError
@@ -95,8 +106,7 @@ def plot_point_overview_from_optimiser(
         objective_values=objective_values,
         objective_names=objective_names,
         variable_names=variable_names,
-        shown_indices=shown_inds,
-
+        shown_indices=shown_inds
     )
 
 
@@ -111,7 +121,7 @@ def plot_point_overview(
         objective_values: torch.Tensor,
         objective_names: list[str],
         variable_names: list[str],
-        shown_indices = None
+        shown_indices: Optional[list[int]] = None
 ) -> None:
     # TODO: Maybe want a longer colour scale to avoid duplicate colours...?
     color_scale = colors.qualitative.T10
@@ -131,7 +141,7 @@ def plot_point_overview(
     for point_no in range(n_points):
 
         if shown_indices is not None:
-            if not point_no in shown_indices:
+            if point_no not in shown_indices:
                 args = {'visible': 'legendonly'}
             else:
                 args = {}
@@ -144,7 +154,7 @@ def plot_point_overview(
                 y=variable_values[point_no].detach().numpy(),
                 name=f"Point no. {point_no}",  # This is currently out of the ones plotted, consider that
                 line={'color': "rgba(" + color_scale[point_no % n_colors][4:-1] + f", {opacity_lines})"},
-                marker={'color': "rgba(" + color_scale[point_no % n_colors][4:-1] + f", 1.0)"},
+                marker={'color': "rgba(" + color_scale[point_no % n_colors][4:-1] + ", 1.0)"},
                 mode='lines+markers',
                 legendgroup=point_no,
                 **args
@@ -158,7 +168,7 @@ def plot_point_overview(
                 x=objective_names,
                 y=objective_values[point_no].detach().numpy(),
                 line={'color': "rgba(" + color_scale[point_no % n_colors][4:-1] + f", {opacity_lines})"},
-                marker={'color': "rgba(" + color_scale[point_no % n_colors][4:-1] + f", 1.0)"},
+                marker={'color': "rgba(" + color_scale[point_no % n_colors][4:-1] + ", 1.0)"},
                 name=f"Point no. {point_no}",
                 mode='lines+markers',
                 legendgroup=point_no,
@@ -191,11 +201,6 @@ def plot_pareto_front_grid_from_optimiser(
 
     objective_names = optimiser.objective.objective_names
 
-    if optimiser.suggested_points:
-        suggested_point_predictions = optimiser.suggested_points.predicted_objective_values['mean']
-    else:
-        suggested_point_predictions = None
-
     plot_pareto_front_grid(
         variable_values=variable_values,
         objective_names=objective_names,
@@ -210,7 +215,7 @@ def plot_pareto_front_grid(
         dominating_objective_values: torch.Tensor,
         suggested_points: Optional[SuggestedPoints] = None,
         return_figure: bool = False
-) -> go.Figure | None:
+) -> Union[go.Figure, None]:
 
     n_objectives = len(objective_names)
 
@@ -244,9 +249,12 @@ def plot_pareto_front_grid(
                 figure.update_xaxes(title_text=objective_names[objective_index_x], row=row, col=col)
 
     if return_figure:
+
         return figure
     else:
+
         figure.show()
+        return None
 
 
 def _add_pareto_traces_2d(
@@ -258,7 +266,7 @@ def _add_pareto_traces_2d(
         suggested_points: Optional[SuggestedPoints] = None,
         row: Optional[int] = None,
         col: Optional[int] = None
-) -> None:
+) -> go.Figure:
 
     if row is None and col is None:
         row_col_info = {}
@@ -278,8 +286,8 @@ def _add_pareto_traces_2d(
             y=objective_values[:, objective_index_y],
             mode='markers',
             name='Evaluated points',
-            marker = {'color': color_evaluated_points},
-    ),
+            marker={'color': color_evaluated_points},
+        ),
         **row_col_info
     )
 
@@ -294,27 +302,38 @@ def _add_pareto_traces_2d(
         **row_col_info
     )
 
-    if suggested_points:
+    if suggested_points is not None:
 
         suggested_point_color = 'rgb(139, 0, 0)'
 
         for suggested_point_no, point in enumerate(suggested_points):
+
+            prediction = point.predicted_objective_values
+
+            assert prediction is not None, (
+                "Must have calculated predictions for the suggested points before calling this function to plot them."
+                "(If the model is trained, the optimiser should do this automatically)."
+            )
+
+            upper_diff = prediction['upper'] - prediction['mean']
+            lower_diff = prediction['mean'] - prediction['lower']
+
             figure.add_trace(
                 go.Scatter(
-                    x=point.predicted_objective_values['mean'][objective_index_x].detach().numpy(),
-                    y=point.predicted_objective_values['mean'][objective_index_y].detach().numpy(),
+                    x=prediction['mean'][objective_index_x].detach().numpy(),
+                    y=prediction['mean'][objective_index_y].detach().numpy(),
                     error_x={
                         'type': 'data',
                         'symmetric': False,
-                        'array': point.predicted_objective_values['upper'][objective_index_x].detach().numpy(),
-                        'arrayminus': point.predicted_objective_values['lower'][objective_index_x].detach().numpy(),
+                        'array': upper_diff[objective_index_x].detach().numpy(),
+                        'arrayminus': lower_diff[objective_index_x].detach().numpy(),
                         'color': suggested_point_color
                     },
                     error_y={
                         'type': 'data',
                         'symmetric': False,
-                        'array': point.predicted_objective_values['upper'][objective_index_y].detach().numpy(),
-                        'arrayminus': point.predicted_objective_values['lower'][objective_index_y].detach().numpy(),
+                        'array': upper_diff[objective_index_y].detach().numpy(),
+                        'arrayminus': lower_diff[objective_index_y].detach().numpy(),
                         'color': suggested_point_color
                     },
                     mode='markers',
@@ -333,7 +352,7 @@ def plot_pareto_front(
         plotted_objective_indices: list[int],
         suggested_points: Optional[SuggestedPoints] = None,
         return_figure: bool = False
-) -> go.Figure | None:
+) -> Union[go.Figure, None]:
 
     if len(plotted_objective_indices) == 2:
 
@@ -370,14 +389,16 @@ def plot_pareto_front(
 
     if return_figure:
         return figure
+
     else:
         figure.show()
+        return None
 
 
 def plot_pareto_front_from_optimiser(
         optimiser: BayesianOptimiser,
         plotted_objective_indices: list[int]
-):
+) -> None:
     objective_values = optimiser.evaluated_objective_values.tensor
     pareto_optimal_objectives = optimiser.get_pareto_optimal_points()['objectives']
 
@@ -397,7 +418,8 @@ def _calculate_proximity_punished_acquisition_values(
         variable_array: np.ndarray,
         acquisition_function: AcquisitionFunction,
         suggested_points_variables: torch.Tensor
-):
+) -> list[torch.Tensor]:
+
     n_suggested_points = suggested_points_variables.shape[DataShape.index_points]
 
     assert type(optimiser.predictor) is BotorchPredictor
@@ -405,6 +427,10 @@ def _calculate_proximity_punished_acquisition_values(
 
     assert type(predictor.acquisition_optimiser) is ProximityPunishmentSequentialOptimiser
     acquisition_optimiser: ProximityPunishmentSequentialOptimiser = predictor.acquisition_optimiser
+
+    assert acquisition_optimiser.scaling is not None, (
+        "Must have calculated scaling in proximity punishment acquisition optimiser before calling this"
+    )
 
     punishing_acquisition_function = ProximityPunishAcquisitionFunction(
         original_acquisition_function=acquisition_function,
@@ -451,26 +477,26 @@ class ModelPrediction:
         self.point = point
 
         self.title: str = title
-        self.variable_array =  variable_array
+        self.variable_array = variable_array
         self.predicted_values_mean = predicted_objective_values['mean']
         self.predicted_values_lower = predicted_objective_values['lower']
         self.predicted_values_upper = predicted_objective_values['upper']
         self.acquisition_values: np.ndarray = acquisition_values.detach().numpy()
-        self.samples: torch.tensor = samples
+        self.samples: Optional[torch.Tensor] = samples
 
-        self.proximity_punished_acquisition_values: Optional[list[torch.Tensor]] = None
+        self.modified_acquisition_values: Optional[list[torch.Tensor]] = None
 
-    def add_proximity_punished_acquisition_values(
+    def add_modified_acquisition_values(
             self,
-            proximity_punished_acquisition_values: list[torch.Tensor]
+            modified_acquisition_values: list[torch.Tensor]
     ) -> None:
-        self.proximity_punished_acquisition_values = proximity_punished_acquisition_values
+        self.modified_acquisition_values = modified_acquisition_values
 
 
 class ModelPredictionContainer:
     def __init__(self) -> None:
         self.data: list[ModelPrediction] = []
-        self.points: torch.tensor = torch.tensor([])
+        self.points: torch.Tensor = torch.tensor([])
         self.variable_indices: np.ndarray = np.array([])
 
     def add_data(
@@ -503,7 +529,7 @@ class ModelPredictionContainer:
     def locate_data(
             self,
             variable_index: int,
-            point: torch.tensor
+            point: torch.Tensor
     ) -> int | None:
 
         # Can we do without the mix of np and torch here?
@@ -534,11 +560,11 @@ class ModelPredictionContainer:
 
     def __call__(
             self,
-            var_ind,
-            point
+            variable_index: int,
+            point: torch.Tensor
     ) -> ModelPrediction:
         data_ind = self.locate_data(
-            variable_index=var_ind,
+            variable_index=variable_index,
             point=point
         )
 
@@ -550,7 +576,7 @@ class ModelPredictionContainer:
     def __contains__(
             self,
             point: torch.Tensor
-    ):
+    ) -> bool:
 
         # Just checking if it has it for var_ind = 0, might be sensible to make it a bit more general/stable
         data_index = self.locate_data(
@@ -561,7 +587,7 @@ class ModelPredictionContainer:
         if data_index is None:
             return False
 
-        elif type(data_index) == int:
+        elif type(data_index) is int:
             return True
 
         else:
@@ -575,12 +601,12 @@ def choose_plot_point(
     if optimiser.suggested_points is None:
         # TODO: Use some general method instead of hard-coding this here
         max_ind = optimiser.get_best_points()['index']
-        eval_point = deepcopy(optimiser.evaluated_variable_values[max_ind:max_ind+1].tensor)
+        eval_point = deepcopy(optimiser.evaluated_variable_values[max_ind:max_ind + 1].tensor)
         point_description = f"at the point with the highest known value (point no. {max_ind})"
     else:
         suggested_point_ind = 0  # In the future, might want the best one
         eval_point = deepcopy(optimiser.suggested_points.variable_values[suggested_point_ind:suggested_point_ind + 1])
-        point_description = f"at the first suggested step)"
+        point_description = "at the first suggested step"
 
     return eval_point, point_description
 
@@ -595,11 +621,11 @@ def fill_model_prediction_from_optimiser(
     if evaluated_point is None:
 
         evaluated_point, title = choose_plot_point(
-        optimiser=optimiser
-    )
+            optimiser=optimiser
+        )
 
     else:
-        title = None
+        title = ''
 
     variable_array = np.linspace(
         start=optimiser.bounds[0, variable_index].tensor,
@@ -608,7 +634,7 @@ def fill_model_prediction_from_optimiser(
     )
 
     all_variables_array = evaluated_point.repeat(len(variable_array), 1)
-    all_variables_array[:, variable_index] = variable_array
+    all_variables_array[:, variable_index] = torch.tensor(variable_array)  # TODO: Figure out variable_array type issue
 
     return ModelPrediction(
         variable_index=variable_index,
@@ -625,13 +651,13 @@ def fill_model_prediction_from_optimiser(
     )
 
 
-# TODO: Decide on location
 def plot_prediction_grid_from_optimiser(
         optimiser: BayesianOptimiser,
         return_figure: bool = False,
-        model_prediction_container: ModelPredictionContainer = None,
-        evaluated_point: torch.Tensor = None
-):
+        model_prediction_container: Optional[ModelPredictionContainer] = None,
+        evaluated_point: Optional[torch.Tensor] = None
+) -> Union[go.Figure, None]:
+
     variable_values = optimiser.evaluated_variable_values.tensor
     objective_values = optimiser.evaluated_objective_values.tensor
     objective_names = optimiser.objective.objective_names
@@ -680,8 +706,8 @@ def plot_prediction_grid_from_optimiser(
                             suggested_points_variables=optimiser.suggested_points.variable_values
                         )
 
-                        calculated_prediction.add_proximity_punished_acquisition_values(
-                            proximity_punished_acquisition_values=punished_acquisition_values
+                        calculated_prediction.add_modified_acquisition_values(
+                            modified_acquisition_values=punished_acquisition_values
                         )
 
             model_prediction_container.add_data(
@@ -710,6 +736,7 @@ def plot_prediction_grid_from_optimiser(
     else:
 
         figure.show()
+        return None
 
 
 def _add_model_traces(
@@ -719,10 +746,11 @@ def _add_model_traces(
         col_no: int,
         objective_index: int,
         legend_group: str
-):
-    predicted_values_mean = model_prediction.predicted_values_mean[objective_index]
-    predicted_values_lower = model_prediction.predicted_values_lower[objective_index]
-    predicted_values_upper = model_prediction.predicted_values_upper[objective_index]
+) -> None:
+
+    predicted_values_mean = model_prediction.predicted_values_mean[:, objective_index]
+    predicted_values_lower = model_prediction.predicted_values_lower[:, objective_index]
+    predicted_values_upper = model_prediction.predicted_values_upper[:, objective_index]
 
     figure.add_trace(
         go.Scatter(
@@ -763,25 +791,26 @@ def _add_model_traces(
 
 
 def opacity_for_multidimensional_points(
-        variable_index,
-        n_variables,
-        variable_values,
-        evaluated_point,
-        alpha_min=0.1,
-        alpha_max=0.6
+        variable_index: int,
+        n_variables: int,
+        variable_values: torch.Tensor,
+        evaluated_point: torch.Tensor,
+        alpha_min: float = 0.1,
+        alpha_max: float = 0.8
+) -> tuple[torch.Tensor, torch.Tensor]:
 
-):
-    distances = []
+    distances_list = []
     index_wo_var_ind = torch.arange(n_variables) != variable_index
     for point_no in range(variable_values.shape[DataShape.index_points]):
-        distances.append(np.linalg.norm(
+        distances_list.append(np.linalg.norm(
             evaluated_point[0, index_wo_var_ind] - variable_values[point_no, index_wo_var_ind]
         ))
 
-    distances = torch.tensor(distances)
+    distances = torch.tensor(distances_list)
 
-    normalised_distances = ((distances - distances.min()) / distances.max()) / \
-                     ((distances - distances.min()) / distances.max()).max()
+    normalised_distances = (
+        ((distances - distances.min()) / distances.max()) / ((distances - distances.min()) / distances.max()).max()
+    )
 
     normalised_proximity = 1 - normalised_distances
 
@@ -799,7 +828,7 @@ def plot_prediction_grid(
         objective_values: torch.Tensor,
         objective_names: list[str],
         variable_names: list[str],
-        suggested_points: SuggestedPoints = None
+        suggested_points: Optional[SuggestedPoints] = None
 ) -> go.Figure:
 
     # TODO: Add option to plot subset of all these
@@ -833,7 +862,7 @@ def plot_prediction_grid(
     for variable_index in range(n_variables):
 
         model_prediction = model_prediction_container(
-            var_ind=variable_index,
+            variable_index=variable_index,
             point=evaluated_point
         )
 
@@ -868,6 +897,7 @@ def plot_prediction_grid(
 
         if evaluated_point_ind >= n_evaluated_points:
             evaluated_suggested_point_ind = evaluated_point_ind - n_evaluated_points
+
         else:
             evaluated_suggested_point_ind = None
 
@@ -882,9 +912,10 @@ def plot_prediction_grid(
                 for point_no in range(n_suggested_points)
             ]
 
-        for obj_ind in range(n_objectives):
+        for objective_index in range(n_objectives):
 
-            row_no = n_objectives - obj_ind  # Placing these backwards to make the "y axes" of subplots go positive upwards
+            # Placing these backwards to make the "y axes" of subplots go positive upwards
+            row_no = n_objectives - objective_index
             col_no = variable_index + 1
 
             # Quick scaling as long as we're just jamming it into this plot
@@ -896,15 +927,18 @@ def plot_prediction_grid(
                 model_prediction=model_prediction,
                 row_no=row_no,
                 col_no=col_no,
-                objective_index=obj_ind,
+                objective_index=objective_index,
                 legend_group='model'
             )
+
+            # TODO: Make acq func colours nicer
+            acquisition_function_colour = 'rgb(141, 160, 203)'
 
             figure.add_trace(
                 go.Scatter(
                     x=model_prediction.variable_array,
                     y=model_prediction.acquisition_values / acq_func_scaling,
-                    line={'color': 'black'},
+                    line={'color': acquisition_function_colour},
                     name='Acquisition function',
                     legendgroup='acq func',
                     showlegend=True if (row_no == 1 and col_no == 1) else False
@@ -912,15 +946,15 @@ def plot_prediction_grid(
                 row=row_no, col=col_no
             )
 
-            if model_prediction.proximity_punished_acquisition_values is not None:
+            if model_prediction.modified_acquisition_values is not None:
 
-                for punish_ind, punished_acq_fun_vals in enumerate(model_prediction.proximity_punished_acquisition_values):
+                for punish_ind, punished_acq_fun_vals in enumerate(model_prediction.modified_acquisition_values):
 
                     figure.add_trace(
                         go.Scatter(
                             x=model_prediction.variable_array,
                             y=punished_acq_fun_vals.detach() / acq_func_scaling,
-                            line={'color': 'black'},
+                            line={'color': acquisition_function_colour},
                             name=f'Acq. func., as seen by suggested point {punish_ind + 1}',
                             legendgroup=f'acq func {punish_ind}',
                             showlegend=True if (row_no == 1 and col_no == 1) else False
@@ -929,24 +963,25 @@ def plot_prediction_grid(
                     )
 
             figure.add_trace(
-            go.Scatter(
-                x=variable_values[:, variable_index],
-                y=objective_values[:, obj_ind],
-                mode='markers',
-                marker={
-                    'color': color_list_w_opacity,
-                    'size': marker_size_list
-                },
-                marker_symbol=marker_type_list,
-                name='Evaluated point',
-                showlegend=False,
-                customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
-                hovertemplate="Param. value: %{x:.3f} <br>"
-                              "Obj. func. value: %{y:.3f} <br>"
-                              "Point number: %{customdata[0]:.0f} <br>"
-                              "Distance to current plane: %{customdata[1]:.3f}"
-            ),
-            row=row_no, col=col_no
+                go.Scatter(
+                    x=variable_values[:, variable_index],
+                    y=objective_values[:, objective_index],
+                    mode='markers',
+                    marker={
+                        'color': color_list_w_opacity,
+                        'size': marker_size_list
+                    },
+                    marker_symbol=marker_type_list,
+                    name='Evaluated point',
+                    showlegend=False,
+                    customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
+                    hovertemplate="Param. value: %{x:.3f} <br>"
+                                  "Obj. func. value: %{y:.3f} <br>"
+                                  "Point number: %{customdata[0]:.0f} <br>"
+                                  "Distance to current plane: %{customdata[1]:.3f}"
+                ),
+                row=row_no,
+                col=col_no
             )
 
             if suggested_points:
@@ -954,20 +989,29 @@ def plot_prediction_grid(
 
                     if suggested_point_no == evaluated_suggested_point_ind:
                         marker_style = 'x'
-                        marker_size = 20 # TODO: Write these somewhere general
+                        marker_size = 20  # TODO: Write these somewhere general
                     else:
                         marker_style = 'circle'
                         marker_size = 8
 
+                    prediction = point.predicted_objective_values
+                    assert prediction is not None, (
+                        "Must have calculated predictions for the suggested points before calling this function to "
+                        "plot them. (If the model is trained, the optimiser should do this automatically)."
+                    )
+
+                    upper_diff = prediction['upper'] - prediction['mean']
+                    lower_diff = prediction['mean'] - prediction['lower']
+
                     figure.add_trace(
                         go.Scatter(
                             x=point.variable_values[variable_index].detach().numpy(),
-                            y=point.predicted_objective_values['mean'][obj_ind].detach().numpy(),
+                            y=prediction['mean'][objective_index].detach().numpy(),
                             error_y={
                                 'type': 'data',
                                 'symmetric': False,
-                                'array': point.predicted_objective_values['upper'][obj_ind].detach().numpy(),
-                                'arrayminus': point.predicted_objective_values['lower'][obj_ind].detach().numpy(),
+                                'array': upper_diff[objective_index].detach().numpy(),
+                                'arrayminus': lower_diff[objective_index].detach().numpy(),
                                 'color': suggested_point_color_list_wo[suggested_point_no]
                             },
                             mode='markers',
@@ -981,8 +1025,8 @@ def plot_prediction_grid(
                             customdata=np.dstack([
                                 [suggested_point_no],
                                 [suggested_point_distance_list[suggested_point_no]],
-                                [point.predicted_objective_values['upper'][obj_ind].detach().numpy()],
-                                [point.predicted_objective_values['lower'][obj_ind].detach().numpy()]
+                                [upper_diff[objective_index].detach().numpy()],
+                                [lower_diff[objective_index].detach().numpy()]
                             ])[0],
                             # TODO: Super sweet feature would be to check if upper and lower are equal and then do pm
                             hovertemplate="Param. value: %{x:.3f} <br>"
@@ -1002,7 +1046,7 @@ def plot_prediction_grid(
             )
 
             if col_no == 1:
-                figure.update_yaxes(title_text=objective_names[obj_ind], row=row_no, col=col_no)
+                figure.update_yaxes(title_text=objective_names[objective_index], row=row_no, col=col_no)
 
             if row_no == n_objectives:
                 figure.update_xaxes(title_text=variable_names[variable_index], row=row_no, col=col_no)
@@ -1016,17 +1060,20 @@ def plot_prediction_grid(
 
 def run_prediction_grid_app(
         optimiser: BayesianOptimiser
-):
+) -> None:
 
     @callback(
         Output('prediction-grid', 'figure'),
         Input('button-go-to-point', 'n_clicks'),
         State('dropdown-points', 'value'),
     )
-    def update_x_timeseries(n_clicks: int, point_index: int):
+    def update_x_timeseries(
+            n_clicks: int,
+            point_index: int
+    ) -> go.Figure:
 
         if point_index is None:
-            raise PreventUpdate
+            raise PreventUpdate()
 
         else:
 
@@ -1039,31 +1086,31 @@ def run_prediction_grid_app(
                 evaluated_point=chosen_point
             )
 
-        return figure
+            assert figure is not None
 
-    if optimiser.suggested_points is False:
-        have_suggested_points = True
-        n_suggested_points = optimiser.n_evaluations_per_step
-    else:
-        have_suggested_points = False
+        return figure
 
     n_points_evaluated = optimiser.n_points_evaluated
 
-    if have_suggested_points:
+    if optimiser.suggested_points is None:
+
+        variable_values = optimiser.evaluated_variable_values.tensor
+        point_names = [f"Point. {point_no}" for point_no in range(0, n_points_evaluated)]
+
+    else:
+
+        n_suggested_points: int = optimiser.n_evaluations_per_step
+
         variable_values = torch.concat([
             optimiser.evaluated_variable_values.tensor,
             optimiser.suggested_points.variable_values
         ])
 
-    else:
-        variable_values = optimiser.evaluated_variable_values.tensor
+        suggested_point_names = [f"Suggested point no. {point_no}" for point_no in range(n_suggested_points)]
 
-    if have_suggested_points:
-        point_names = ([f"Point no. {point_no}" for point_no in range(n_points_evaluated)] +
-                       [f"Suggested point no. {point_no}" for point_no in range(n_suggested_points)])
-
-    else:
-        point_names = [f"Point. {point_no}" for point_no in range(0, n_points_evaluated)]
+        point_names = (
+            [f"Point no. {point_no}" for point_no in range(n_points_evaluated)] + suggested_point_names
+        )
 
     model_prediction_container = ModelPredictionContainer()
 
@@ -1073,17 +1120,18 @@ def run_prediction_grid_app(
         model_prediction_container=model_prediction_container
     )
 
+    dropdown_options = [{'label': point_names[i], 'value': i} for i in range(len(point_names))]
+
     app = Dash()
 
-    app.layout = html.Div([
+    app.layout = html.Div([  # type: ignore[misc]
         html.Div([
             dcc.Graph(
                 id='prediction-grid',
                 figure=fig_1,
                 style={'height': '800px'}
             )
-    ],
-        ),
+        ]),
         html.Div([
             html.Button(
                 'Go to point',
@@ -1092,7 +1140,7 @@ def run_prediction_grid_app(
             ),
             dcc.Dropdown(
                 id='dropdown-points',
-                options=[{'label': point_names[i], 'value': i} for i in range(len(point_names))]
+                options=dropdown_options  # type: ignore[arg-type]
             )
         ])
     ])

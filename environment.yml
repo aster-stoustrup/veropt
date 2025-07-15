@@ -9,9 +9,7 @@ dependencies:
   - gpytorch
   - botorch
   - dill
-  - click
   - scipy
-  - scikit-learn
   - plotly
   - dash
   - pip

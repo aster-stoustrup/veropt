@@ -1,1 +1,0 @@
-from veropt.optimiser.constructors import bayesian_optimiser

@@ -15,7 +15,7 @@ class BotorchPracticeObjective(CallableObjective, metaclass=abc.ABCMeta):
             bounds_upper: list[float],
             n_variables: int,
             n_objectives: int,
-            function: botorch.test_functions.SyntheticTestFunction,
+            function: botorch.test_functions.base.BaseTestProblem,
             variable_names: Optional[list[str]] = None,
             objective_names: Optional[list[str]] = None
     ):
@@ -70,4 +70,72 @@ class Hartmann(BotorchPracticeObjective):
     ) -> Self:
         return cls(
             n_variables=saved_state['n_variables']
+        )
+
+
+class VehicleSafety(BotorchPracticeObjective):
+
+    name = 'vehicle_safety'
+
+    def __init__(
+            self
+    ) -> None:
+        n_variables = 5
+        n_objectives = 3
+        function = botorch.test_functions.VehicleSafety()
+        objective_names = [f"VeSa {obj_no + 1}" for obj_no in range(n_objectives)]
+
+        super().__init__(
+            bounds_lower=[1.0] * n_variables,
+            bounds_upper=[3.0] * n_variables,
+            n_variables=n_variables,
+            n_objectives=n_objectives,
+            function=function,
+            objective_names=objective_names
+        )
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+        return cls(
+        )
+
+
+class DTLZ1(BotorchPracticeObjective):
+
+    name = 'dtlz_1'
+
+    def __init__(
+            self,
+            n_variables: int = 10,
+            n_objectives: int = 5
+    ):
+
+        function = botorch.test_functions.DTLZ1(
+            dim=n_variables,
+            num_objectives=n_objectives,
+            negate=True
+        )
+
+        objective_names = [f"DTLZ1 {obj_no + 1}" for obj_no in range(n_objectives)]
+
+        super().__init__(
+            bounds_lower=[0.0] * n_variables,
+            bounds_upper=[1.0] * n_variables,
+            n_variables=n_variables,
+            n_objectives=n_objectives,
+            function=function,
+            objective_names=objective_names
+        )
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+        return cls(
+            n_variables=saved_state['n_variables'],
+            n_objectives=saved_state['n_objectives']
         )
