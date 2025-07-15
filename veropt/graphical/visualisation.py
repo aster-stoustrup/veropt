@@ -419,6 +419,7 @@ def _calculate_proximity_punished_acquisition_values(
         acquisition_function: AcquisitionFunction,
         suggested_points_variables: torch.Tensor
 ) -> list[torch.Tensor]:
+
     n_suggested_points = suggested_points_variables.shape[DataShape.index_points]
 
     assert type(optimiser.predictor) is BotorchPredictor
@@ -442,7 +443,7 @@ def _calculate_proximity_punished_acquisition_values(
     modified_acquisition_values: list[torch.Tensor] = []
 
     full_variable_array = evaluated_point.repeat(len(variable_array), 1)
-    full_variable_array[:, variable_index] = variable_array
+    full_variable_array[:, variable_index] = torch.tensor(variable_array)
 
     suggested_points_variables_list = [suggested_points_variables[i, :] for i in range(n_suggested_points)]
 
@@ -633,7 +634,7 @@ def fill_model_prediction_from_optimiser(
     )
 
     all_variables_array = evaluated_point.repeat(len(variable_array), 1)
-    all_variables_array[:, variable_index] = variable_array
+    all_variables_array[:, variable_index] = torch.tensor(variable_array)  # TODO: Figure out variable_array type issue
 
     return ModelPrediction(
         variable_index=variable_index,
