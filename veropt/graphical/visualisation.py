@@ -1137,7 +1137,7 @@ def run_prediction_grid_app(
                 n_clicks=0
             ),
             dcc.Dropdown(
-                id='dropdown-points',
+                id='dropdown-points',  # type: ignore[arg-type]
                 options=[{'label': point_names[i], 'value': i} for i in range(len(point_names))]
             )
         ])

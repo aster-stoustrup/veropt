@@ -261,7 +261,7 @@ class ProximityPunishAcquisitionFunction(AcquisitionFunction):
 
         for other_point_variables in other_points_variable_values:
 
-            proximity_punish += scaling * np.exp(
+            proximity_punish += scaling * torch.exp(
                 -(torch.sum((point_variable_values - other_point_variables) ** 2, dim=1) / (self.alpha ** 2))
             )
 
