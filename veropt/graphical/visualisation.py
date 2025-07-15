@@ -1120,6 +1120,8 @@ def run_prediction_grid_app(
         model_prediction_container=model_prediction_container
     )
 
+    dropdown_options = [{'label': point_names[i], 'value': i} for i in range(len(point_names))]
+
     app = Dash()
 
     app.layout = html.Div([  # type: ignore[misc]
@@ -1137,8 +1139,8 @@ def run_prediction_grid_app(
                 n_clicks=0
             ),
             dcc.Dropdown(
-                id='dropdown-points',  # type: ignore[arg-type]
-                options=[{'label': point_names[i], 'value': i} for i in range(len(point_names))]
+                id='dropdown-points',
+                options=dropdown_options  # type: ignore[arg-type]
             )
         ])
     ])
