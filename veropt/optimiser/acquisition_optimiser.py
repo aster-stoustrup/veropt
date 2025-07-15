@@ -262,10 +262,7 @@ class ProximityPunishAcquisitionFunction(AcquisitionFunction):
         for other_point_variables in other_points_variable_values:
 
             proximity_punish += scaling * np.exp(
-                -(
-                        torch.sum((point_variable_values - other_point_variables) ** 2, dim=1)
-                        / (self.alpha ** 2)
-                )
+                -(torch.sum((point_variable_values - other_point_variables) ** 2, dim=1) / (self.alpha ** 2))
             )
 
         return acquisition_value.detach() - proximity_punish
@@ -433,15 +430,14 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
         n_params = self.bounds.shape[1]
 
         random_coordinates = (
-                (self.bounds[1] - self.bounds[0]) * torch.rand(n_acq_func_samples, n_params)
-                + self.bounds[0]
+            (self.bounds[1] - self.bounds[0]) * torch.rand(n_acq_func_samples, n_params) + self.bounds[0]
         )
 
         samples = np.zeros(n_acq_func_samples)
 
         for coord_ind in range(n_acq_func_samples):
             sample = acquisition_function(
-                variable_values=random_coordinates[coord_ind:coord_ind+1, :]
+                variable_values=random_coordinates[coord_ind:coord_ind + 1, :]
             )
             samples[coord_ind] = sample.detach().numpy()  # If this is not detached, it causes a memory leak o:)
 

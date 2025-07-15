@@ -157,7 +157,7 @@ class BotorchAcquisitionFunction(AcquisitionFunction, metaclass=abc.ABCMeta):
 
             for point_no in range(n_points_in_call):
                 acquisition_values[point_no] = super().__call__(
-                    variable_values=variable_values[point_no:point_no+1, :]
+                    variable_values=variable_values[point_no:point_no + 1, :]
                 )
 
             return acquisition_values

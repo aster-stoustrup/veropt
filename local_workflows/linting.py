@@ -7,7 +7,7 @@ def run_flake8():
 
     go_up_to_find_veropt_folder()
 
-    os.system('flake8 .')
+    os.system("flake8 .")
 
 
 if __name__ == '__main__':

@@ -79,11 +79,11 @@ def plot_point_overview_from_optimiser(
         for objective_index in range(n_objectives):
 
             best_points_for_objective = get_best_points(
-                    variable_values=variable_values,
-                    objective_values=objective_values,
-                    weights=optimiser.settings.objective_weights,
-                    best_for_objecive_index=objective_index
-                )
+                variable_values=variable_values,
+                objective_values=objective_values,
+                weights=optimiser.settings.objective_weights,
+                best_for_objecive_index=objective_index
+            )
 
             assert best_points_for_objective is not None, f"Failed to find best points for objective {objective_index}"
 
@@ -600,7 +600,7 @@ def choose_plot_point(
     if optimiser.suggested_points is None:
         # TODO: Use some general method instead of hard-coding this here
         max_ind = optimiser.get_best_points()['index']
-        eval_point = deepcopy(optimiser.evaluated_variable_values[max_ind:max_ind+1].tensor)
+        eval_point = deepcopy(optimiser.evaluated_variable_values[max_ind:max_ind + 1].tensor)
         point_description = f"at the point with the highest known value (point no. {max_ind})"
     else:
         suggested_point_ind = 0  # In the future, might want the best one
@@ -808,8 +808,7 @@ def opacity_for_multidimensional_points(
     distances = torch.tensor(distances_list)
 
     normalised_distances = (
-            ((distances - distances.min()) / distances.max())
-            / ((distances - distances.min()) / distances.max()).max()
+        ((distances - distances.min()) / distances.max()) / ((distances - distances.min()) / distances.max()).max()
     )
 
     normalised_proximity = 1 - normalised_distances
@@ -1106,9 +1105,10 @@ def run_prediction_grid_app(
             optimiser.suggested_points.variable_values
         ])
 
+        suggested_point_names = [f"Suggested point no. {point_no}" for point_no in range(n_suggested_points)]
+
         point_names = (
-                [f"Point no. {point_no}" for point_no in range(n_points_evaluated)] +
-                [f"Suggested point no. {point_no}" for point_no in range(n_suggested_points)]
+            [f"Point no. {point_no}" for point_no in range(n_points_evaluated)] + suggested_point_names
         )
 
     model_prediction_container = ModelPredictionContainer()

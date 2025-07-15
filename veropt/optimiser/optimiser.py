@@ -366,8 +366,8 @@ class BayesianOptimiser(SavableClass):
         if self.optimisation_mode == OptimisationMode.initial:
 
             suggested_variables_tensor = self.initial_points[
-                    self.n_points_evaluated: self.n_points_evaluated + self.n_evaluations_per_step
-                ].tensor
+                self.n_points_evaluated: self.n_points_evaluated + self.n_evaluations_per_step
+            ].tensor
 
             prediction = None
 

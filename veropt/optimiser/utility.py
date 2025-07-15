@@ -79,10 +79,12 @@ def count_positional_arguments_in_signature(function: Callable) -> int:
 
     signature = inspect.signature(function)
 
+    positional_only = inspect.Parameter.POSITIONAL_ONLY
+    positional_or_keyword = inspect.Parameter.POSITIONAL_OR_KEYWORD
+
     return len([
         parameter for parameter in signature.parameters.values() if (
-                parameter.kind == inspect.Parameter.POSITIONAL_ONLY
-                or parameter.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+            parameter.kind == positional_only or parameter.kind == positional_or_keyword
         )
     ])
 

@@ -45,7 +45,9 @@ def test_gpytorch_model() -> None:
 
         assert model._model_list[obj_no].get_settings() == model_from_constructors._model_list[obj_no].get_settings()
 
-        assert (model._model_list[obj_no].__class__.__name__
-                == model_from_constructors._model_list[obj_no].__class__.__name__)
+        class_name = model._model_list[obj_no].__class__.__name__
+        class_name_from_constructors = model_from_constructors._model_list[obj_no].__class__.__name__
+
+        assert class_name == class_name_from_constructors
 
     assert model.training_settings == model_from_constructors.training_settings
