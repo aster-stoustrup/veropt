@@ -26,7 +26,7 @@ optimiser = bayesian_optimiser(
             'max_iter': 500
         },
         'allow_proximity_punishment': True,
-        'proximity_punish_settings':{
+        'proximity_punish_settings': {
             'alpha': 0.5,
             'omega': 0.9
         }

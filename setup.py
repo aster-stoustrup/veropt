@@ -21,6 +21,7 @@ setup(
     name='veropt',
     version='1.0.0',
     packages=find_packages(),
+    python_requires='>3.13',
     url='https://github.com/aster-stoustrup/veropt',
     license='OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
     author='Aster Stoustrup',
