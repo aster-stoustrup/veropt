@@ -5,7 +5,7 @@ objective = VehicleSafety()
 
 optimiser = bayesian_optimiser(
     n_initial_points=16,
-    n_bayesian_points=32,
+    n_bayesian_points=36,
     n_evaluations_per_step=4,
     objective=objective,
     model={
