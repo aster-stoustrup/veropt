@@ -1,5 +1,5 @@
 import abc
-from typing import Literal, Optional
+from typing import Literal, Optional, Self
 
 import botorch
 import torch
@@ -64,7 +64,10 @@ class Hartmann(BotorchPracticeObjective):
         )
 
     @classmethod
-    def from_saved_state(cls, saved_state: dict) -> 'Hartmann':
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
         return cls(
             n_variables=saved_state['n_variables']
         )

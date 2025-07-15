@@ -166,7 +166,7 @@ class BayesianOptimiser(SavableClass):
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'BayesianOptimiser':
+    ) -> Self:
 
         objective = rehydrate_object(
             superclass=Objective,
@@ -174,7 +174,7 @@ class BayesianOptimiser(SavableClass):
             saved_state=saved_state['objective']['state']
         )
 
-        assert type(objective) is CallableObjective or type(objective) is InterfaceObjective
+        assert issubclass(type(objective), CallableObjective) or issubclass(type(objective), InterfaceObjective)
 
         predictor = rehydrate_object(
             superclass=Predictor,
@@ -206,9 +206,12 @@ class BayesianOptimiser(SavableClass):
 
         assert initial_points_real_units.normalised is False
 
-        suggested_points = SuggestedPoints.from_saved_state(
-            saved_state=saved_state['suggested_points']
-        )
+        if len(saved_state['suggested_points']) == 0:
+            suggested_points = None
+        else:
+            suggested_points = SuggestedPoints.from_saved_state(
+                saved_state=saved_state['suggested_points']
+            )
 
         suggested_points_history = [
             SuggestedPoints.from_saved_state(suggested_point_state)
@@ -230,7 +233,7 @@ class BayesianOptimiser(SavableClass):
         assert evaluated_objective_values.normalised is False
 
         settings = OptimiserSettings.from_saved_state(
-            saved_state['optimiser']['settings']
+            saved_state['settings']
         )
 
         return cls(
@@ -307,16 +310,16 @@ class BayesianOptimiser(SavableClass):
                 },
                 'normaliser_variables': normaliser_variables_dict,
                 'normaliser_objectives': normaliser_objectives_dict,
-                'evaluated_variable_values': {
+                'evaluated_variables': {
                     'values': self.evaluated_variables_real_units,
                     'normalised': False,
                 },
-                'evaluated_objective_values': {
+                'evaluated_objectives': {
                     'values': self.evaluated_objectives_real_units,
                     'normalised': False,
                 },
                 'suggested_points': self.suggested_points.gather_dicts_to_save() if self.suggested_points else {},
-                'suggsted_points_history': [
+                'suggested_points_history': [
                     suggested_point.gather_dicts_to_save() for suggested_point in self.suggested_points_history
                 ],
                 'settings': self.settings.gather_dicts_to_save()
@@ -554,8 +557,12 @@ class BayesianOptimiser(SavableClass):
 
     def _set_up_settings(self) -> None:
 
-        if self.settings.mask_nans:
-            gpytorch.settings.observation_nan_policy('mask')
+        # TODO: Make nan policy work
+        #   - Need to handle in model but also in e.g. get_best_points and the like
+        # if self.settings.mask_nans:
+        #     gpytorch.settings.observation_nan_policy._set_value('mask')
+
+        pass
 
     def _reset_suggested_points(self) -> None:
 
@@ -655,9 +662,11 @@ class BayesianOptimiser(SavableClass):
 
         newest_variables_string = list_with_floats_to_string(self.evaluated_variable_values[-1, :].tensor.tolist())
 
+        total_steps = (self.n_initial_points + self.n_bayesian_points) // self.n_evaluations_per_step
+
         status_string = (
             f"Optimisation running in {self.optimisation_mode.name} mode "
-            f"at step {self.current_step} out of {self.n_points_evaluated} \n"
+            f"at step {self.current_step} out of {total_steps} \n"
             f"Best objective value(s): {best_values_string} at variable values {best_values_variables_string} \n"
             f"Newest objective value(s): {newest_value_string} at variable values {newest_variables_string} \n"
         )

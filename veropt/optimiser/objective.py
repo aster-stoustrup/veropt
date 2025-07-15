@@ -10,7 +10,7 @@ from veropt.optimiser.saver_loader_utility import SavableClass
 
 class Objective(SavableClass, metaclass=abc.ABCMeta):
 
-    name: str
+    name: str = 'meta'
 
     def __init__(
             self,

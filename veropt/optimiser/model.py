@@ -72,20 +72,35 @@ class GPyTorchDataModel(gpytorch.models.ExactGP, botorch.models.gpytorch.GPyTorc
 def format_json_state_dict(
         state_dict: dict,
 ) -> dict:
-    formatted_dict = {}
+    formatted_dict = state_dict.copy()
 
     for key, value in state_dict.items():
-        if "inf" in value:
-            formatted_dict[key] = torch.tensor(float(value))
-        else:
+
+        if isinstance(value, str):
+
+            if "inf" in value:
+                formatted_dict[key] = torch.tensor(float(value))
+
+        elif isinstance(value, list):
+
+            for item_no, item in enumerate(value):
+                if isinstance(item, str):
+                    if "inf" in item:
+                        value[item_no] = float(item)
+
             formatted_dict[key] = torch.tensor(value)
+
+        elif isinstance(value, float):
+
+            formatted_dict[key] = torch.tensor(value)
+
 
     return formatted_dict
 
 
 class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
 
-    name: str
+    name: str = 'meta'
 
     def __init__(
             self,
@@ -112,6 +127,11 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
         )
 
+        assert 'name' != 'meta', (
+            f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
+        )
+
+
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}("
@@ -126,14 +146,14 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             cls,
             n_variables: int,
             settings: Mapping[str, Any]
-    ) -> 'GPyTorchSingleModel':
+    ) -> Self:
         pass
 
     @classmethod
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'GPyTorchSingleModel':
+    ) -> Self:
 
         model = cls.from_n_variables_and_settings(
             n_variables=saved_state['n_variables'],
@@ -190,7 +210,6 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
         self.model_with_data.load_state_dict(  # type: ignore[union-attr]  # model initialised just before calling this
             state_dict=state_dict
         )
-
 
     def gather_dicts_to_save(self) -> dict:
 
@@ -458,7 +477,7 @@ class MaternSingleModel(GPyTorchSingleModel):
 
 class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):
 
-    name: str
+    name: str = 'meta'
 
     def __init__(
             self,
@@ -482,7 +501,10 @@ class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):
         }
 
     @classmethod
-    def from_saved_state(cls, saved_state: dict) -> 'TorchModelOptimiser':
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
 
         # TODO: Make this nicer?
         #   - This is essentially assuming an init like in the Adam implementation
@@ -559,11 +581,25 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         assert len(single_model_list) == n_objectives, "Number of objectives must match the length of the model list"
 
         self._model_list = single_model_list
+
         self._model: Optional[botorch.models.ModelListGP] = None
         self._likelihood: Optional[gpytorch.likelihoods.LikelihoodList] = None
+
         self._marginal_log_likelihood: Optional[gpytorch.mlls.SumMarginalLogLikelihood] = None
 
         self._model_optimiser = model_optimiser
+
+        if self._model_list[0].model_with_data is None:
+            single_models_are_trained = False
+
+        else:
+            single_models_are_trained = True
+
+            for model in self._model_list:
+                assert model.model_with_data is not None
+
+        if single_models_are_trained:
+            self._initialise_model_likelihood_lists()
 
         super().__init__(
             n_variables=n_variables,
@@ -596,7 +632,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'GPyTorchFullModel':
+    ) -> Self:
 
         model_list = []
 
@@ -609,9 +645,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
         assert len(model_list) == saved_state['n_objectives']
 
-        settings = rehydrate_object(
-            superclass=GPyTorchTrainingParameters,
-            name=cls.name,
+        settings = GPyTorchTrainingParameters.from_saved_state(
             saved_state=saved_state['settings']
         )
 
@@ -777,9 +811,13 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
                 train_targets=objective_values[:, objective_number]
             )
 
+        self._initialise_model_likelihood_lists()
+
+    def _initialise_model_likelihood_lists(self) -> None:
+
         for model in self._model_list:
-            assert model.model_with_data is not None, "Model initialisation seems to have failed"
-            assert model.model_with_data.likelihood is not None, "Model initialisation seems to have failed"
+            assert model.model_with_data is not None, "Single models must be trained to use this function"
+            assert model.model_with_data.likelihood is not None, "Single models must be trained to use this function"
 
         # TODO: Might need to look into more options here
         #   - Currently seems to be assuming independent models. Maybe need to add an option for this?

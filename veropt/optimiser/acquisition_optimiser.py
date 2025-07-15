@@ -1,6 +1,6 @@
 import abc
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Optional, TypedDict, Unpack
+from typing import Any, Callable, Literal, Optional, Self, TypedDict, Unpack
 
 import numpy as np
 import scipy
@@ -9,13 +9,13 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
-from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
+from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass, rehydrate_object
 from veropt.optimiser.utility import DataShape
 
 
 class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
 
-    name: str
+    name: str = 'meta'
     maximum_evaluations_per_step: int | None
 
     def __init__(
@@ -82,33 +82,46 @@ class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
     def gather_dicts_to_save(self) -> dict:
         return {
             'name': self.name,
-            'settings': self.settings.gather_dicts_to_save()
+            'state': {
+                'bounds': self.bounds,
+                'n_evaluations_per_step': self.n_evaluations_per_step,
+                'settings': self.settings.gather_dicts_to_save()
+            }
         }
 
     @classmethod
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'AcquisitionOptimiser':
+    ) -> Self:
 
-        raise NotImplementedError
+        return cls(
+            bounds=saved_state['bounds'],
+            n_evaluations_per_step=saved_state['n_evaluations_per_step'],
+            **saved_state['settings']
+        )
 
 
 class TorchNumpyWrapper:
     def __init__(
             self,
-            function: Callable[[torch.Tensor], torch.Tensor],
+            acquisition_function: AcquisitionFunction,
     ):
-        self.function = function
+        self.acquisition_function = acquisition_function
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(
+            self,
+            variable_values: np.ndarray
+    ) -> np.ndarray:
 
         # TODO: Move somewhere prettier:
         #   - And make more general etc etc
-        if len(x.shape) == 1:
-            x = x.reshape(1, len(x))
+        if len(variable_values.shape) == 1:
+            variable_values = variable_values.reshape(1, len(variable_values))
 
-        output = self.function(torch.tensor(x))
+        output = self.acquisition_function(
+            variable_values=torch.tensor(variable_values)
+        )
 
         return output.detach().numpy()
 
@@ -148,18 +161,94 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
     ) -> torch.Tensor:
 
         wrapped_acquisition_function = TorchNumpyWrapper(
-            function=acquisition_function  # type: ignore  # mypy insanity because of the '*' in __call__
+            acquisition_function=acquisition_function
         )
 
         optimisation_result = scipy.optimize.dual_annealing(
-            func=wrapped_acquisition_function,
+            func=lambda x: - wrapped_acquisition_function(x),
             bounds=self.bounds.T,
             maxiter=self.settings.max_iter
         )
 
         candidates = torch.tensor(optimisation_result.x)
 
+        # TODO: Make a general version in superclass?
+        if len(candidates.shape) == 1:
+            candidates = candidates.unsqueeze(DataShape.index_points)
+
         return candidates
+
+
+class ProximityPunishAcquisitionFunction(AcquisitionFunction):
+    name = 'proximity_punish'
+
+    def __init__(
+            self,
+            original_acquisition_function: AcquisitionFunction,
+            other_points: list[torch.Tensor],
+            scaling: float,
+            alpha: float,
+            omega: float
+    ):
+        self.original_acquisition_function = original_acquisition_function
+        self.other_points = other_points
+
+        self.multi_objective = original_acquisition_function.multi_objective
+
+        self.scaling = scaling
+        self.alpha = alpha
+        self.omega = omega
+
+        super().__init__(
+            n_variables=self.original_acquisition_function.n_variables,
+            n_objectives=self.original_acquisition_function.n_objectives
+        )
+
+    def _add_proximity_punishment(
+            self,
+            point_variable_values: torch.Tensor,
+            acquisition_value: torch.Tensor,
+            other_points_variable_values: list[torch.Tensor]
+    ) -> torch.Tensor:
+
+        assert self.scaling is not None, "Scaling must have been calculated before adding the proximity punishment."
+
+        proximity_punish = torch.zeros(len(acquisition_value))
+        scaling = self.omega * self.scaling
+
+        for other_point_variables in other_points_variable_values:
+
+            proximity_punish += scaling * np.exp(
+                -(
+                        torch.sum((point_variable_values - other_point_variables) ** 2, dim=1)
+                        / (self.alpha ** 2)
+                )
+            )
+
+        return acquisition_value.detach() - proximity_punish
+
+    def update_points(
+            self,
+            new_points: list[torch.Tensor]
+    ):
+        self.other_points = new_points
+
+    def __call__(
+            self,
+            *,
+            variable_values: torch.Tensor
+    ) -> torch.Tensor:
+        original_acquisition_value = self.original_acquisition_function(
+            variable_values=variable_values
+        )
+
+        modified_acquisition_value = self._add_proximity_punishment(
+            point_variable_values=variable_values,
+            acquisition_value=original_acquisition_value,
+            other_points_variable_values=self.other_points
+        )
+
+        return modified_acquisition_value
 
 
 class ProximityPunishSettingsInputDict(TypedDict, total=False):
@@ -209,40 +298,33 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             acquisition_function: AcquisitionFunction,
     ) -> torch.Tensor:
 
-        def proximity_punishment_wrapper(
-                variable_values: torch.Tensor,
-                other_points_variables: list[torch.Tensor]
-        ) -> torch.Tensor:
-
-            acquistion_value = acquisition_function(
-                variable_values=variable_values
-            )
-
-            new_acq_func_val = self._add_proximity_punishment(
-                point_variable_values=variable_values,
-                acquisition_value=acquistion_value,
-                other_points_variable_values=other_points_variables
-            )
-
-            return new_acq_func_val
-
-        # TODO: Make acquisition function class with the proximity punishment added
-        #   - Satisfies type-hint
-        #   - Will be super useful for visualising acq func
-        #       - Consider visualisation ease when building
+        punishing_acquisition_function = ProximityPunishAcquisitionFunction(
+            original_acquisition_function=acquisition_function,
+            other_points=[],
+            scaling=self.scaling,
+            alpha=self.settings.alpha,
+            omega=self.settings.omega
+        )
 
         candidates: list[torch.Tensor] = []
 
         for candidate_no in range(self.n_evaluations_per_step):
 
             candidates.append(self.single_step_optimiser(
-                acquisition_function=lambda x: proximity_punishment_wrapper(x, candidates)
+                acquisition_function=punishing_acquisition_function
             ))
+
+            punishing_acquisition_function.update_points(
+                new_points=candidates
+            )
 
             # TODO: Add verbosity flag here
             print(f"Found point {candidate_no + 1} of {self.n_evaluations_per_step}.")
 
-        candidates_tensor = torch.stack(candidates, dim=DataShape.index_points)
+        candidates_tensor = torch.cat(
+            tensors=candidates,
+            dim=DataShape.index_points
+        )
 
         return candidates_tensor
 
@@ -269,29 +351,6 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
         super().update_bounds(
             new_bounds=new_bounds
         )
-
-    def _add_proximity_punishment(
-            self,
-            point_variable_values: torch.Tensor,
-            acquisition_value: torch.Tensor,
-            other_points_variable_values: list[torch.Tensor]
-    ) -> torch.Tensor:
-
-        assert self.scaling is not None, "Scaling must have been calculated before adding the proximity punishment."
-
-        proximity_punish = torch.zeros(len(acquisition_value))
-        scaling = self.settings.omega * self.scaling
-
-        for other_point_variables in other_points_variable_values:
-
-            proximity_punish += scaling * np.exp(
-                -(
-                        torch.sum((point_variable_values - other_point_variables) ** 2, dim=1)
-                        / (self.settings.alpha ** 2)
-                )
-            )
-
-        return acquisition_value.detach() - proximity_punish
 
     def _sample_acq_func(
             self,
@@ -377,10 +436,26 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
 
         self.scaling = 2 * float(np.sqrt(best_fitter.covariances_[top_cluster_ind]))
 
-
     def gather_dicts_to_save(self) -> dict:
-        return {
-            'name': self.name,
-            'settings': self.settings.gather_dicts_to_save(),
-            'single_step_optimiser': self.single_step_optimiser.gather_dicts_to_save()
-        }
+        save_dict = super().gather_dicts_to_save()
+        save_dict['state']['single_step_optimiser'] = self.single_step_optimiser.gather_dicts_to_save()
+
+        return save_dict
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+
+        single_step_optimiser = rehydrate_object(
+            superclass=AcquisitionOptimiser,
+            name=saved_state['single_step_optimiser']['name'],
+            saved_state=saved_state['single_step_optimiser']['state']
+        )
+
+        return cls(
+            bounds=saved_state['bounds'],
+            n_evaluations_per_step=saved_state['n_evaluations_per_step'],
+            single_step_optimiser=single_step_optimiser
+        )

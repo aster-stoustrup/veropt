@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from typing import Optional, TypedDict, Union
+from typing import Optional, Self, TypedDict, Union
 
 import torch
 
@@ -29,7 +29,6 @@ class OptimiserSettings(SavableClass):
             normalise: bool = True,
             verbose: bool = True,
             renormalise_each_step: Optional[bool] = None,
-            mask_nans: bool = True,
             n_points_before_fitting: Optional[int] = None,
             objective_weights: Optional[list[float]] = None
     ):
@@ -42,7 +41,6 @@ class OptimiserSettings(SavableClass):
 
         self.normalise = normalise
         self.verbose = verbose
-        self.mask_nans = mask_nans
 
         if renormalise_each_step is None:
 
@@ -72,7 +70,7 @@ class OptimiserSettings(SavableClass):
     def from_saved_state(
             cls,
             saved_state: dict
-    ) -> 'OptimiserSettings':
+    ) -> Self:
 
         return cls(
             **saved_state
@@ -86,7 +84,6 @@ class OptimiserSettingsInputDict(TypedDict, total=False):
     verbose: bool
     renormalise_each_step: bool
     initial_points_generator: InitialPointsChoice
-    mask_nans: bool
 
 
 @dataclass
@@ -96,6 +93,27 @@ class SuggestedPoints(SavableDataClass):
     generated_at_step: int
     generated_with_mode: str
     normalised: bool
+
+    def __getitem__(
+            self,
+            point_no: int
+    ) -> 'SuggestedPoints':
+
+        predicted_objective_values = {
+            prediction_type: tensor[point_no, :]
+            for (prediction_type, tensor) in self.predicted_objective_values.items()
+        }
+
+        return SuggestedPoints(
+            variable_values=self.variable_values[point_no, :],
+            predicted_objective_values=predicted_objective_values,
+            generated_at_step=self.generated_at_step,
+            generated_with_mode=self.generated_with_mode,
+            normalised=self.normalised,
+        )
+
+    def __len__(self) -> int:
+        return self.variable_values.shape[DataShape.index_points]
 
     @property
     def variable_values_flagged(self) -> TensorWithNormalisationFlag:
@@ -351,7 +369,7 @@ def format_output_for_objective(
 ) -> dict[str, torch.Tensor]:
 
     suggested_variables_dict = {
-        name: suggested_variables[:,variable_number] for (variable_number, name) in enumerate(variable_names)
+        name: suggested_variables[:, variable_number] for (variable_number, name) in enumerate(variable_names)
     }
 
     return suggested_variables_dict

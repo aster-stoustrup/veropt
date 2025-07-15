@@ -211,7 +211,6 @@ def unpack_flagged_variables_objectives_from_kwargs(
     return variable_values, objective_values
 
 
-# TODO: If PEP 764 is accepted, maybe convert this to inline?
 class PredictionDict(TypedDict):
     mean: torch.Tensor
     lower: torch.Tensor

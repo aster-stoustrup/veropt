@@ -1,12 +1,16 @@
 import abc
 from dataclasses import asdict, dataclass, fields
+from json import JSONDecoder, JSONEncoder
 from typing import Self, TypeVar
 from inspect import isabstract
+
+import torch
+from torch.utils.data import Dataset
 
 
 class SavableClass(metaclass=abc.ABCMeta):
 
-    name: str
+    name: str = 'meta'
 
     @abc.abstractmethod
     def gather_dicts_to_save(self) -> dict:
@@ -14,7 +18,10 @@ class SavableClass(metaclass=abc.ABCMeta):
 
     @classmethod
     @abc.abstractmethod
-    def from_saved_state(cls, saved_state: dict) -> Self:
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
         pass
 
 
@@ -25,7 +32,10 @@ class SavableDataClass(SavableClass):
         return asdict(self)
 
     @classmethod
-    def from_saved_state(cls, saved_state: dict) -> Self:
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
 
         expected_fields = [field.name for field in fields(cls)]
 
@@ -72,3 +82,29 @@ def rehydrate_object[S: SavableClass](
 
     else:
         raise ValueError(f"Unknown subclass of {superclass.__name__}: '{name}'")
+
+
+class TensorsAsListsEncoder(JSONEncoder, Dataset):
+
+    def default[T](
+            self,
+            dict_item: T
+    ) -> T | list | str:
+
+        if isinstance(dict_item, torch.Tensor):
+
+            converted_tensor = dict_item.detach().tolist()
+
+            if type(converted_tensor) is list:
+                converted_tensor = [
+                    str(item) if item in [float('inf'), float('-inf')] else item for item in converted_tensor
+                ]
+
+            elif type(converted_tensor) is float:
+                converted_tensor = (
+                    str(converted_tensor) if converted_tensor in [float('inf'), float('-inf')] else converted_tensor
+                )
+
+            return converted_tensor
+
+        return super(TensorsAsListsEncoder, self).default(dict_item)

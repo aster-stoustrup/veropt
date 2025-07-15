@@ -461,6 +461,7 @@ def acquisition_optimiser_with_proximity_punishment(
 
         assert optimiser_settings is None, (
             "Can't accept settings for acquisition function optimiser without a specified optimiser."
+            f"Options are {get_args(AcquisitionOptimiserOptions)}."
         )
 
         # Could support this in the future
@@ -532,6 +533,11 @@ def acquisition_optimiser_with_proximity_punishment(
 
         else:
             raise RuntimeError()  # Is it possible to end up here? Probably not. GLHF if you did :))
+
+    else:
+        raise NotImplementedError(
+            f"Acquisition optimiser '{optimiser}' not recognised. Options are {get_args(AcquisitionOptimiserOptions)}."
+        )
 
 
 def build_normaliser(
