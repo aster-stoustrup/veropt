@@ -21,7 +21,7 @@ class VirtualEnvironmentManager(ABC):
             args=['/bin/bash', '-c', '%s && %s' % (source, dump)],
             stdout=subprocess.PIPE)
 
-        os.environ = json.loads(s=pipe.stdout.read())
+        os.environ = json.loads(s=pipe.stdout.read())  # type: ignore
 
     def run_in_virtual_environment(
             self,

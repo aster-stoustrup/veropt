@@ -25,13 +25,13 @@ def _mask_nans(
     current_stds: dict[str, float] = {}
 
     for name in dict_of_objectives[0].keys():
-        current_minima[name] = np.nanmin([experimental_state.points[i].objective_values[name] 
+        current_minima[name] = np.nanmin([experimental_state.points[i].objective_values[name]
                                           for i in range(experimental_state.next_point)])
-        current_stds[name] = np.std([experimental_state.points[i].objective_values[name] 
-                                          for i in range(experimental_state.next_point)])
+        current_stds[name] = np.std([experimental_state.points[i].objective_values[name]
+                                     for i in range(experimental_state.next_point)])
 
     for i, objectives in dict_of_objectives.items():
-        dict_of_objectives[i] = {name: value if not np.isnan(value) else current_minima[name]-2*current_stds[name]
+        dict_of_objectives[i] = {name: value if not np.isnan(value) else current_minima[name] - 2 * current_stds[name]
                                  for name, value in objectives.items()}
 
 
@@ -220,7 +220,7 @@ class Experiment:
     ) -> None:
 
         _mask_nans(
-            dict_of_objectives=dict_of_objectives, 
+            dict_of_objectives=dict_of_objectives,
             experimental_state=self.state
         )
 
@@ -246,7 +246,7 @@ class Experiment:
 
         dict_of_parameters = self.get_parameters_from_optimiser()
 
-        results = self.batch_manager.run_batch(
+        results = self.batch_manager.run_batch(  # type: ignore # batch manager is initailised -> not None
             dict_of_parameters=dict_of_parameters,
             experimental_state=self.state
         )
@@ -262,7 +262,7 @@ class Experiment:
     def run_experiment(self) -> None:
 
         n_iterations = (self.optimiser_config.n_initial_points + self.optimiser_config.n_bayesian_points) \
-                        // self.optimiser_config.n_evaluations_per_step
+            // self.optimiser_config.n_evaluations_per_step
 
         for i in range(n_iterations):
             self.run_experiment_step()

@@ -17,8 +17,6 @@ then
     echo "SLURM_JOB_ID = $SLURM_JOB_ID"
 fi
 
-export OMP_NUM_THREADS=2
-
 command="ml list"
 search_string="miniconda/python3.11"
 
@@ -29,8 +27,6 @@ else
     ml load miniconda/python3.11
 fi
 
-#conda init bash
-#source $HOME/.bashrc
 if [ "$CONDA_DEFAULT_ENV" = "veropt" ]; then
     conda deactivate
 fi

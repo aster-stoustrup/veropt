@@ -210,9 +210,9 @@ class BatchManager(ABC):
 
         pending_jobs = 0
         points = experimental_state.points
-        submitted_points = [i for i in points
-                            if points[i].state == "Simulation running"
-                            or points[i].state == "Simulation started"]
+        submitted_points = [i for i in points if (
+            points[i].state == "Simulation running" or points[i].state == "Simulation started"
+        )]
         submitted_jobs = [points[i].job_id for i in submitted_points]
 
         for i in range(len(submitted_jobs)):
@@ -223,7 +223,7 @@ class BatchManager(ABC):
                 point_id, job_id = submitted_points[i], submitted_jobs[i]
 
                 state = self._check_job_status(
-                    job_id=job_id,
+                    job_id=job_id,  # type: ignore # job_id cannot be None here (job must be submitted or running)
                     state=experimental_state.points[point_id].state,
                 )
 
@@ -259,16 +259,16 @@ def batch_manager(
 ) -> BatchManager:
 
     batch_manager_classes = {
-        ExperimentMode.LOCAL: LocalBatchManager,
-        ExperimentMode.LOCAL_SLURM: LocalSlurmBatchManager,
-        ExperimentMode.REMOTE_SLURM: RemoteSlurmBatchManager
+        "local": LocalBatchManager,
+        "local_slurm": LocalSlurmBatchManager,
+        "remote_slurm": RemoteSlurmBatchManager
     }
 
     assert experiment_mode in ExperimentMode, \
         f"Unsupported experiment mode: {experiment_mode};" \
         f"expected one of: {[mode.value for mode in ExperimentMode]}."
 
-    remote = True if experiment_mode == ExperimentMode.REMOTE_SLURM else False
+    remote = True if experiment_mode == "remote_slurm" else False
 
     BatchManagerClass = batch_manager_classes[experiment_mode]
 

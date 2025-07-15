@@ -59,8 +59,8 @@ def try_to_run(
 
             tries += 1
 
-            print(f"Retrying in {tries*60} seconds.")
-            time.sleep(tries*60)
+            print(f"Retrying in {tries * 60} seconds.")
+            time.sleep(tries * 60)
 
     return result
 
