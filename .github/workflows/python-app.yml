@@ -32,9 +32,9 @@ jobs:
     - name: Type checking with mypy
       run: |
         pip install mypy
+        pip install pytest
         mypy veropt tests examples
 
     - name: Test with pytest
       run: |
-        pip install pytest
         pytest
