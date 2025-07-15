@@ -38,6 +38,9 @@ optimiser = bayesian_optimiser(
 
 ## The Visualisation Tools
 
+<img width="1399" height="729" alt="for_read_me" src="https://github.com/user-attachments/assets/7a45df99-ec19-4ffb-900b-a909d372b995" />
+
+
 _veropt_ comes equipped with multiple visualisation tools that will help you inspect your optimisation problem and make sure everything looks correct.
 
 In the figure above, we show a visualisation of the practice problem 'VehicleSafety' which features 3 objective functions and 5 variables.  
