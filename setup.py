@@ -8,7 +8,9 @@ install_requires = [
     "dill",
     "scipy",
     "plotly",
-    "dash"
+    "dash",
+    "pydantic",
+    "xarray"
 ]
 
 extras_require = {
