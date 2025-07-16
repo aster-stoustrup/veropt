@@ -1,24 +1,40 @@
+import re
+
 
 def edit_veros_run_script(
         run_script: str,
         parameters: dict[str, float]
 ) -> None:
 
-    with open(run_script, 'r') as file:
-        data = file.readlines()
+    pattern = re.compile(r'^(?P<indent>\s*)settings\.(?P<key>[A-Za-z0-9_]+)\s*=\s*.*$')
 
-    # TODO: This is not robust. Need to figure out how to handle the indentation.
-    #       Regular expression match /\w+settings\.([a-zA-Z0-9_]+)\w*=/, for all matches look up key
-    #       and set value; gather all keys in file, complement with assigned keys, add new lines.
-    # TODO: How to introduce new parameters that are not already in the setup file?
-    # TODO: Check if the parameters are already overwritten in the setup file.
-    for i, line in enumerate(data):
-        for key, value in parameters.items():
-            if line.startswith(f"        settings.{key} ="):
-                print(f"Overwriting {key} in setup file with value: {value}")
-                old_line = data[i].strip()
-                data[i] = f"        settings.{key} = {value}  # default {old_line}\n"
-                break
+    with open(run_script, 'r') as f:
+        lines = f.readlines()
 
-    with open(run_script, 'w') as file:
-        file.writelines(data)
+    new_lines: list[str] = []
+
+    # TODO: Handle cases when key is not in setup file.
+    for line in lines:
+        m = pattern.match(line)
+
+        if m:
+            key = m.group('key')
+            indent = m.group('indent')
+
+            if key in parameters:
+                val = parameters[key]
+                old_assignment = line.strip()
+
+                new_line = (
+                    f"{indent}settings.{key} = {val}  "
+                    f"# default: {old_assignment}\n"
+                )
+
+                print(f"Overwriting {key} with value: {val}")
+                new_lines.append(new_line)
+                continue
+
+        new_lines.append(line)
+
+    with open(run_script, 'w') as f:
+        f.writelines(new_lines)

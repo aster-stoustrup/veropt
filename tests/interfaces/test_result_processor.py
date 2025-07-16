@@ -17,7 +17,7 @@ def test_process() -> None:
 
         for name in output_filenames[1:]:
             with open(f"{tmp_dir}/{name}.txt", "w") as f:
-                f.write("dummy content")
+                f.write("0.1")
 
         simulation_results_dict = {
             i: SimulationResult(

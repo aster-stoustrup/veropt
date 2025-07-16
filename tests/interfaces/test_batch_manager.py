@@ -26,8 +26,8 @@ def test_local_batch_manager() -> None:
 
         parameters = {
             0: {"c_k": 0.05, "c_eps": 1.0},
-            1: {"c_k": 0.1,  "c_eps": 0.5},
-            2: {"c_k": 0.2,  "c_eps": 0.1}
+            1: {"c_k": 0.1, "c_eps": 0.5},
+            2: {"c_k": 0.2, "c_eps": 0.1}
         }
 
         experimental_state = ExperimentalState.make_fresh_state(
@@ -77,7 +77,7 @@ def test_local_slurm_batch_manager() -> None:
             run_script_root_directory="path/to/run/script/root",
             results_directory="path/to/results",
             output_filename="test",
-            check_job_status_sleep_time=10
+            check_job_status_frequency=10
         )
 
         dict_of_parameters = {

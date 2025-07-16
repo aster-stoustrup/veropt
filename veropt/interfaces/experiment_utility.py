@@ -59,7 +59,6 @@ class ExperimentConfig(Config):
     experiment_name: str
     parameter_names: list[str]
     parameter_bounds: dict[str, list[float]]
-    objective_names: list[str]
     path_to_experiment: str
     experiment_mode: str
     experiment_directory_name: Optional[str] = None

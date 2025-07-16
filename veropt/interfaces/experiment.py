@@ -19,20 +19,35 @@ torch.set_default_dtype(torch.float64)
 def _mask_nans(
         dict_of_objectives: ObjectivesDict,
         experimental_state: ExperimentalState
-) -> None:  # TODO: Remove when veropt core supports nan imputs
+) -> ObjectivesDict:  # TODO: Remove when veropt core supports nan imputs
 
     current_minima: dict[str, float] = {}
     current_stds: dict[str, float] = {}
+    first_new_point = next(iter(dict_of_objectives.values()))
 
-    for name in dict_of_objectives[0].keys():
-        current_minima[name] = np.nanmin([experimental_state.points[i].objective_values[name]
-                                          for i in range(experimental_state.next_point)])
-        current_stds[name] = np.std([experimental_state.points[i].objective_values[name]
-                                     for i in range(experimental_state.next_point)])
+    assert experimental_state.points, "To clear nans, there must be at least one point saved to state."
+
+    for name in first_new_point.keys():
+        values = []
+
+        for i in range(experimental_state.next_point):
+            if experimental_state.points[i].objective_values is not None:  # I check if it is None right here
+                values.append(experimental_state.points[i].objective_values[name])  # type: ignore
+            else:
+                continue
+
+        assert values, f'No objective values found for objective "{name}".'
+
+        current_minima[name] = np.nanmin(values)
+        current_stds[name] = np.nanstd(values).astype(float)
+
+        assert not np.isnan(current_minima[name]), f'All objective values are nans for objective "{name}".'
 
     for i, objectives in dict_of_objectives.items():
         dict_of_objectives[i] = {name: value if not np.isnan(value) else current_minima[name] - 2 * current_stds[name]
                                  for name, value in objectives.items()}
+
+    return dict_of_objectives
 
 
 class ExperimentObjective(InterfaceObjective):
@@ -86,12 +101,31 @@ class ExperimentObjective(InterfaceObjective):
 
         return suggested_variables, evaluated_objectives
 
+    def gather_dicts_to_save(self) -> dict:
+        saved_state = super().gather_dicts_to_save()
+        saved_state['state']['suggested_parameters_json'] = self.suggested_parameters_json
+        saved_state['state']['evaluated_objectives_json'] = self.evaluated_objectives_json
+        return saved_state
+
     @classmethod
     def from_saved_state(
             cls,
             saved_state: dict
     ) -> Self:
-        pass
+
+        bounds_lower = saved_state["state"]["bounds"].tolist()[0]
+        bounds_upper = saved_state["state"]["bounds"].tolist()[1]
+
+        return cls(
+            bounds_lower=bounds_lower,
+            bounds_upper=bounds_upper,
+            n_variables=saved_state["state"]["n_variables"],
+            n_objectives=saved_state["state"]["n_objectives"],
+            variable_names=saved_state["state"]["variable_names"],
+            objective_names=saved_state["state"]["objective_names"],
+            suggested_parameters_json=saved_state["state"]["suggested_parameters_json"],
+            evaluated_objectives_json=saved_state["state"]["evaluated_objectives_json"]
+        )
 
 
 class Experiment:
@@ -121,7 +155,7 @@ class Experiment:
         self.result_processor = result_processor
 
         self.n_parameters = len(self.experiment_config.parameter_names)
-        self.n_objectives = len(self.experiment_config.objective_names)
+        self.n_objectives = len(self.result_processor.objective_names)
 
         self.initialise_experimental_set_up()
 
@@ -138,7 +172,7 @@ class Experiment:
             n_variables=self.n_parameters,
             n_objectives=self.n_objectives,
             variable_names=self.experiment_config.parameter_names,
-            objective_names=self.experiment_config.objective_names,
+            objective_names=self.result_processor.objective_names,
             suggested_parameters_json=self.path_manager.suggested_parameters_json,
             evaluated_objectives_json=self.path_manager.evaluated_objectives_json
         )
@@ -166,7 +200,7 @@ class Experiment:
     def _initialise_objective_jsons(self) -> None:
 
         initial_parameter_dict: dict[str, list] = {name: [] for name in self.experiment_config.parameter_names}
-        initial_objectives_dict: dict[str, list] = {name: [] for name in self.experiment_config.objective_names}
+        initial_objectives_dict: dict[str, list] = {name: [] for name in self.result_processor.objective_names}
 
         with open(self.path_manager.suggested_parameters_json, "w") as f:
             json.dump(initial_parameter_dict, f)
@@ -184,9 +218,6 @@ class Experiment:
 
         with open(self.path_manager.suggested_parameters_json, 'r') as f:
             suggested_parameters = json.load(f)
-
-        assert [key for key in suggested_parameters.keys()] == self.experiment_config.parameter_names, \
-            "Parameters loaded from the optimiser in the wrong order."
 
         dict_of_parameters = {}
 
@@ -206,7 +237,8 @@ class Experiment:
 
     def save_objectives_to_state(
             self,
-            dict_of_objectives: ObjectivesDict) -> None:
+            dict_of_objectives: ObjectivesDict
+    ) -> None:
 
         for i, objective_values in dict_of_objectives.items():
             self.state.points[i].objective_values = objective_values
@@ -219,13 +251,13 @@ class Experiment:
             dict_of_objectives: ObjectivesDict
     ) -> None:
 
-        _mask_nans(
+        dict_of_objectives = _mask_nans(
             dict_of_objectives=dict_of_objectives,
             experimental_state=self.state
-        )
+        )  # TODO: Remove when veropt core supports nan imputs
 
         evaluated_objectives = {name: [dict_of_objectives[i][name] for i in dict_of_parameters.keys()]
-                                for name in self.experiment_config.objective_names}
+                                for name in self.result_processor.objective_names}
 
         with open(self.path_manager.evaluated_objectives_json, "w") as f:
             json.dump(evaluated_objectives, f)

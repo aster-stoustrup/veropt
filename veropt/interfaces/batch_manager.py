@@ -272,7 +272,7 @@ def batch_manager(
 
     BatchManagerClass = batch_manager_classes[experiment_mode]
 
-    return BatchManagerClass(
+    return BatchManagerClass(  # type: ignore # abstract BatchManager is never initialised here
         simulation_runner=simulation_runner,
         run_script_filename=run_script_filename,
         run_script_root_directory=run_script_root_directory,

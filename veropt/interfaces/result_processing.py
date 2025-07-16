@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 import os
 
 from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
@@ -29,8 +30,9 @@ class ResultProcessor(ABC):
     def open_output_file(
             self,
             result: SimulationResult
-    ) -> None:
+    ) -> Any:
         """Method to open the output file to check if it exists and can be opened."""
+        """Can be used in calculate_objectives() to read data from output files."""
         ...
 
     def process(
@@ -81,14 +83,13 @@ class MockResultProcessor(ResultProcessor):
     ):
 
         self.objective_names = objective_names
-        self.counter = 1.0
         self.objectives = objectives
         self.fixed_objective = fixed_objective
 
     def open_output_file(
             self,
             result: SimulationResult
-    ) -> None:
+    ) -> float:
 
         result_file = f"{result.output_directory}/{result.output_filename}.txt"
 
@@ -96,7 +97,9 @@ class MockResultProcessor(ResultProcessor):
             raise ValueError("Mock error opening output file.")
         else:
             with open(result_file, "r") as f:
-                f.read()
+                result_value = f.read()
+
+        return float(result_value)
 
     def calculate_objectives(
             self,
@@ -106,8 +109,8 @@ class MockResultProcessor(ResultProcessor):
         if self.fixed_objective:
             objectives = self.objectives
         else:
-            objectives = {name: self.counter for name in self.objective_names}
-            self.counter += 1
+            objectives = {name: self.open_output_file(result=result) for name in self.objective_names}
+
         return objectives
 
 
@@ -115,20 +118,19 @@ class TestVerosResultProcessor(ResultProcessor):
     def open_output_file(
             self,
             result: SimulationResult
-    ) -> None:
+    ) -> xr.Dataset:
 
         filename = f"{result.output_filename}.overturning.nc"
         dataset = os.path.join(result.output_directory, filename)
-        xr.open_dataset(dataset)
+        return xr.open_dataset(dataset, decode_times=False)
 
     def calculate_objectives(
             self,
             result: SimulationResult
     ) -> dict[str, float]:
 
-        filename = f"{result.output_filename}.overturning.nc"
-        dataset = os.path.join(result.output_directory, filename)
-        ds = xr.open_dataset(dataset)
-        amoc_strength = abs(ds.sel(zt=-1000, method="nearest").vsf_depth.min().values * 1e-6)
+        ds = self.open_output_file(result=result)
+        amoc = abs(ds.sel(zt=-1000, method="nearest").vsf_depth.min().values * 1e-6)
+        objectives = [-abs(amoc - 17)]
 
-        return {self.objective_names[0]: amoc_strength}
+        return {name: objectives[i] for i, name in enumerate(self.objective_names)}
