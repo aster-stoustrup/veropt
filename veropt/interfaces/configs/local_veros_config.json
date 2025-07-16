@@ -1,0 +1,11 @@
+{
+    "env_manager": "conda",
+    "env_name": "veros",
+    "path_to_conda": "path/to/conda",
+    "path_to_env": null,
+    "path_to_veros_executable": "veros",
+    "backend": "numpy",
+    "device": "cpu",
+    "float_type": "float64",
+    "keep_old_params": 0
+}

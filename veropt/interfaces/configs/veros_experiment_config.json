@@ -1,0 +1,9 @@
+{
+    "experiment_name": "veros_test",
+    "parameter_names": ["c_k"],
+    "parameter_bounds": {"c_k": [0.0, 10.0]},
+    "path_to_experiment": "path/to/experiment",
+    "experiment_mode": "local",
+    "run_script_filename": "acc",
+    "output_filename": "acc"
+}

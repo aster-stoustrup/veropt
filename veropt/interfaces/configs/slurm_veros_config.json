@@ -1,0 +1,15 @@
+{
+    "batch_script_template": "veropt/interfaces/slurm/veros_batch_script_template.sh",
+    "partition_name": "aegir",
+    "group_name": "ocean",
+    "constraint": "v1",
+    "n_cores": 1,
+    "n_cycles": 1,
+    "cycle_length": 31104000,
+    "backend": "jax",
+    "n_cores_nx": 1,
+    "n_cores_ny": 1,
+    "float_type": "float64",
+    "max_tries": 3,
+    "keep_old_params": 0
+}

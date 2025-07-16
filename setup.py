@@ -8,7 +8,9 @@ install_requires = [
     "dill",
     "scipy",
     "plotly",
-    "dash"
+    "dash",
+    "pydantic",
+    "xarray"
 ]
 
 extras_require = {
@@ -21,6 +23,10 @@ setup(
     name='veropt',
     version='1.0.0',
     packages=find_packages(),
+    include_package_data=True,
+    package_data={
+        'veropt.optimiser': ['default_settings.json'],
+    },
     python_requires='>3.13',
     url='https://github.com/aster-stoustrup/veropt',
     license='OSI Approved :: GNU General Public License v3 or later (GPLv3+)',

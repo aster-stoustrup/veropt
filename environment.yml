@@ -13,5 +13,7 @@ dependencies:
   - plotly
   - dash
   - pip
+  - pydantic
+  - xarray
   - pip:
     - -e .

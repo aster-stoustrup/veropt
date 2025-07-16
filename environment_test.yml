@@ -14,5 +14,7 @@ dependencies:
   - flake8
   - pytest
   - pip
+  - pydantic
+  - xarray
   - pip:
     - -e .
