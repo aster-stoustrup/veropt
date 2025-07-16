@@ -335,6 +335,6 @@ def _load_defaults() -> dict:
 
     with resources.open_text(
             'veropt',
-            'optimiser/default_settings.json'
+            'veropt/optimiser/default_settings.json'
     ) as defaults_file:
         return json.load(defaults_file)
