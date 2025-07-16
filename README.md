@@ -72,7 +72,8 @@ experiment = Experiment(
     optimiser_config=optimiser_config
 )
 
-experiment.run_experiment()```
+experiment.run_experiment()
+```
 
 _veropt_ interfaces support the implementation of two types of experiments: local (for simulations running locally) and local slurm (for simulations running on a cluster).
 
