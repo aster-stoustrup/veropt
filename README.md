@@ -49,6 +49,33 @@ For every objective function and variable combination, we see a cross section of
 
 These graphics are made with the library 'plotly', which offers modern, interactable plots that can be sent as html's.
 
+## Interfaces
+
+For optimization of computationally heavy, complex models, _veropt_ interfaces provide a framework to automatically submit, track and evaluate user-defined simulations. Below is an example of an experiment where a parameter of the ocean model [veros](https://veros.readthedocs.io/en/latest/) is optimised to simulate realistic current strength in an idealised setup.
+
+```from veropt.interfaces.experiment import Experiment
+from veropt.interfaces.local_simulation import LocalVerosRunner, LocalVerosConfig
+from veropt.interfaces.result_processing import TestVerosResultProcessor
+
+simulation_config = LocalVerosConfig.load("veropt/interfaces/configs/local_veros_config.json")
+simulation_runner = LocalVerosRunner(config=simulation_config)
+
+optimiser_config = "veropt/interfaces/configs/optimiser_config.json"
+experiment_config = "veropt/interfaces/configs/veros_experiment_config.json"
+
+result_processor = TestVerosResultProcessor(objective_names=["amoc"])
+
+experiment = Experiment(
+    simulation_runner=simulation_runner,
+    result_processor=result_processor,
+    experiment_config=experiment_config,
+    optimiser_config=optimiser_config
+)
+
+experiment.run_experiment()```
+
+_veropt_ interfaces support the implementation of two types of experiments: local (for simulations running locally) and local slurm (for simulations running on a cluster).
+
 ## License
 
 This project uses the [GPLv3](https://choosealicense.com/licenses/gpl-3.0/) license.
