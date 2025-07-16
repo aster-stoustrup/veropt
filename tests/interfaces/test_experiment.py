@@ -47,7 +47,7 @@ def test_mask_nans() -> None:
     )
 
     values = [20.0, 0.5, 17.0, -0.01, -13.0]
-    initial_dict_of_objectives = {i: {"objective_1": value} for i, value in enumerate(values)}
+    initial_dict_of_objectives = {i: {"obj1": value} for i, value in enumerate(values)}
 
     for objective_values in initial_dict_of_objectives.values():
         point = Point(
@@ -59,7 +59,7 @@ def test_mask_nans() -> None:
         experimental_state.update(point)
 
     new_values = [5.0, float("nan"), -5.0]
-    dict_of_objectives = {i: {"objective_1": value} for i, value in enumerate(new_values)}
+    dict_of_objectives = {i: {"obj1": value} for i, value in enumerate(new_values)}
 
     for objective_values in dict_of_objectives.values():
         point = Point(
@@ -75,7 +75,7 @@ def test_mask_nans() -> None:
         experimental_state=experimental_state
     )
 
-    assert not np.isnan(updated_dict_of_objectives[1]["objective_1"])
+    assert not np.isnan(updated_dict_of_objectives[1]["obj1"])
 
     new_experimental_state = ExperimentalState.make_fresh_state(
         experiment_name="",
@@ -94,7 +94,7 @@ def test_mask_nans() -> None:
         assert False
 
 
-def test_experiment() -> None:
+def test_experiment_step() -> None:
 
     optimiser_config = OptimiserConfig(
         n_initial_points=1,
@@ -116,13 +116,16 @@ def test_experiment() -> None:
         experiment_config.run_script_root_directory = tmp_dir
         experiment_config.run_script_filename = run_script_filename
 
-        objective_names = ["objective1"]
-        objectives = {"objective1": 1.}
+        objective_names = ["obj1"]
+        objectives = {"obj1": 1.}
 
         simulation_config = MockSimulationConfig()
         simulation_config.output_filename = "output"
-        simulation_config.output_directory = ""
+        simulation_config.output_directory = tmp_dir
         simulation_runner = MockSimulationRunner(config=simulation_config)
+
+        with open(f"{tmp_dir}/output.txt", "w+") as f:
+            f.write("0.1")
 
         result_processor = MockResultProcessor(
             objective_names=objective_names,
@@ -135,4 +138,14 @@ def test_experiment() -> None:
             optimiser_config=optimiser_config
         )
 
-        experiment.run_experiment()
+        experiment.run_experiment_step()
+
+        assert experiment.state.points[0].objective_values["obj1"] == 0.1  # type: ignore
+
+
+def test_experiment() -> None:
+
+    # TODO: make a test for integrated experiment
+    #       need better MockSimulation and MockResultProcessor for this
+
+    pass
