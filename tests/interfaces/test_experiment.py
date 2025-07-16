@@ -102,7 +102,15 @@ def test_experiment_step() -> None:
         n_evaluations_per_step=1
     )
 
-    experiment_config = ExperimentConfig.load("veropt/interfaces/configs/experiment_config.json")
+    experiment_config = ExperimentConfig(
+        experiment_name="integration_test",
+        parameter_names=["param1"],
+        parameter_bounds={"param1": [0, 1]},
+        path_to_experiment="path/to/experiment",
+        experiment_mode="local",
+        run_script_filename="test_experiment",
+        output_filename="output"
+    )
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         run_script_root_directory = tmp_dir
