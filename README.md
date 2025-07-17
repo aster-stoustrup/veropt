@@ -36,7 +36,7 @@ optimiser = bayesian_optimiser(
 
 Here we use a simple practice objective called 'VehicleSafety'. When setting up your own, real optimisation problem, we recommend looking in our 'interfaces' subpackage which will help run your expensive objective function, even when using slurm on a cluster. See more about this below.
 
-With a simple practice objective like this, we can simply step forward the optimisation with,
+With a simple practice objective like this, everything is already set up, and we can simply step forward the optimisation with,
 
 ```python
 optimiser.run_optimisation_step()
