@@ -21,12 +21,10 @@ Please note that veropt relies on complex packages such as pytorch and will prob
 Below is a simple example of setting up an optimisation problem with _veropt_. 
 
 ```python
-from veropt.optimiser.practice_objectives import Hartmann
+from veropt.optimiser.practice_objectives import VehicleSafety
 from veropt import bayesian_optimiser
 
-objective = Hartmann(
-    n_variables=6
-)
+objective = VehicleSafety()
 
 optimiser = bayesian_optimiser(
     n_initial_points=16,
@@ -36,17 +34,41 @@ optimiser = bayesian_optimiser(
 )
 ```
 
+Here we use a simple practice objective called 'VehicleSafety'. When setting up your own, real optimisation problem, we recommend looking in our 'interfaces' subpackage which will help setting everything up, even on clusters with slurm. See more about this below.
+
+With a simple practice objective like this, we can simply step forward the optimisation with,
+
+```python
+optimiser.run_optimisation_step()
+```
+
+and we'll receive a message like,
+
+```
+Optimisation running in initial mode at step 1 out of 12 
+Best objective value(s): [1691.06, 10.02, 0.11] at variable values [2.77, 2.51, 2.11, 2.31, 2.46] 
+Newest objective value(s): [1683.49, 8.93, 0.10] at variable values [2.23, 2.68, 1.55, 1.50, 2.92] 
+```
+
 ## The Visualisation Tools
+
+Once our optimisation has run for a few steps, we can visualise the surrogate model or other aspects of the optimisation to make sure everything is set up correctly.
+
+For example, we can call,
+
+```python
+plot_prediction_grid_from_optimiser(
+    optimiser=optimiser
+)
+```
+
+and we'll get a figure like the one below.
 
 <img width="10080" height="6480" alt="for_readme" src="https://github.com/user-attachments/assets/b43fafcc-d7f9-44ae-8bbe-7db3502b219e" />
 
-_veropt_ comes equipped with multiple visualisation tools that will help you inspect your optimisation problem and make sure everything looks correct.
-
-In the figure above, we show a visualisation of the practice problem 'VehicleSafety' which features 3 objective functions and 5 variables.  
-
 For every objective function and variable combination, we see a cross section of the domain, where we can inspect the surrogate model, acquisition function, suggested points and evaluated points.
 
-These graphics are made with the library 'plotly', which offers modern, interactable plots that can be sent as html's.
+These graphics are made with the library 'plotly', which offers modern, interactive plots. These can be saved and shared as html's, retaining the interactive features.
 
 ## Interfaces
 
