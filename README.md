@@ -1,5 +1,5 @@
 
-# _veropt_, the versatile optimiser
+# _veropt_ - the versatile optimiser
 
 _veropt_ is a Python package that aims to make Bayesian Optimisation easy to approach, inspect and adjust. It was developed for the Versatile Ocean Simulator ([VEROS](https://veros.readthedocs.io/en/latest/)) with the aim of providing a user-friendly optimisation tool to tune ocean simulations to real world data. 
 
@@ -21,12 +21,10 @@ Please note that veropt relies on complex packages such as pytorch and will prob
 Below is a simple example of setting up an optimisation problem with _veropt_. 
 
 ```python
-from veropt.optimiser.practice_objectives import Hartmann
+from veropt.optimiser.practice_objectives import VehicleSafety
 from veropt import bayesian_optimiser
 
-objective = Hartmann(
-    n_variables=6
-)
+objective = VehicleSafety()
 
 optimiser = bayesian_optimiser(
     n_initial_points=16,
@@ -36,24 +34,50 @@ optimiser = bayesian_optimiser(
 )
 ```
 
+Here we use a simple practice objective called 'VehicleSafety'. When setting up your own, real optimisation problem, we recommend looking in our 'interfaces' subpackage which will help run your expensive objective function, even when using slurm on a cluster. See more about this below.
+
+With a simple practice objective like this, everything is already set up, and we can simply step forward the optimisation with,
+
+```python
+optimiser.run_optimisation_step()
+```
+
+and we'll receive a message like,
+
+```
+Optimisation running in initial mode at step 1 out of 12 
+Best objective value(s): [1691.06, 10.02, 0.11] at variable values [2.77, 2.51, 2.11, 2.31, 2.46] 
+Newest objective value(s): [1683.49, 8.93, 0.10] at variable values [2.23, 2.68, 1.55, 1.50, 2.92] 
+```
+
 ## The Visualisation Tools
 
-<img width="1399" height="729" alt="for_read_me" src="https://github.com/user-attachments/assets/7a45df99-ec19-4ffb-900b-a909d372b995" />
+Once our optimisation has run for a few steps, we can visualise the surrogate model or other aspects of the optimisation to make sure everything is set up correctly.
 
+For example, we can call,
 
-_veropt_ comes equipped with multiple visualisation tools that will help you inspect your optimisation problem and make sure everything looks correct.
+```python
+plot_prediction_grid_from_optimiser(
+    optimiser=optimiser
+)
+```
 
-In the figure above, we show a visualisation of the practice problem 'VehicleSafety' which features 3 objective functions and 5 variables.  
+and we'll get a figure like the one below.
+
+<img width="10080" height="6480" alt="for_readme" src="https://github.com/user-attachments/assets/b43fafcc-d7f9-44ae-8bbe-7db3502b219e" />
 
 For every objective function and variable combination, we see a cross section of the domain, where we can inspect the surrogate model, acquisition function, suggested points and evaluated points.
 
-These graphics are made with the library 'plotly', which offers modern, interactable plots that can be sent as html's.
+These graphics are made with the library 'plotly', which offers modern, interactive plots. These can be saved and shared as html's, retaining the interactive features.
+
+If you want to try out the library with a practice objective before setting up your own optimisation problem, we recommend looking through our examples.
 
 ## Interfaces
 
 For optimization of computationally heavy, complex models, _veropt_ interfaces provide a framework to automatically submit, track and evaluate user-defined simulations. Below is an example of an experiment where a parameter of the ocean model [veros](https://veros.readthedocs.io/en/latest/) is optimised to simulate realistic current strength in an idealised setup.
 
-```from veropt.interfaces.experiment import Experiment
+```python
+from veropt.interfaces.experiment import Experiment
 from veropt.interfaces.local_simulation import LocalVerosRunner, LocalVerosConfig
 from veropt.interfaces.result_processing import TestVerosResultProcessor
 
@@ -76,6 +100,8 @@ experiment.run_experiment()
 ```
 
 _veropt_ interfaces support the implementation of two types of experiments: local (for simulations running locally) and local slurm (for simulations running on a cluster).
+
+For examples on how to use these features, see examples/interfaces.
 
 ## License
 
