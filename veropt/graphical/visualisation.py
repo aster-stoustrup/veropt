@@ -932,7 +932,7 @@ def plot_prediction_grid(
             )
 
             # TODO: Make acq func colours nicer
-            acquisition_function_colour = 'rgb(141, 160, 203)'
+            acquisition_function_colour = 'grey'
 
             figure.add_trace(
                 go.Scatter(
