@@ -101,6 +101,8 @@ experiment.run_experiment()
 
 _veropt_ interfaces support the implementation of two types of experiments: local (for simulations running locally) and local slurm (for simulations running on a cluster).
 
+For examples on how to use these features, see examples/interfaces.
+
 ## License
 
 This project uses the [GPLv3](https://choosealicense.com/licenses/gpl-3.0/) license.
