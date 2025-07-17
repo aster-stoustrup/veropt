@@ -38,8 +38,7 @@ optimiser = bayesian_optimiser(
 
 ## The Visualisation Tools
 
-<img width="1399" height="729" alt="for_read_me" src="https://github.com/user-attachments/assets/7a45df99-ec19-4ffb-900b-a909d372b995" />
-
+<img width="10080" height="6480" alt="for_readme" src="https://github.com/user-attachments/assets/86308763-5ca1-450d-ac31-17b4ea80d8f6" />
 
 _veropt_ comes equipped with multiple visualisation tools that will help you inspect your optimisation problem and make sure everything looks correct.
 
