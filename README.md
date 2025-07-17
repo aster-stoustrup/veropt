@@ -70,6 +70,8 @@ For every objective function and variable combination, we see a cross section of
 
 These graphics are made with the library 'plotly', which offers modern, interactive plots. These can be saved and shared as html's, retaining the interactive features.
 
+If you want to try out the library with a practice objective before setting up your own optimisation problem, we recommend looking through our examples.
+
 ## Interfaces
 
 For optimization of computationally heavy, complex models, _veropt_ interfaces provide a framework to automatically submit, track and evaluate user-defined simulations. Below is an example of an experiment where a parameter of the ocean model [veros](https://veros.readthedocs.io/en/latest/) is optimised to simulate realistic current strength in an idealised setup.
