@@ -66,7 +66,7 @@ and we'll get a figure like the one below.
 
 <img width="10080" height="6480" alt="for_readme" src="https://github.com/user-attachments/assets/b43fafcc-d7f9-44ae-8bbe-7db3502b219e" />
 
-For every objective function and variable combination, we see a cross section of the domain, where we can inspect the surrogate model, acquisition function, suggested points and evaluated points.
+For every objective function and variable combination, we see a cross section of the domain, where we can inspect the surrogate model (black line with grey area for uncertainty), acquisition function (grey lines), suggested points (red points with uncertainty bars) and evaluated points (colourful points).
 
 These graphics are made with the library 'plotly', which offers modern, interactive plots. These can be saved and shared as html's, retaining the interactive features.
 
