@@ -50,6 +50,8 @@ Best objective value(s): [1691.06, 10.02, 0.11] at variable values [2.77, 2.51, 
 Newest objective value(s): [1683.49, 8.93, 0.10] at variable values [2.23, 2.68, 1.55, 1.50, 2.92] 
 ```
 
+Please note that in order to follow common Bayesian Optimisation convention, _veropt_ always maximises. If you need to minimise, simply put a negative sign on your objective.
+
 ## The Visualisation Tools
 
 Once our optimisation has run for a few steps, we can visualise the surrogate model or other aspects of the optimisation to make sure everything is set up correctly.
