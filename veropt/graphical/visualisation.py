@@ -11,15 +11,21 @@ from dash.exceptions import PreventUpdate
 from plotly import colors
 from plotly.subplots import make_subplots
 
+from veropt.graphical.visualisation_utility import (
+    ModelPrediction, ModelPredictionContainer,
+    opacity_for_multidimensional_points, get_continuous_colour
+)
 from veropt.optimiser.acquisition import AcquisitionFunction
-from veropt.optimiser.acquisition_optimiser import ProximityPunishAcquisitionFunction, \
+from veropt.optimiser.acquisition_optimiser import (
+    ProximityPunishAcquisitionFunction,
     ProximityPunishmentSequentialOptimiser
+)
 from veropt.optimiser.optimiser import BayesianOptimiser
 # from veropt.utility import opacity_for_multidimensional_points
 # ModelPrediction, ModelPredictionContainer
 from veropt.optimiser.optimiser_utility import SuggestedPoints, get_best_points
 from veropt.optimiser.prediction import BotorchPredictor
-from veropt.optimiser.utility import DataShape, PredictionDict
+from veropt.optimiser.utility import DataShape
 
 
 def plot_point_overview_from_optimiser(
@@ -191,6 +197,95 @@ def plot_point_overview(
         figure.update_layout(hovermode="x")
 
     figure.show()
+
+
+def plot_progression(
+        objective_values: torch.Tensor,
+        objective_names: list[str],
+        n_initial_points: int
+) -> go.Figure:
+
+    n_evaluated_points = objective_values.shape[DataShape.index_points]
+    n_objectives = objective_values.shape[DataShape.index_dimensions]
+
+    colour_scale = colors.qualitative.Dark2
+    if n_objectives > 2:
+        colour_list = colors.sample_colorscale(
+            colorscale=colour_scale,
+            samplepoints=n_objectives
+        )
+    else:
+        colour_list = [colour_scale[0]]
+
+    figure = go.Figure()
+
+    for objective_index in range(n_objectives):
+
+        figure.add_trace(go.Scatter(
+            x=np.arange(n_initial_points),
+            y=objective_values.detach().numpy()[:n_initial_points, objective_index],
+            name=f"Initial points, objective '{objective_names[objective_index]}'",
+            mode='markers',
+            marker={
+                'symbol': 'diamond',
+                'color': colour_list[objective_index],
+            },
+        ))
+
+        figure.add_trace(go.Scatter(
+            x=np.arange(n_initial_points, n_evaluated_points),
+            y=objective_values.detach().numpy()[n_initial_points:, objective_index],
+            name=f"Bayesian points, objective '{objective_names[objective_index]}'",
+            mode='markers',
+            marker={
+                'color': colour_list[objective_index],
+            }
+        ))
+
+    figure.update_layout(
+        xaxis={
+            'title': {
+                'text': "Evaluated points",
+            }},
+        yaxis={
+            'title': {
+                'text': "Objective values",
+            }},
+
+    )
+
+    return figure
+
+
+def plot_progression_from_optimiser(
+        optimiser: BayesianOptimiser,
+        normalised: Optional[bool] = None,
+        return_figure: bool = False
+) -> Union[None, go.Figure]:
+
+    if normalised is None:
+        if optimiser.settings.normalise and optimiser.normalisers_have_been_initialised:
+            normalised = True
+        else:
+            normalised = False
+
+    if normalised:
+        objective_values = optimiser.evaluated_objectives_normalised
+        assert objective_values is not None
+    else:
+        objective_values = optimiser.evaluated_objectives_real_units
+
+    figure = plot_progression(
+        objective_values=objective_values,
+        objective_names=optimiser.objective.objective_names,
+        n_initial_points=optimiser.n_initial_points,
+    )
+
+    if return_figure:
+        return figure
+    else:
+        figure.show()
+        return None
 
 
 def plot_pareto_front_grid_from_optimiser(
@@ -460,140 +555,6 @@ def _calculate_proximity_punished_acquisition_values(
     return modified_acquisition_values
 
 
-class ModelPrediction:
-    def __init__(
-            self,
-            variable_index: int,
-            point: torch.Tensor,
-            title: str,
-            variable_array: np.ndarray,
-            predicted_objective_values: PredictionDict,
-            acquisition_values: torch.Tensor,
-            samples: Optional[torch.Tensor] = None
-    ) -> None:
-
-        self.variable_index = variable_index
-
-        self.point = point
-
-        self.title: str = title
-        self.variable_array = variable_array
-        self.predicted_values_mean = predicted_objective_values['mean']
-        self.predicted_values_lower = predicted_objective_values['lower']
-        self.predicted_values_upper = predicted_objective_values['upper']
-        self.acquisition_values: np.ndarray = acquisition_values.detach().numpy()
-        self.samples: Optional[torch.Tensor] = samples
-
-        self.modified_acquisition_values: Optional[list[torch.Tensor]] = None
-
-    def add_modified_acquisition_values(
-            self,
-            modified_acquisition_values: list[torch.Tensor]
-    ) -> None:
-        self.modified_acquisition_values = modified_acquisition_values
-
-
-class ModelPredictionContainer:
-    def __init__(self) -> None:
-        self.data: list[ModelPrediction] = []
-        self.points: torch.Tensor = torch.tensor([])
-        self.variable_indices: np.ndarray = np.array([])
-
-    def add_data(
-            self,
-            model_prediction: ModelPrediction
-    ) -> None:
-
-        self.data.append(model_prediction)
-
-        if self.points.numel() == 0:
-            self.points = model_prediction.point
-        else:
-            self.points = torch.concat(
-                tensors=[self.points, model_prediction.point],
-                dim=0
-            )
-
-        self.variable_indices = np.append(
-            arr=self.variable_indices,
-            values=model_prediction.variable_index
-        )
-
-    def __getitem__(
-            self,
-            data_index: int
-    ) -> ModelPrediction:
-
-        return self.data[data_index]
-
-    def locate_data(
-            self,
-            variable_index: int,
-            point: torch.Tensor
-    ) -> int | None:
-
-        # Can we do without the mix of np and torch here?
-        matching_variable_indices = torch.tensor(np.equal(variable_index, self.variable_indices))
-
-        # NB: Not using any tolerance at the moment, might make this a little unreliable
-        no_matching_coordinates_per_point = torch.eq(point, self.points).sum(dim=1)
-
-        n_variables = self.points.shape[DataShape.index_dimensions]
-
-        matching_points = no_matching_coordinates_per_point == n_variables
-
-        matching_point_and_var = matching_variable_indices * matching_points
-
-        full_match_index = torch.where(matching_point_and_var)[0]
-
-        if len(full_match_index) == 1:
-            return int(full_match_index)
-
-        elif full_match_index.numel() == 0:
-            return None
-
-        elif len(full_match_index) > 1:
-            raise RuntimeError("Found more than one matching point.")
-
-        else:
-            raise RuntimeError("Unexpected error.")
-
-    def __call__(
-            self,
-            variable_index: int,
-            point: torch.Tensor
-    ) -> ModelPrediction:
-        data_ind = self.locate_data(
-            variable_index=variable_index,
-            point=point
-        )
-
-        if data_ind is None:
-            raise ValueError("Point not found.")
-
-        return self.data[data_ind]
-
-    def __contains__(
-            self,
-            point: torch.Tensor
-    ) -> bool:
-
-        # Just checking if it has it for var_ind = 0, might be sensible to make it a bit more general/stable
-        data_index = self.locate_data(
-            variable_index=0,
-            point=point
-        )
-
-        if data_index is None:
-            return False
-
-        elif type(data_index) is int:
-            return True
-
-        else:
-            raise RuntimeError
-
-
 def choose_plot_point(
         optimiser: BayesianOptimiser
 ) -> tuple[torch.Tensor, str]:
@@ -790,37 +751,6 @@ def _add_model_traces(
     )
 
 
-def opacity_for_multidimensional_points(
-        variable_index: int,
-        n_variables: int,
-        variable_values: torch.Tensor,
-        evaluated_point: torch.Tensor,
-        alpha_min: float = 0.1,
-        alpha_max: float = 0.8
-) -> tuple[torch.Tensor, torch.Tensor]:
-
-    distances_list = []
-    index_wo_var_ind = torch.arange(n_variables) != variable_index
-    for point_no in range(variable_values.shape[DataShape.index_points]):
-        distances_list.append(np.linalg.norm(
-            evaluated_point[0, index_wo_var_ind] - variable_values[point_no, index_wo_var_ind]
-        ))
-
-    distances = torch.tensor(distances_list)
-
-    normalised_distances = (
-        ((distances - distances.min()) / distances.max()) / ((distances - distances.min()) / distances.max()).max()
-    )
-
-    normalised_proximity = 1 - normalised_distances
-
-    alpha_values = (alpha_max - alpha_min) * normalised_proximity + alpha_min
-
-    alpha_values[alpha_values.argmax()] = 1.0
-
-    return alpha_values, normalised_distances
-
-
 def plot_prediction_grid(
         model_prediction_container: ModelPredictionContainer,
         evaluated_point: torch.Tensor,
@@ -845,14 +775,15 @@ def plot_prediction_grid(
     n_variables = variable_values.shape[1]
     n_objectives = len(objective_names)
 
-    color_scale = colors.get_colorscale('Inferno')
-    color_list = colors.sample_colorscale(
-        colorscale=color_scale,
-        samplepoints=n_evaluated_points,
-        low=0.0,
-        high=1.0,
-        colortype='rgb'
-    )
+    colour_scale = colors.get_colorscale('matter')
+    colour_scale_suggested_points = colors.get_colorscale('Emrld')
+    # colour_list = colors.sample_colorscale(
+    #     colorscale=colour_scale,
+    #     samplepoints=n_evaluated_points,
+    #     low=0.0,
+    #     high=1.0,
+    #     colortype='rgb'
+    # )
 
     figure = make_subplots(
         rows=n_objectives,
@@ -879,8 +810,8 @@ def plot_prediction_grid(
             n_variables=n_variables,
             variable_values=joint_points,
             evaluated_point=evaluated_point,
-            alpha_min=0.3,
-            alpha_max=0.9
+            alpha_min=0.7,
+            alpha_max=1.0
         )
 
         distance_list = joint_distance_list[:n_evaluated_points]
@@ -893,7 +824,7 @@ def plot_prediction_grid(
 
         if evaluated_point_ind < n_evaluated_points:
             marker_type_list[evaluated_point_ind] = 'x'
-            marker_size_list[evaluated_point_ind] = 20
+            marker_size_list[evaluated_point_ind] = 14
 
         if evaluated_point_ind >= n_evaluated_points:
             evaluated_suggested_point_ind = evaluated_point_ind - n_evaluated_points
@@ -901,14 +832,27 @@ def plot_prediction_grid(
         else:
             evaluated_suggested_point_ind = None
 
-        color_list_w_opacity = [
-            "rgba(" + color_list[point_no][4:-1] + f", {joint_opacity_list[point_no]})"
+        colour_list = [get_continuous_colour(colour_scale, float(1 - distance)) for distance in distance_list]
+
+        colour_list_w_opacity = [
+            "rgba(" + colour_list[point_no][4:-1] + f", {joint_opacity_list[point_no]})"
             for point_no in range(n_evaluated_points)
         ]
 
         if suggested_points:
-            suggested_point_color_list_wo = [
-                f"rgba(139, 0, 0, {joint_opacity_list[n_evaluated_points + point_no]})"
+
+            colour_list_suggested_points = [
+                get_continuous_colour(colour_scale_suggested_points, float(1 - distance))
+                for distance in suggested_point_distance_list
+            ]
+
+            colour_list_suggested_points_w_opacity = [
+                (
+                    f"rgba("
+                    f"{colour_list_suggested_points[point_no][4:-1]}, "
+                    f"{joint_opacity_list[n_evaluated_points + point_no]}"
+                    f")"
+                )
                 for point_no in range(n_suggested_points)
             ]
 
@@ -968,12 +912,17 @@ def plot_prediction_grid(
                     y=objective_values[:, objective_index],
                     mode='markers',
                     marker={
-                        'color': color_list_w_opacity,
-                        'size': marker_size_list
+                        'color': colour_list_w_opacity,
+                        'size': marker_size_list,
+                        'line': {
+                            'width': 0.0
+                        },
+                        'opacity': 1.0
                     },
                     marker_symbol=marker_type_list,
-                    name='Evaluated point',
-                    showlegend=False,
+                    name='Evaluated points',
+                    showlegend=True if (row_no == 1 and col_no == 1) else False,
+                    legendgroup='Evaluated points',
                     customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
                     hovertemplate="Param. value: %{x:.3f} <br>"
                                   "Obj. func. value: %{y:.3f} <br>"
@@ -989,7 +938,7 @@ def plot_prediction_grid(
 
                     if suggested_point_no == evaluated_suggested_point_ind:
                         marker_style = 'x'
-                        marker_size = 20  # TODO: Write these somewhere general
+                        marker_size = 14  # TODO: Write these somewhere general
                     else:
                         marker_style = 'circle'
                         marker_size = 8
@@ -999,6 +948,10 @@ def plot_prediction_grid(
                         "Must have calculated predictions for the suggested points before calling this function to "
                         "plot them. (If the model is trained, the optimiser should do this automatically)."
                     )
+
+                    show_legend = False
+                    if variable_index == 0 and objective_index == 0 and suggested_point_no == 0:
+                        show_legend = True
 
                     upper_diff = prediction['upper'] - prediction['mean']
                     lower_diff = prediction['mean'] - prediction['lower']
@@ -1012,16 +965,17 @@ def plot_prediction_grid(
                                 'symmetric': False,
                                 'array': upper_diff[objective_index].detach().numpy(),
                                 'arrayminus': lower_diff[objective_index].detach().numpy(),
-                                'color': suggested_point_color_list_wo[suggested_point_no]
+                                'color': colour_list_suggested_points_w_opacity[suggested_point_no]
                             },
                             mode='markers',
                             marker={
-                                'color': suggested_point_color_list_wo[suggested_point_no],
+                                'color': colour_list_suggested_points_w_opacity[suggested_point_no],
                                 'size': marker_size
                             },
                             marker_symbol=marker_style,
-                            name='Suggested point',
-                            showlegend=False,
+                            name='Suggested points',
+                            legendgroup='Suggested points',
+                            showlegend=show_legend,
                             customdata=np.dstack([
                                 [suggested_point_no],
                                 [suggested_point_distance_list[suggested_point_no]],

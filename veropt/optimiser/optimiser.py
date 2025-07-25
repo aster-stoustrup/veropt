@@ -249,7 +249,7 @@ class BayesianOptimiser(SavableClass):
             saved_state['settings']
         )
 
-        return cls(
+        optimiser = cls(
             objective=objective,  # type: ignore[arg-type]  # this is checked above
             predictor=predictor,
             normaliser_class=normaliser_class,
@@ -262,6 +262,11 @@ class BayesianOptimiser(SavableClass):
             evaluated_variables_real_units=evaluated_variable_values.tensor,
             evaluated_objectives_real_units=evaluated_objective_values.tensor
         )
+
+        if optimiser.model_has_been_trained:
+            optimiser._update_predictor()
+
+        return optimiser
 
     @staticmethod
     def _check_input_dimensions[T, **P](
@@ -494,7 +499,7 @@ class BayesianOptimiser(SavableClass):
 
                         self._fit_normaliser()
 
-                self._train_model()
+                self._update_predictor()
 
             elif self.n_points_evaluated > self.settings.n_points_before_fitting:
 
@@ -502,7 +507,7 @@ class BayesianOptimiser(SavableClass):
 
                     self._fit_normaliser()
 
-                self._train_model()
+                self._update_predictor()
 
             if self.settings.verbose:
                 self._print_status()
@@ -583,10 +588,11 @@ class BayesianOptimiser(SavableClass):
         if self.suggested_points is None:
             raise RuntimeError()
 
+        # TODO: Unnormalise suggested point when saving
         self.suggested_points_history.append(self.suggested_points.copy())
         self.suggested_points = None
 
-    def _train_model(self) -> None:
+    def _update_predictor(self) -> None:
 
         if self.settings.normalise:
             assert self.normalisers_have_been_initialised

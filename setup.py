@@ -32,7 +32,7 @@ setup(
     license='OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
     author='Aster Stoustrup',
     author_email='aster.stoustrup@gmail.com',
-    description='The Versatile Optimiser (VerOpt)',
+    description='User-friendly Bayesian Optimisation for computationally expensive problems',
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=install_requires,
