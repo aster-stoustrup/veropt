@@ -116,7 +116,7 @@ class PathManager:
 
     @staticmethod
     def make_simulation_id(i: int) -> str:
-        return f"point={i}"
+        return f"point_{i}"
 
     def make_results_directory(self) -> str:
         path = os.path.join(self.experiment_directory, "results")
