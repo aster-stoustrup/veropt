@@ -135,7 +135,7 @@ class Experiment:
             result_processor: ResultProcessor,
             experiment_config: Union[str, ExperimentConfig],
             optimiser_config: Union[str, OptimiserConfig],
-            batch_manager: Optional[BatchManager] = None,
+            batch_manager_class: Optional[type[BatchManager]] = None,
             state: Optional[Union[str, ExperimentalState]] = None
     ):
 
@@ -151,7 +151,8 @@ class Experiment:
         )
 
         self.simulation_runner = simulation_runner
-        self.batch_manager = batch_manager
+        self.batch_manager = None
+        self.batch_manager_class = batch_manager_class
         self.result_processor = result_processor
 
         self.n_parameters = len(self.experiment_config.parameter_names)
@@ -187,6 +188,13 @@ class Experiment:
 
     def _initialise_batch_manager(self) -> None:
 
+        # TODO: Refactor this (consider how to set up this little guy)
+        #   - Fixed this so it works but isn't general
+        #   - Probably need a constructor that makes the experiment itself...?
+        #   - Or actually, might mostly need to make an interface to the batch_manager where it can take
+        #     some of the things it is being bound to here?
+        #       - Then it can be initialised on its own but can be linked to internal things here or something
+
         self.batch_manager = batch_manager(
             experiment_mode=self.experiment_config.experiment_mode,
             simulation_runner=self.simulation_runner,
@@ -194,7 +202,8 @@ class Experiment:
             run_script_root_directory=self.path_manager.run_script_root_directory,
             results_directory=self.path_manager.results_directory,
             output_filename=self.experiment_config.output_filename,
-            check_job_status_frequency=60  # TODO: put in server config
+            check_job_status_frequency=60,  # TODO: put in server config,
+            batch_manager_class=self.batch_manager_class
         )
 
     def _initialise_objective_jsons(self) -> None:

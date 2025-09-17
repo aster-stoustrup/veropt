@@ -4,7 +4,7 @@ import os
 import tqdm
 import subprocess
 import time
-from typing import Optional
+from typing import Optional, Literal
 
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner, SimulationResultsDict
 from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
@@ -264,21 +264,28 @@ class BatchManager(ABC):
                     time.sleep(1)
 
 
-def batch_manager(
-        experiment_mode: str,
-        simulation_runner: SimulationRunner,
-        run_script_filename: str,
-        run_script_root_directory: str,
-        results_directory: str,
-        output_filename: str,
-        check_job_status_frequency: int = 60
-) -> BatchManager:
-
+def _get_batch_manager_class(
+        experiment_mode: Literal['local', 'local_slurm', 'remote_slurm'],
+):
     batch_manager_classes = {
         "local": LocalBatchManager,
         "local_slurm": LocalSlurmBatchManager,
         "remote_slurm": RemoteSlurmBatchManager
     }
+
+    return batch_manager_classes[experiment_mode]
+
+
+def batch_manager(
+        experiment_mode: Literal['local', 'local_slurm', 'remote_slurm'],
+        simulation_runner: SimulationRunner,
+        run_script_filename: str,
+        run_script_root_directory: str,
+        results_directory: str,
+        output_filename: str,
+        check_job_status_frequency: int = 60,
+        batch_manager_class: Optional[type[BatchManager]] = None
+) -> BatchManager:
 
     assert experiment_mode in ExperimentMode, \
         f"Unsupported experiment mode: {experiment_mode};" \
@@ -286,9 +293,9 @@ def batch_manager(
 
     remote = True if experiment_mode == "remote_slurm" else False
 
-    BatchManagerClass = batch_manager_classes[experiment_mode]
+    batch_manager_class = batch_manager_class or _get_batch_manager_class(experiment_mode)
 
-    return BatchManagerClass(  # type: ignore # abstract BatchManager is never initialised here
+    return batch_manager_class(  # type: ignore # abstract BatchManager is never initialised here
         simulation_runner=simulation_runner,
         run_script_filename=run_script_filename,
         run_script_root_directory=run_script_root_directory,

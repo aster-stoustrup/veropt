@@ -1,4 +1,4 @@
-from typing import Optional, Self
+from typing import Optional, Self, Literal, Any
 import os
 
 from veropt.interfaces.simulation import SimulationResult
@@ -25,7 +25,7 @@ class ExperimentalState(Config):
     experiment_name: str
     experiment_directory: str
     state_json: str
-    points: dict[int, Point] = {}
+    points: dict[int, Point] = {}  # Change default if we move away from pydantic
     next_point: int = 0
 
     def update(
@@ -42,9 +42,11 @@ class ExperimentalState(Config):
             experiment_name: str,
             experiment_directory: str,
             state_json: str,
-            points: dict[int, Point] = {},
+            points: dict[int, Point] = None,
             next_point: int = 0
     ) -> Self:
+
+        points = points or {}
 
         return cls(
             experiment_name=experiment_name,
@@ -56,11 +58,11 @@ class ExperimentalState(Config):
 
 
 class ExperimentConfig(Config):
-    experiment_name: str
+    experiment_name: Literal['local', 'local_slurm', 'remote_slurm']
     parameter_names: list[str]
     parameter_bounds: dict[str, list[float]]
     path_to_experiment: str
-    experiment_mode: str
+    experiment_mode: Literal['local', 'local_slurm', 'remote_slurm']
     experiment_directory_name: Optional[str] = None
     run_script_filename: str
     run_script_root_directory: Optional[str] = None
