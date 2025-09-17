@@ -320,8 +320,8 @@ class Experiment:
 
     def run_experiment(self) -> None:
 
-        n_iterations = (self.optimiser.n_initial_points + self.optimiser.n_bayesian_points) \
-            // self.optimiser.n_evaluations_per_step
+        n_points = self.optimiser.n_initial_points + self.optimiser.n_bayesian_points
+        n_iterations = n_points // self.optimiser.n_evaluations_per_step
 
         for i in range(n_iterations):
             self.run_experiment_step()
