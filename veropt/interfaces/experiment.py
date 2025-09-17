@@ -5,10 +5,11 @@ from veropt.interfaces.simulation import SimulationRunner
 from veropt.interfaces.batch_manager import BatchManager, batch_manager
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
 from veropt.interfaces.experiment_utility import (
-    ExperimentConfig, OptimiserConfig, ExperimentalState, PathManager, Point
+    ExperimentConfig, ExperimentalState, PathManager, Point
 )
 from veropt.optimiser.objective import InterfaceObjective
 from veropt.optimiser.constructors import bayesian_optimiser
+from veropt.optimiser.optimiser_saver_loader import load_optimiser_from_settings, load_optimiser_from_state
 
 import torch
 import numpy as np
@@ -134,13 +135,12 @@ class Experiment:
             simulation_runner: SimulationRunner,
             result_processor: ResultProcessor,
             experiment_config: Union[str, ExperimentConfig],
-            optimiser_config: Union[str, OptimiserConfig],
+            optimiser_config: str,
             batch_manager_class: Optional[type[BatchManager]] = None,
             state: Optional[Union[str, ExperimentalState]] = None
     ):
 
         self.experiment_config = ExperimentConfig.load(experiment_config)
-        self.optimiser_config = OptimiserConfig.load(optimiser_config)
 
         self.path_manager = PathManager(self.experiment_config)
 
@@ -158,9 +158,14 @@ class Experiment:
         self.n_parameters = len(self.experiment_config.parameter_names)
         self.n_objectives = len(self.result_processor.objective_names)
 
-        self.initialise_experimental_set_up()
+        self.initialise_experimental_set_up(
+            optimiser_config_path=optimiser_config
+        )
 
-    def _initialise_optimiser(self) -> None:
+    def _initialise_optimiser(
+            self,
+            optimiser_config_path: str
+    ) -> None:
 
         bounds_lower = [self.experiment_config.parameter_bounds[name][0]
                         for name in self.experiment_config.parameter_names]
@@ -178,11 +183,8 @@ class Experiment:
             evaluated_objectives_json=self.path_manager.evaluated_objectives_json
         )
 
-        # TODO: Initialise any optimiser, not just default!
-        self.optimiser = bayesian_optimiser(
-            n_initial_points=self.optimiser_config.n_initial_points,
-            n_bayesian_points=self.optimiser_config.n_bayesian_points,
-            n_evaluations_per_step=self.optimiser_config.n_evaluations_per_step,
+        self.optimiser = load_optimiser_from_settings(
+            file_name=optimiser_config_path,
             objective=objective
         )
 
@@ -230,7 +232,7 @@ class Experiment:
 
         dict_of_parameters = {}
 
-        for i in range(self.optimiser_config.n_evaluations_per_step):
+        for i in range(self.optimiser.n_evaluations_per_step):
             parameters = {name: value[i] for name, value in suggested_parameters.items()}
             dict_of_parameters[self.state.next_point] = parameters
             new_point = Point(
@@ -271,9 +273,14 @@ class Experiment:
         with open(self.path_manager.evaluated_objectives_json, "w") as f:
             json.dump(evaluated_objectives, f)
 
-    def initialise_experimental_set_up(self) -> None:
+    def initialise_experimental_set_up(
+            self,
+            optimiser_config_path: str
+    ) -> None:
 
-        self._initialise_optimiser()
+        self._initialise_optimiser(
+            optimiser_config_path=optimiser_config_path
+        )
         self._initialise_objective_jsons()
 
         if self.batch_manager is None:
@@ -302,8 +309,8 @@ class Experiment:
 
     def run_experiment(self) -> None:
 
-        n_iterations = (self.optimiser_config.n_initial_points + self.optimiser_config.n_bayesian_points) \
-            // self.optimiser_config.n_evaluations_per_step
+        n_iterations = (self.optimiser.n_initial_points + self.optimiser.n_bayesian_points) \
+            // self.optimiser.n_evaluations_per_step
 
         for i in range(n_iterations):
             self.run_experiment_step()

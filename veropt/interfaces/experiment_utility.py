@@ -15,12 +15,6 @@ class Point(BaseModel):
     objective_values: Optional[dict[str, float]] = None
 
 
-class OptimiserConfig(Config):
-    n_initial_points: int
-    n_bayesian_points: int
-    n_evaluations_per_step: int
-
-
 class ExperimentalState(Config):
     experiment_name: str
     experiment_directory: str
