@@ -2,7 +2,8 @@ from typing import Optional, Union, Self
 import json
 
 from veropt.interfaces.simulation import SimulationRunner
-from veropt.interfaces.batch_manager import BatchManager, batch_manager, ExperimentMode
+from veropt.interfaces.batch_manager import BatchManager, batch_manager, ExperimentMode, DirectBatchManager, \
+    SubmitBatchManager
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
 from veropt.interfaces.experiment_utility import (
     ExperimentConfig, ExperimentalState, PathManager, Point
@@ -137,18 +138,22 @@ class Experiment:
             result_processor: ResultProcessor,
             experiment_config: Union[str, ExperimentConfig],
             optimiser_config: Union[str, dict],
-            batch_manager_class: Optional[type[BatchManager]] = None,
+            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None,
             state: Optional[Union[str, ExperimentalState]] = None
     ):
         self.experiment_config = ExperimentConfig.load(experiment_config)
 
         self.path_manager = PathManager(self.experiment_config)
 
-        self.state = ExperimentalState.load(state) if state is not None else ExperimentalState.make_fresh_state(
-            experiment_name=self.experiment_config.experiment_name,
-            experiment_directory=self.path_manager.experiment_directory,
-            state_json=self.path_manager.experimental_state_json
-        )
+        if state is None:
+            self.state = ExperimentalState.make_fresh_state(
+                experiment_name=self.experiment_config.experiment_name,
+                experiment_directory=self.path_manager.experiment_directory,
+                state_json=self.path_manager.experimental_state_json
+            )
+
+        else:
+            self.state = ExperimentalState.load(state)
 
         self.simulation_runner = simulation_runner
         self.batch_manager = None
@@ -300,8 +305,9 @@ class Experiment:
 
     def run_experiment_step_direct(self) -> None:
 
-        assert self.batch_manager is not None, "Batch manager must be initialised before calling this function"
-
+        assert issubclass(type(self.batch_manager), DirectBatchManager), (
+            f"Batch manager must be subclassing DirectBatchManager to call this method."
+        )
         self.optimiser.run_optimisation_step()
 
         dict_of_parameters = self.get_parameters_from_optimiser()
@@ -321,22 +327,24 @@ class Experiment:
 
     def run_experiment_step_submitted(self):
 
-        assert self.batch_manager is not None, "Batch manager must be initialised before calling this function"
+        # Note for the future: Could consider doing two Optimiser and two Experiment classes instead of these checks
+        assert issubclass(type(self.batch_manager), SubmitBatchManager), (
+            f"Batch manager must be subclassing SubmitBatchManager to call this method"
+        )
 
         if not self.optimiser.current_step == 0:
 
             # TODO: Implement/refactor
-            self.batch_manager.wait_for_jobs()
+            self.batch_manager.wait_for_jobs(
+                experimental_state=self.state
+            )
 
-            # TODO: Get results from somewhere?
-            #   - Are they in the experimental_state somewhere?
+            # TODO: Implement method
+            results = self.state.grab_latest_results()
 
             dict_of_objectives = self.result_processor.process(results=results)
-
-            # TODO: Get parameters
-            #   - Make sure it's safe and will not mess up order
-            #       - Might need to add some bookkeeping
-            #   - Might need to refactor current 'get_parameters_from_optimiser'
+            # TODO: Implement method
+            dict_of_parameters = get_parameters_from_results(results=results)
 
             self.save_objectives_to_state(dict_of_objectives=dict_of_objectives)
             self.send_objectives_to_optimiser(
@@ -348,9 +356,14 @@ class Experiment:
 
         dict_of_parameters = self.get_parameters_from_optimiser()
 
-        self.batch_manager.run_batch(
+        self.batch_manager.submit_batch(
             dict_of_parameters=dict_of_parameters,
             experimental_state=self.state
+        )
+
+        save_to_json(
+            object_to_save=self.optimiser,
+            file_name=f"{self.path_manager.experiment_directory}/optimiser_state"
         )
 
     def run_experiment_step(self):
@@ -362,6 +375,9 @@ class Experiment:
 
         elif self.experiment_config.experiment_mode == ExperimentMode.REMOTE_SLURM:
             self.run_experiment_step_submitted()
+
+        else:
+            raise RuntimeError("Unknown experiment mode: '{self.experiment_config.experiment_mode}'")
 
     def run_experiment(self) -> None:
 

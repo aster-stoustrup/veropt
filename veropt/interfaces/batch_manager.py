@@ -101,14 +101,6 @@ class BatchManager(ABC):
         self.remote = remote
         self.hostname = hostname
 
-    @abstractmethod
-    def run_batch(
-            self,
-            dict_of_parameters: dict[int, dict],
-            experimental_state: ExperimentalState
-    ) -> SimulationResultsDict:
-        ...
-
     def _set_up_directory(
             self,
             i: int
@@ -172,7 +164,17 @@ def batch_manager(
     )
 
 
-class LocalBatchManager(BatchManager):
+class DirectBatchManager(BatchManager, ABC):
+    @abstractmethod
+    def run_batch(
+            self,
+            dict_of_parameters: dict[int, dict],
+            experimental_state: ExperimentalState
+    ) -> SimulationResultsDict:
+        ...
+
+
+class LocalBatchManager(DirectBatchManager):
     def run_batch(
             self,
             dict_of_parameters: dict[int, dict],
@@ -208,7 +210,24 @@ class LocalBatchManager(BatchManager):
         return results
 
 
-class LocalSlurmBatchManager(BatchManager):
+class SubmitBatchManager(BatchManager, ABC):
+
+    @abstractmethod
+    def submit_batch(
+            self,
+            dict_of_parameters: dict[int, dict],
+            experimental_state: ExperimentalState
+    ) -> None:
+        ...
+
+    @abstractmethod
+    def wait_for_jobs(
+            self,
+            experimental_state: ExperimentalState
+    ) -> None:
+        ...
+
+class LocalSlurmBatchManager(SubmitBatchManager):
 
     # TODO: These slurm specific class methods should be moved to a new SlurmBatchManager superclass if
     #  RemoteSlurmBatchManager needs them
@@ -346,11 +365,11 @@ class LocalSlurmBatchManager(BatchManager):
                 for i in tqdm.tqdm(range(self.check_job_status_frequency), "Time until next server poll"):
                     time.sleep(1)
 
-    def run_batch(
+    def submit_batch(
             self,
             dict_of_parameters: dict[int, dict],
             experimental_state: ExperimentalState
-    ) -> SimulationResultsDict:
+    ) -> None:
 
         results = {}
 
@@ -376,17 +395,29 @@ class LocalSlurmBatchManager(BatchManager):
             experimental_state.points[i].result = result
 
         experimental_state.save_to_json(experimental_state.state_json)
+
+    def wait_for_jobs(
+            self,
+            experimental_state: ExperimentalState
+    ) -> None:
+
         self._check_pending_jobs(experimental_state=experimental_state)
         experimental_state.save_to_json(experimental_state.state_json)
 
-        return results
 
-
-class RemoteSlurmBatchManager(BatchManager):
-    def run_batch(
+class RemoteSlurmBatchManager(SubmitBatchManager):
+    def submit_batch(
             self,
             dict_of_parameters: dict[int, dict],
             experimental_state: ExperimentalState
-    ) -> SimulationResultsDict:
+    ) -> None:
         # TODO: Implement
         raise NotImplementedError("Remote slurm experiments are not supported yet.")
+
+    def wait_for_jobs(
+            self,
+            experimental_state: ExperimentalState
+    ) -> None:
+        # TODO: Implement
+        raise NotImplementedError("Remote slurm experiments are not supported yet.")
+
