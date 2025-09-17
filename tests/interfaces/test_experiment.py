@@ -5,7 +5,7 @@ from veropt.optimiser.objective import Objective
 from veropt.interfaces.experiment import ExperimentObjective, Experiment, _mask_nans
 from veropt.interfaces.local_simulation import MockSimulationRunner, MockSimulationConfig
 from veropt.interfaces.result_processing import MockResultProcessor
-from veropt.interfaces.experiment_utility import OptimiserConfig, ExperimentConfig, ExperimentalState, Point
+from veropt.interfaces.experiment_utility import ExperimentConfig, ExperimentalState, Point
 
 import numpy as np
 
@@ -96,7 +96,7 @@ def test_mask_nans() -> None:
 
 def test_experiment_step() -> None:
 
-    optimiser_config = OptimiserConfig(
+    optimiser_config = dict(
         n_initial_points=1,
         n_bayesian_points=1,
         n_evaluations_per_step=1

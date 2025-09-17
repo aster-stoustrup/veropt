@@ -52,7 +52,7 @@ class ExperimentalState(Config):
 
 
 class ExperimentConfig(Config):
-    experiment_name: Literal['local', 'local_slurm', 'remote_slurm']
+    experiment_name: str
     parameter_names: list[str]
     parameter_bounds: dict[str, list[float]]
     path_to_experiment: str

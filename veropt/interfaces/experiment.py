@@ -8,8 +8,9 @@ from veropt.interfaces.experiment_utility import (
     ExperimentConfig, ExperimentalState, PathManager, Point
 )
 from veropt.optimiser.objective import InterfaceObjective
-from veropt.optimiser.constructors import bayesian_optimiser
-from veropt.optimiser.optimiser_saver_loader import load_optimiser_from_settings, load_optimiser_from_state
+from veropt.optimiser.optimiser_saver_loader import (
+    bayesian_optimiser, load_optimiser_from_settings, load_optimiser_from_state, save_to_json
+)
 
 import torch
 import numpy as np
@@ -135,7 +136,7 @@ class Experiment:
             simulation_runner: SimulationRunner,
             result_processor: ResultProcessor,
             experiment_config: Union[str, ExperimentConfig],
-            optimiser_config: str,
+            optimiser_config: Union[str, dict],
             batch_manager_class: Optional[type[BatchManager]] = None,
             state: Optional[Union[str, ExperimentalState]] = None
     ):
@@ -159,12 +160,12 @@ class Experiment:
         self.n_objectives = len(self.result_processor.objective_names)
 
         self.initialise_experimental_set_up(
-            optimiser_config_path=optimiser_config
+            optimiser_config=optimiser_config
         )
 
     def _initialise_optimiser(
             self,
-            optimiser_config_path: str
+            optimiser_config: str
     ) -> None:
 
         bounds_lower = [self.experiment_config.parameter_bounds[name][0]
@@ -183,10 +184,20 @@ class Experiment:
             evaluated_objectives_json=self.path_manager.evaluated_objectives_json
         )
 
-        self.optimiser = load_optimiser_from_settings(
-            file_name=optimiser_config_path,
-            objective=objective
-        )
+        if isinstance(optimiser_config, str):
+            self.optimiser = load_optimiser_from_settings(
+                file_name=optimiser_config,
+                objective=objective
+            )
+
+        elif isinstance(optimiser_config, dict):
+            self.optimiser = bayesian_optimiser(
+                objective=objective,
+                **optimiser_config
+            )
+
+        else:
+            raise ValueError("optimiser_config must be a valid dictionary or a path to a valid configuration file")
 
     def _initialise_batch_manager(self) -> None:
 
@@ -275,11 +286,11 @@ class Experiment:
 
     def initialise_experimental_set_up(
             self,
-            optimiser_config_path: str
+            optimiser_config: str
     ) -> None:
 
         self._initialise_optimiser(
-            optimiser_config_path=optimiser_config_path
+            optimiser_config=optimiser_config
         )
         self._initialise_objective_jsons()
 
