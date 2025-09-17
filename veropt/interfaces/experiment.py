@@ -2,7 +2,7 @@ from typing import Optional, Union, Self
 import json
 
 from veropt.interfaces.simulation import SimulationRunner
-from veropt.interfaces.batch_manager import BatchManager, batch_manager
+from veropt.interfaces.batch_manager import BatchManager, batch_manager, ExperimentMode
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
 from veropt.interfaces.experiment_utility import (
     ExperimentConfig, ExperimentalState, PathManager, Point
@@ -140,7 +140,6 @@ class Experiment:
             batch_manager_class: Optional[type[BatchManager]] = None,
             state: Optional[Union[str, ExperimentalState]] = None
     ):
-
         self.experiment_config = ExperimentConfig.load(experiment_config)
 
         self.path_manager = PathManager(self.experiment_config)
@@ -299,13 +298,15 @@ class Experiment:
 
         self._check_initialisation()
 
-    def run_experiment_step(self) -> None:
+    def run_experiment_step_direct(self) -> None:
+
+        assert self.batch_manager is not None, "Batch manager must be initialised before calling this function"
 
         self.optimiser.run_optimisation_step()
 
         dict_of_parameters = self.get_parameters_from_optimiser()
 
-        results = self.batch_manager.run_batch(  # type: ignore # batch manager is initailised -> not None
+        results = self.batch_manager.run_batch(
             dict_of_parameters=dict_of_parameters,
             experimental_state=self.state
         )
@@ -318,12 +319,57 @@ class Experiment:
             dict_of_objectives=dict_of_objectives
         )
 
+    def run_experiment_step_submitted(self):
+
+        assert self.batch_manager is not None, "Batch manager must be initialised before calling this function"
+
+        if not self.optimiser.current_step == 0:
+
+            # TODO: Implement/refactor
+            self.batch_manager.wait_for_jobs()
+
+            # TODO: Get results from somewhere?
+            #   - Are they in the experimental_state somewhere?
+
+            dict_of_objectives = self.result_processor.process(results=results)
+
+            # TODO: Get parameters
+            #   - Make sure it's safe and will not mess up order
+            #       - Might need to add some bookkeeping
+            #   - Might need to refactor current 'get_parameters_from_optimiser'
+
+            self.save_objectives_to_state(dict_of_objectives=dict_of_objectives)
+            self.send_objectives_to_optimiser(
+                dict_of_parameters=dict_of_parameters,
+                dict_of_objectives=dict_of_objectives
+            )
+
+        self.optimiser.run_optimisation_step()
+
+        dict_of_parameters = self.get_parameters_from_optimiser()
+
+        self.batch_manager.run_batch(
+            dict_of_parameters=dict_of_parameters,
+            experimental_state=self.state
+        )
+
+    def run_experiment_step(self):
+        if self.experiment_config.experiment_mode == ExperimentMode.LOCAL:
+            self.run_experiment_step_direct()
+
+        elif self.experiment_config.experiment_mode == ExperimentMode.LOCAL_SLURM:
+            self.run_experiment_step_submitted()
+
+        elif self.experiment_config.experiment_mode == ExperimentMode.REMOTE_SLURM:
+            self.run_experiment_step_submitted()
+
     def run_experiment(self) -> None:
 
-        n_points = self.optimiser.n_initial_points + self.optimiser.n_bayesian_points
-        n_iterations = n_points // self.optimiser.n_evaluations_per_step
+        n_total_points = self.optimiser.n_initial_points + self.optimiser.n_bayesian_points
+        n_points_left = n_total_points - self.optimiser.n_points_evaluated
+        n_remaining_steps = n_points_left // self.optimiser.n_evaluations_per_step
 
-        for i in range(n_iterations):
+        for i in range(n_remaining_steps):
             self.run_experiment_step()
 
     def restart_experiment(self) -> None:

@@ -10,7 +10,8 @@ install_requires = [
     "plotly",
     "dash",
     "pydantic",
-    "xarray"
+    "xarray",
+    "tqdm"
 ]
 
 extras_require = {

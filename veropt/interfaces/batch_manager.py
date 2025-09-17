@@ -211,7 +211,7 @@ class LocalBatchManager(BatchManager):
 class LocalSlurmBatchManager(BatchManager):
 
     # TODO: These slurm specific class methods should be moved to a new SlurmBatchManager superclass if
-    #  RemoteSlurm needs them
+    #  RemoteSlurmBatchManager needs them
     def _submit_job(
             self,
             parameters: dict[str, float],

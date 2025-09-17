@@ -29,7 +29,7 @@ class VirtualEnvironmentManager(ABC):
             directory: str
     ) -> subprocess.CompletedProcess:
         self.activate_virtual_environment()
-        os.chdir(directory)
+        os.chdir(directory)  # TODO: Consider if this is necessary and/or stable?
         env_copy = os.environ.copy()
 
         return subprocess.run(
