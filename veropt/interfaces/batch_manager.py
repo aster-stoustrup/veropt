@@ -144,18 +144,34 @@ class BatchManager(ABC):
             output_filename=self.output_filename
         )
 
-        with open(result.stdout_file, "r") as f:
-            output = f.read()
+        job_id = self._get_job_id(
+            result=result
+        )
+
+        if job_id is None:
+            print(f"Submission of simulation {result.simulation_id} failed.")
+            print("Maximum retries limit reached. Proceeding without resubmission.")
+
+        return job_id, result
+
+    def _get_job_id(
+            self,
+            result: SimulationResult
+    ) -> Optional[int]:
+
+        # TODO: Probably need to detect if the stdout is of the expected format?
+        #   - And otherwise raise exception so the user will know they need to overwrite this
+        #   - Could also leave this as an abstract, but maybe it's a good assumption that this will work for many cases?
+
+        with open(result.stdout_file, "r") as stdout_file:
+            output = stdout_file.read()
 
         if os.path.getsize(result.stderr_file) == 0 and output.strip().isdigit():
             job_id = int(output.strip())
-
         else:
-            print(f"Submission of simulation {result.simulation_id} failed.")
-            print("Maximum retries limit reached. Proceeding without resubmission.")
             job_id = None
 
-        return job_id, result
+        return job_id
 
     def _check_job_status(
             self,

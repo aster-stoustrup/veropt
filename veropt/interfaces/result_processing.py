@@ -32,6 +32,12 @@ class ResultProcessor(ABC):
             result: SimulationResult
     ) -> Any:
         """Method to open the output file to check if it exists and can be opened."""
+
+        # TODO: This method isn't compliant with Liskov as the input/output is not consistent (returns Any)
+        #   - Delete this
+        #   - If we think it's important to check that specific files have been created by sims, let's make an
+        #   - abstract to do that specifically (happens now in return_nan)
+        
         """Can be used in calculate_objectives() to read data from output files."""
         ...
 
