@@ -9,6 +9,7 @@ from veropt.interfaces.experiment_utility import (
     ExperimentConfig, ExperimentalState, PathManager, Point
 )
 from veropt.optimiser.objective import InterfaceObjective
+from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.optimiser_saver_loader import (
     bayesian_optimiser, load_optimiser_from_settings, load_optimiser_from_state, save_to_json
 )
@@ -303,6 +304,22 @@ class Experiment:
 
         self._check_initialisation()
 
+    def _get_optimiser_path(self) -> str:
+        return f"{self.path_manager.experiment_directory}/optimiser_state"
+
+    def _save_optimiser(self) -> None:
+
+        save_to_json(
+            object_to_save=self.optimiser,
+            file_name=self._get_optimiser_path()
+        )
+
+    def _load_optimiser_from_state(self) -> BayesianOptimiser:
+
+        return load_optimiser_from_state(
+            file_name=self._get_optimiser_path()
+        )
+
     def run_experiment_step_direct(self) -> None:
 
         assert issubclass(type(self.batch_manager), DirectBatchManager), (
@@ -334,7 +351,6 @@ class Experiment:
 
         if not self.optimiser.current_step == 0:
 
-            # TODO: Implement/refactor
             self.batch_manager.wait_for_jobs(
                 experimental_state=self.state
             )
@@ -361,10 +377,7 @@ class Experiment:
             experimental_state=self.state
         )
 
-        save_to_json(
-            object_to_save=self.optimiser,
-            file_name=f"{self.path_manager.experiment_directory}/optimiser_state"
-        )
+        self._save_optimiser()
 
     def run_experiment_step(self):
         if self.experiment_config.experiment_mode == ExperimentMode.LOCAL:
