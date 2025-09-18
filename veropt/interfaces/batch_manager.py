@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
-from enum import StrEnum
 import os
 import tqdm
 import subprocess
 import time
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner, SimulationResultsDict
-from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
+from veropt.interfaces.experiment_utility import (
+    ExperimentMode, ExperimentalState, Point, PathManager
+)
 from veropt.interfaces.utility import create_directory, copy_files
 
 
@@ -73,12 +74,6 @@ def _check_if_job_completed(
     return completed
 
 
-class ExperimentMode(StrEnum):
-    LOCAL = "local"
-    LOCAL_SLURM = "local_slurm"
-    REMOTE_SLURM = "remote_slurm"
-
-
 class BatchManager(ABC):
     def __init__(
             self,
@@ -134,7 +129,7 @@ def _get_batch_manager_class(
     return batch_manager_classes[experiment_mode]
 
 
-def batch_manager(
+def make_batch_manager(
         experiment_mode: Literal['local', 'local_slurm', 'remote_slurm'],
         simulation_runner: SimulationRunner,
         run_script_filename: str,
@@ -143,7 +138,7 @@ def batch_manager(
         output_filename: str,
         check_job_status_frequency: int = 60,
         batch_manager_class: Optional[type[BatchManager]] = None
-) -> BatchManager:
+) -> Union['DirectBatchManager', 'SubmitBatchManager']:
 
     assert experiment_mode in ExperimentMode, \
         f"Unsupported experiment mode: {experiment_mode};" \

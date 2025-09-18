@@ -1,12 +1,13 @@
+import os.path
 from typing import Optional, Union, Self
 import json
 
 from veropt.interfaces.simulation import SimulationRunner
-from veropt.interfaces.batch_manager import BatchManager, batch_manager, ExperimentMode, DirectBatchManager, \
+from veropt.interfaces.batch_manager import BatchManager, make_batch_manager, DirectBatchManager, \
     SubmitBatchManager
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
 from veropt.interfaces.experiment_utility import (
-    ExperimentConfig, ExperimentalState, PathManager, Point
+    ExperimentConfig, ExperimentMode, ExperimentalState, PathManager, Point
 )
 from veropt.optimiser.objective import InterfaceObjective
 from veropt.optimiser.optimiser import BayesianOptimiser
@@ -137,66 +138,186 @@ class Experiment:
             self,
             simulation_runner: SimulationRunner,
             result_processor: ResultProcessor,
-            experiment_config: Union[str, ExperimentConfig],
-            optimiser_config: Union[str, dict],
-            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None,
-            state: Optional[Union[str, ExperimentalState]] = None
+            experiment_config: ExperimentConfig,
+            optimiser: BayesianOptimiser,
+            path_manager: PathManager,
+            batch_manager: Union[DirectBatchManager, SubmitBatchManager],
+            state: ExperimentalState
     ):
-        self.experiment_config = ExperimentConfig.load(experiment_config)
-
-        self.path_manager = PathManager(self.experiment_config)
-
-        if state is None:
-            self.state = ExperimentalState.make_fresh_state(
-                experiment_name=self.experiment_config.experiment_name,
-                experiment_directory=self.path_manager.experiment_directory,
-                state_json=self.path_manager.experimental_state_json
-            )
-
-        else:
-            self.state = ExperimentalState.load(state)
+        self.experiment_config = experiment_config
+        self.path_manager = path_manager
 
         self.simulation_runner = simulation_runner
-        self.batch_manager = None
-        self.batch_manager_class = batch_manager_class
+        self.batch_manager = batch_manager
         self.result_processor = result_processor
+
+        self.state = state
+        self.optimiser = optimiser
 
         self.n_parameters = len(self.experiment_config.parameter_names)
         self.n_objectives = len(self.result_processor.objective_names)
 
-        self.initialise_experimental_set_up(
-            optimiser_config=optimiser_config
+    @classmethod
+    def from_the_beginning(
+            cls,
+            simulation_runner: SimulationRunner,
+            result_processor: ResultProcessor,
+            experiment_config: Union[str, ExperimentConfig],
+            optimiser_config: Union[str, dict],
+            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
+    ) -> Self:
+
+        experiment_config = ExperimentConfig.load(experiment_config)
+        path_manager = PathManager(experiment_config)
+
+        state = ExperimentalState.make_fresh_state(
+            experiment_name=experiment_config.experiment_name,
+            experiment_directory=path_manager.experiment_directory,
+            state_json=path_manager.experimental_state_json
         )
 
-    def _initialise_optimiser(
-            self,
-            optimiser_config: str
-    ) -> None:
+        state_json_path = path_manager.experimental_state_json
 
-        bounds_lower = [self.experiment_config.parameter_bounds[name][0]
-                        for name in self.experiment_config.parameter_names]
-        bounds_upper = [self.experiment_config.parameter_bounds[name][1]
-                        for name in self.experiment_config.parameter_names]
+        if os.path.exists(state_json_path):
+            raise RuntimeError(
+                f"Experimental state exists at {state_json_path}. Please clear all files from previous run,"
+                f"unless you want to continue that run. (In that case, use .continue_if_possible instead of"
+                f".from_the_beginning.)"
+            )
+
+        n_parameters = len(experiment_config.parameter_names)
+        n_objectives = len(result_processor.objective_names)
+
+        optimiser = cls._make_fresh_optimiser(
+            n_parameters=n_parameters,
+            n_objectives=n_objectives,
+            experiment_config=experiment_config,
+            result_processor=result_processor,
+            path_manager=path_manager,
+            optimiser_config=optimiser_config,
+        )
+
+        batch_manager = cls._make_fresh_batch_manager(
+            experiment_config=experiment_config,
+            simulation_runner=simulation_runner,
+            path_manager=path_manager,
+            batch_manager_class=batch_manager_class
+        )
+
+        experiment = cls(
+            simulation_runner=simulation_runner,
+            result_processor=result_processor,
+            experiment_config=experiment_config,
+            optimiser=optimiser,
+            path_manager=path_manager,
+            batch_manager=batch_manager,
+            state=state
+        )
+
+        experiment._initialise_objective_jsons()
+
+    @classmethod
+    def _continue_existing(
+            cls,
+            state_path: str,
+            simulation_runner: SimulationRunner,
+            result_processor: ResultProcessor,
+            experiment_config: Union[str, ExperimentConfig],
+            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
+    ) -> Self:
+
+        experiment_config = ExperimentConfig.load(experiment_config)
+        path_manager = PathManager(experiment_config)
+
+        state = ExperimentalState.load(state_path)
+
+        batch_manager = cls._make_fresh_batch_manager(
+            experiment_config=experiment_config,
+            simulation_runner=simulation_runner,
+            path_manager=path_manager,
+            batch_manager_class=batch_manager_class
+        )
+
+        optimiser = load_optimiser_from_state(
+            file_name=path_manager.optimiser_state_json
+        )
+
+        return cls(
+            simulation_runner=simulation_runner,
+            result_processor=result_processor,
+            experiment_config=experiment_config,
+            optimiser=optimiser,
+            path_manager=path_manager,
+            batch_manager=batch_manager,
+            state=state
+        )
+
+
+    @classmethod
+    def continue_if_possible(
+            cls,
+            simulation_runner: SimulationRunner,
+            result_processor: ResultProcessor,
+            experiment_config: Union[str, ExperimentConfig],
+            optimiser_config: Union[str, dict],
+            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
+    ):
+
+        path_manager = PathManager(experiment_config)
+
+        state_json_path = path_manager.experimental_state_json
+
+        if os.path.exists(state_json_path):
+            return cls._continue_existing(
+                state_path=state_json_path,
+                simulation_runner=simulation_runner,
+                result_processor=result_processor,
+                experiment_config=experiment_config,
+                batch_manager_class=batch_manager_class
+            )
+        else:
+            return cls.from_the_beginning(
+                simulation_runner=simulation_runner,
+                result_processor=result_processor,
+                experiment_config=experiment_config,
+                optimiser_config=optimiser_config,
+                batch_manager_class=batch_manager_class
+            )
+
+    @staticmethod
+    def _make_fresh_optimiser(
+            n_parameters: int,
+            n_objectives: int,
+            experiment_config: ExperimentConfig,
+            result_processor: ResultProcessor,
+            path_manager: PathManager,
+            optimiser_config: str
+    ) -> BayesianOptimiser:
+
+        bounds_lower = [experiment_config.parameter_bounds[name][0]
+                        for name in experiment_config.parameter_names]
+        bounds_upper = [experiment_config.parameter_bounds[name][1]
+                        for name in experiment_config.parameter_names]
 
         objective = ExperimentObjective(
             bounds_lower=bounds_lower,
             bounds_upper=bounds_upper,
-            n_variables=self.n_parameters,
-            n_objectives=self.n_objectives,
-            variable_names=self.experiment_config.parameter_names,
-            objective_names=self.result_processor.objective_names,
-            suggested_parameters_json=self.path_manager.suggested_parameters_json,
-            evaluated_objectives_json=self.path_manager.evaluated_objectives_json
+            n_variables=n_parameters,
+            n_objectives=n_objectives,
+            variable_names=experiment_config.parameter_names,
+            objective_names=result_processor.objective_names,
+            suggested_parameters_json=path_manager.suggested_parameters_json,
+            evaluated_objectives_json=path_manager.evaluated_objectives_json
         )
 
         if isinstance(optimiser_config, str):
-            self.optimiser = load_optimiser_from_settings(
+            return load_optimiser_from_settings(
                 file_name=optimiser_config,
                 objective=objective
             )
 
         elif isinstance(optimiser_config, dict):
-            self.optimiser = bayesian_optimiser(
+            return bayesian_optimiser(
                 objective=objective,
                 **optimiser_config
             )
@@ -204,7 +325,13 @@ class Experiment:
         else:
             raise ValueError("optimiser_config must be a valid dictionary or a path to a valid configuration file")
 
-    def _initialise_batch_manager(self) -> None:
+    @staticmethod
+    def _make_fresh_batch_manager(
+            experiment_config: ExperimentConfig,
+            simulation_runner: SimulationRunner,
+            path_manager: PathManager,
+            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]]
+    ) -> Union[DirectBatchManager, SubmitBatchManager]:
 
         # TODO: Refactor this (consider how to set up this little guy)
         #   - Fixed this so it works but isn't general
@@ -213,15 +340,15 @@ class Experiment:
         #     some of the things it is being bound to here?
         #       - Then it can be initialised on its own but can be linked to internal things here or something
 
-        self.batch_manager = batch_manager(
-            experiment_mode=self.experiment_config.experiment_mode,
-            simulation_runner=self.simulation_runner,
-            run_script_filename=self.experiment_config.run_script_filename,
-            run_script_root_directory=self.path_manager.run_script_root_directory,
-            results_directory=self.path_manager.results_directory,
-            output_filename=self.experiment_config.output_filename,
+        return make_batch_manager(
+            experiment_mode=experiment_config.experiment_mode.name,
+            simulation_runner=simulation_runner,
+            run_script_filename=experiment_config.run_script_filename,
+            run_script_root_directory=path_manager.run_script_root_directory,
+            results_directory=path_manager.results_directory,
+            output_filename=experiment_config.output_filename,
             check_job_status_frequency=60,  # TODO: put in server config,
-            batch_manager_class=self.batch_manager_class
+            batch_manager_class=batch_manager_class
         )
 
     def _initialise_objective_jsons(self) -> None:
@@ -234,12 +361,6 @@ class Experiment:
 
         with open(self.path_manager.evaluated_objectives_json, "w") as f:
             json.dump(initial_objectives_dict, f)
-
-    def _check_initialisation(self) -> None:
-
-        assert isinstance(self.simulation_runner, SimulationRunner), "simulation_runner must be a SimulationRunner"
-        assert isinstance(self.batch_manager, BatchManager), "batch_manager must be a BatchManager"
-        assert isinstance(self.result_processor, ResultProcessor), "result_processor must be a ResultProcessor"
 
     def get_parameters_from_optimiser(self) -> dict[int, dict]:
 
@@ -289,35 +410,12 @@ class Experiment:
         with open(self.path_manager.evaluated_objectives_json, "w") as f:
             json.dump(evaluated_objectives, f)
 
-    def initialise_experimental_set_up(
-            self,
-            optimiser_config: str
-    ) -> None:
-
-        self._initialise_optimiser(
-            optimiser_config=optimiser_config
-        )
-        self._initialise_objective_jsons()
-
-        if self.batch_manager is None:
-            self._initialise_batch_manager()
-
-        self._check_initialisation()
-
-    def _get_optimiser_path(self) -> str:
-        return f"{self.path_manager.experiment_directory}/optimiser_state"
 
     def _save_optimiser(self) -> None:
 
         save_to_json(
             object_to_save=self.optimiser,
-            file_name=self._get_optimiser_path()
-        )
-
-    def _load_optimiser_from_state(self) -> BayesianOptimiser:
-
-        return load_optimiser_from_state(
-            file_name=self._get_optimiser_path()
+            file_path=self.path_manager.optimiser_state_json
         )
 
     def run_experiment_step_direct(self) -> None:
@@ -349,18 +447,24 @@ class Experiment:
             f"Batch manager must be subclassing SubmitBatchManager to call this method"
         )
 
-        if not self.optimiser.current_step == 0:
+        if not self.current_step == 0:
 
             self.batch_manager.wait_for_jobs(
                 experimental_state=self.state
             )
 
-            # TODO: Implement method
-            results = self.state.grab_latest_results()
+            results = self.state.get_results(
+                start_point=self.current_batch_indices['start'],
+                end_point=self.current_batch_indices['end']
+            )
 
-            dict_of_objectives = self.result_processor.process(results=results)
-            # TODO: Implement method
-            dict_of_parameters = get_parameters_from_results(results=results)
+            dict_of_objectives = self.result_processor.process(
+                results=results
+            )
+            dict_of_parameters = self.state.get_parameters(
+                start_point=self.current_batch_indices['start'],
+                end_point=self.current_batch_indices['end']
+            )
 
             self.save_objectives_to_state(dict_of_objectives=dict_of_objectives)
             self.send_objectives_to_optimiser(
@@ -380,26 +484,53 @@ class Experiment:
         self._save_optimiser()
 
     def run_experiment_step(self):
-        if self.experiment_config.experiment_mode == ExperimentMode.LOCAL:
+        if self.experiment_config.experiment_mode == ExperimentMode.local:
             self.run_experiment_step_direct()
 
-        elif self.experiment_config.experiment_mode == ExperimentMode.LOCAL_SLURM:
+        elif self.experiment_config.experiment_mode == ExperimentMode.local_slurm:
             self.run_experiment_step_submitted()
 
-        elif self.experiment_config.experiment_mode == ExperimentMode.REMOTE_SLURM:
+        elif self.experiment_config.experiment_mode == ExperimentMode.remote_slurm:
             self.run_experiment_step_submitted()
 
         else:
-            raise RuntimeError("Unknown experiment mode: '{self.experiment_config.experiment_mode}'")
+            raise RuntimeError(f"Unknown experiment mode: '{self.experiment_config.experiment_mode}'")
 
     def run_experiment(self) -> None:
 
-        n_total_points = self.optimiser.n_initial_points + self.optimiser.n_bayesian_points
-        n_points_left = n_total_points - self.optimiser.n_points_evaluated
-        n_remaining_steps = n_points_left // self.optimiser.n_evaluations_per_step
+        n_total_points = self.n_initial_points + self.n_bayesian_points
+        n_points_left = n_total_points - self.n_points_evaluated
+        n_remaining_steps = n_points_left // self.n_evaluations_per_step
 
         for i in range(n_remaining_steps):
             self.run_experiment_step()
+
+    @property
+    def current_step(self) -> int:
+        return self.optimiser.current_step
+
+    @property
+    def n_evaluations_per_step(self) -> int:
+        return self.optimiser.n_evaluations_per_step
+
+    @property
+    def n_initial_points(self) -> int:
+        return self.optimiser.n_initial_points
+
+    @property
+    def n_bayesian_points(self) -> int:
+        return self.optimiser.n_bayesian_points
+
+    @property
+    def n_points_evaluated(self) -> int:
+        return self.optimiser.n_points_evaluated
+
+    @property
+    def current_batch_indices(self) -> dict[str, int]:
+        return {
+            'start': self.n_points_evaluated,
+            'end': self.n_points_evaluated + self.n_evaluations_per_step - 1
+        }
 
     def restart_experiment(self) -> None:
         raise NotImplementedError("Restarting an experiment is not implemented yet.")

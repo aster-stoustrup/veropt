@@ -1,5 +1,7 @@
 import tempfile
 
+import pytest
+
 from veropt.optimiser.saver_loader_utility import rehydrate_object
 from veropt.optimiser.objective import Objective
 from veropt.interfaces.experiment import ExperimentObjective, Experiment, _mask_nans
@@ -83,21 +85,17 @@ def test_mask_nans() -> None:
         state_json=""
     )
 
-    try:
+    with pytest.raises(AssertionError):
         _mask_nans(
             dict_of_objectives=dict_of_objectives,
             experimental_state=new_experimental_state
         )
-    except AssertionError:
-        assert True
-    else:
-        assert False
 
 
 def test_experiment_step() -> None:
 
     optimiser_config = dict(
-        n_initial_points=1,
+        n_initial_points=3,
         n_bayesian_points=1,
         n_evaluations_per_step=1
     )
@@ -139,7 +137,7 @@ def test_experiment_step() -> None:
             objective_names=objective_names,
             objectives=objectives)
 
-        experiment = Experiment(
+        experiment = Experiment.from_the_beginning(
             simulation_runner=simulation_runner,
             result_processor=result_processor,
             experiment_config=experiment_config,
