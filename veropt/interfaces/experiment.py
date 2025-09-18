@@ -216,6 +216,8 @@ class Experiment:
 
         experiment._initialise_objective_jsons()
 
+        return experiment
+
     @classmethod
     def _continue_existing(
             cls,
