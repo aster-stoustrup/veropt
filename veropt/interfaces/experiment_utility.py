@@ -78,6 +78,9 @@ class ExperimentalState(Config):
 
         return {point_no: result.parameters for point_no, result in results.items()}
 
+    @property
+    def n_points(self) -> int:
+        return len(self.points)
 
 
 class ExperimentConfig(Config):

@@ -118,18 +118,18 @@ class ExperimentObjective(InterfaceObjective):
             saved_state: dict
     ) -> Self:
 
-        bounds_lower = saved_state["state"]["bounds"].tolist()[0]
-        bounds_upper = saved_state["state"]["bounds"].tolist()[1]
+        bounds_lower = saved_state["bounds"][0]
+        bounds_upper = saved_state["bounds"][1]
 
         return cls(
             bounds_lower=bounds_lower,
             bounds_upper=bounds_upper,
-            n_variables=saved_state["state"]["n_variables"],
-            n_objectives=saved_state["state"]["n_objectives"],
-            variable_names=saved_state["state"]["variable_names"],
-            objective_names=saved_state["state"]["objective_names"],
-            suggested_parameters_json=saved_state["state"]["suggested_parameters_json"],
-            evaluated_objectives_json=saved_state["state"]["evaluated_objectives_json"]
+            n_variables=saved_state["n_variables"],
+            n_objectives=saved_state["n_objectives"],
+            variable_names=saved_state["variable_names"],
+            objective_names=saved_state["objective_names"],
+            suggested_parameters_json=saved_state["suggested_parameters_json"],
+            evaluated_objectives_json=saved_state["evaluated_objectives_json"]
         )
 
 
@@ -265,6 +265,7 @@ class Experiment:
             batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
     ):
 
+        experiment_config = ExperimentConfig.load(experiment_config)
         path_manager = PathManager(experiment_config)
 
         state_json_path = path_manager.experimental_state_json
@@ -478,12 +479,13 @@ class Experiment:
 
         dict_of_parameters = self.get_parameters_from_optimiser()
 
-        self.batch_manager.submit_batch(
-            dict_of_parameters=dict_of_parameters,
-            experimental_state=self.state
-        )
-
         self._save_optimiser()
+
+        if not self.current_step == (self.n_total_steps - 1):
+            self.batch_manager.submit_batch(
+                dict_of_parameters=dict_of_parameters,
+                experimental_state=self.state
+            )
 
     def run_experiment_step(self):
         if self.experiment_config.experiment_mode == ExperimentMode.local:
@@ -500,16 +502,19 @@ class Experiment:
 
     def run_experiment(self) -> None:
 
-        n_total_points = self.n_initial_points + self.n_bayesian_points
-        n_points_left = n_total_points - self.n_points_evaluated
-        n_remaining_steps = n_points_left // self.n_evaluations_per_step
+        n_remaining_steps = self.n_total_steps - self.current_step
 
         for i in range(n_remaining_steps):
             self.run_experiment_step()
 
     @property
     def current_step(self) -> int:
-        return self.optimiser.current_step
+        return self.n_points_submitted // self.n_evaluations_per_step
+
+    @property
+    def n_total_steps(self):
+        total_full_steps = (self.n_initial_points + self.n_bayesian_points) // self.n_evaluations_per_step
+        return total_full_steps + 1
 
     @property
     def n_evaluations_per_step(self) -> int:
@@ -522,6 +527,10 @@ class Experiment:
     @property
     def n_bayesian_points(self) -> int:
         return self.optimiser.n_bayesian_points
+
+    @property
+    def n_points_submitted(self) -> int:
+        return self.state.n_points
 
     @property
     def n_points_evaluated(self) -> int:

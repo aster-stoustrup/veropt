@@ -309,6 +309,12 @@ class LocalSlurmBatchManager(SubmitBatchManager):
                 print(f"{job_id} status: FAILED")
                 state = "Simulation failed"  # TODO: Extra check for slurm log file
 
+        elif "slurm_load_jobs error: Invalid job id specified" in error:
+            # TODO: Make this nicer
+            #  - note, Aster: Made this as a quick fix as current solution wasn't working
+            print(f"{job_id} status: COMPLETED")
+            state = "Simulation completed"
+
         elif error and "slurm_load_jobs error: Invalid job id specified" not in error:
             print(f"Error checking job {job_id}: {error}")
             print("Continuing in 60 seconds.")  # TODO: Move to config; what name?
