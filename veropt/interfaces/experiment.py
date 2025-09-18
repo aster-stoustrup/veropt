@@ -413,7 +413,6 @@ class Experiment:
         with open(self.path_manager.evaluated_objectives_json, "w") as f:
             json.dump(evaluated_objectives, f)
 
-
     def _save_optimiser(self) -> None:
 
         save_to_json(

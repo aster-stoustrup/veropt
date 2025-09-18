@@ -16,7 +16,7 @@ class Point(BaseModel):
     state: str
     job_id: Optional[int] = None
     result: Optional[SimulationResult] = None
-    objective_values: Optional[dict[str, float]] = None
+    objective_values: Optional[dict[str, Optional[float]]] = None
 
 
 class ExperimentMode(StrEnum):
