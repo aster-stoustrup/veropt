@@ -236,7 +236,7 @@ def get_best_points(
             max_index = max_index_or_none
 
     elif best_for_objecive_index is not None:
-        max_index_tensor = objective_values[0, :, best_for_objecive_index].argmax()
+        max_index_tensor = objective_values[:, best_for_objecive_index].argmax()
         max_index = int(max_index_tensor)
 
     else:

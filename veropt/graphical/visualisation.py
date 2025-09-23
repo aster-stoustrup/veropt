@@ -810,7 +810,7 @@ def plot_prediction_grid(
             n_variables=n_variables,
             variable_values=joint_points,
             evaluated_point=evaluated_point,
-            alpha_min=0.7,
+            alpha_min=0.4,
             alpha_max=1.0
         )
 
