@@ -34,7 +34,7 @@ def test_experiment_objective() -> None:
     rehydrated_experiment_objective = rehydrate_object(
         superclass=Objective,
         name=saved_state["name"],
-        saved_state=saved_state
+        saved_state=saved_state["state"]
     )
 
     assert isinstance(rehydrated_experiment_objective, ExperimentObjective)
@@ -55,7 +55,7 @@ def test_mask_nans() -> None:
         point = Point(
             parameters={"param1": 0.1},
             state="",
-            objective_values=objective_values
+            objective_values=objective_values  # type: ignore[arg-type]  # mypy silliness
         )
 
         experimental_state.update(point)
@@ -67,7 +67,7 @@ def test_mask_nans() -> None:
         point = Point(
             parameters={"param1": 0.1},
             state="",
-            objective_values=objective_values
+            objective_values=objective_values  # type: ignore[arg-type]  # mypy silliness
         )
 
         experimental_state.update(point)
@@ -87,7 +87,7 @@ def test_mask_nans() -> None:
 
     with pytest.raises(AssertionError):
         _mask_nans(
-            dict_of_objectives=dict_of_objectives,
+            dict_of_objectives=dict_of_objectives,  # type: ignore[assignment]  # mypy silliness
             experimental_state=new_experimental_state
         )
 
@@ -105,7 +105,7 @@ def test_experiment_step() -> None:
         parameter_names=["param1"],
         parameter_bounds={"param1": [0, 1]},
         path_to_experiment="path/to/experiment",
-        experiment_mode="local",
+        experiment_mode="local",  # type: ignore[arg-type]  # pydantic casts the string to ExperimentMode internally
         run_script_filename="test_experiment",
         output_filename="output"
     )

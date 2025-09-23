@@ -22,7 +22,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='veropt',
-    version='1.0.2',
+    version='1.1',
     packages=find_packages(),
     include_package_data=True,
     package_data={

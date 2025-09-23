@@ -48,7 +48,7 @@ def test_local_batch_manager() -> None:
             output_filename=""
         )
 
-        results = my_batch_manager.run_batch(
+        results = my_batch_manager.run_batch(  # type: ignore[union-attr]  # It will be DirectBM because mode is 'local'
             dict_of_parameters=parameters,
             experimental_state=experimental_state
         )

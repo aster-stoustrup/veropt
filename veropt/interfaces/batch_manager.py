@@ -119,7 +119,7 @@ class BatchManager(ABC):
 
 def _get_batch_manager_class(
         experiment_mode: Literal['local', 'local_slurm', 'remote_slurm'],
-):
+) -> type[BatchManager]:
     batch_manager_classes = {
         "local": LocalBatchManager,
         "local_slurm": LocalSlurmBatchManager,
@@ -221,6 +221,7 @@ class SubmitBatchManager(BatchManager, ABC):
             experimental_state: ExperimentalState
     ) -> None:
         ...
+
 
 class LocalSlurmBatchManager(SubmitBatchManager):
 
@@ -421,4 +422,3 @@ class RemoteSlurmBatchManager(SubmitBatchManager):
     ) -> None:
         # TODO: Implement
         raise NotImplementedError("Remote slurm experiments are not supported yet.")
-

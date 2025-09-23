@@ -607,7 +607,9 @@ class DoubleMaternKernelSingleModel(GPyTorchSingleModel):
             lower_bound: float,
             upper_bound: float
     ) -> None:
-        
+
+        assert self.model_with_data is not None, "Model must be initialised to use this method"
+
         # TODO: Ideally use normal system
         #   - Might need to make that system more general
 

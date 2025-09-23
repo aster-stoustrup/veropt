@@ -14,7 +14,7 @@ def test_gpy_torch_single_model_init_mandatory_name() -> None:
         _ = TestModel(n_variables=3)
 
 
-def test_double_matern():
+def test_double_matern() -> None:
 
     var_1_tensor = torch.tensor([0.4, 0.1, 0.7, 0.3])
     var_2_tensor = torch.tensor([0.1, 0.5, 0.2, 0.6])
@@ -48,7 +48,6 @@ def test_double_matern():
         train_inputs=var_tensor,
         train_targets=obj_tensor
     )
-
 
     # TODO: Finish test or maybe delete if not currently/urgently necessary
     pass

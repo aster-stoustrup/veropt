@@ -3,7 +3,7 @@ from typing import Optional, Union, Self
 import json
 
 from veropt.interfaces.simulation import SimulationRunner
-from veropt.interfaces.batch_manager import BatchManager, make_batch_manager, DirectBatchManager, \
+from veropt.interfaces.batch_manager import make_batch_manager, DirectBatchManager, \
     SubmitBatchManager
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
 from veropt.interfaces.experiment_utility import (
@@ -32,25 +32,29 @@ def _mask_nans(
 
     assert experimental_state.points, "To clear nans, there must be at least one point saved to state."
 
-    for name in first_new_point.keys():
-        values = []
+    for objective_name in first_new_point.keys():
+        objective_values = []
 
         for i in range(experimental_state.next_point):
             if experimental_state.points[i].objective_values is not None:  # I check if it is None right here
-                values.append(experimental_state.points[i].objective_values[name])  # type: ignore
+                objective_values.append(experimental_state.points[i].objective_values[objective_name])  # type: ignore
             else:
                 continue
 
-        assert values, f'No objective values found for objective "{name}".'
+        assert objective_values, f'No objective values found for objective "{objective_name}".'
 
-        current_minima[name] = np.nanmin(values)
-        current_stds[name] = np.nanstd(values).astype(float)
+        current_minima[objective_name] = np.nanmin(objective_values)  # type: ignore[arg-type]  # Type checked above
+        current_stds[objective_name] = np.nanstd(objective_values).astype(float)  # type: ignore[arg-type]
 
-        assert not np.isnan(current_minima[name]), f'All objective values are nans for objective "{name}".'
+        assert not np.isnan(current_minima[objective_name]), (
+            f'All objective values are nans for objective "{objective_name}".'
+        )
 
     for i, objectives in dict_of_objectives.items():
-        dict_of_objectives[i] = {name: value if not np.isnan(value) else current_minima[name] - 2 * current_stds[name]
-                                 for name, value in objectives.items()}
+        dict_of_objectives[i] = {
+            name: value if not np.isnan(value) else current_minima[name] - 2 * current_stds[name]
+            for name, value in objectives.items()
+        }
 
     return dict_of_objectives
 
@@ -254,7 +258,6 @@ class Experiment:
             state=state
         )
 
-
     @classmethod
     def continue_if_possible(
             cls,
@@ -263,7 +266,7 @@ class Experiment:
             experiment_config: Union[str, ExperimentConfig],
             optimiser_config: Union[str, dict],
             batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
-    ):
+    ) -> Self:
 
         experiment_config = ExperimentConfig.load(experiment_config)
         path_manager = PathManager(experiment_config)
@@ -294,7 +297,7 @@ class Experiment:
             experiment_config: ExperimentConfig,
             result_processor: ResultProcessor,
             path_manager: PathManager,
-            optimiser_config: str
+            optimiser_config: Union[str, dict]
     ) -> BayesianOptimiser:
 
         bounds_lower = [experiment_config.parameter_bounds[name][0]
@@ -344,7 +347,7 @@ class Experiment:
         #       - Then it can be initialised on its own but can be linked to internal things here or something
 
         return make_batch_manager(
-            experiment_mode=experiment_config.experiment_mode.name,
+            experiment_mode=experiment_config.experiment_mode.name,  # type: ignore[arg-type]  # Silly mypy
             simulation_runner=simulation_runner,
             run_script_filename=experiment_config.run_script_filename,
             run_script_root_directory=path_manager.run_script_root_directory,
@@ -392,7 +395,7 @@ class Experiment:
     ) -> None:
 
         for i, objective_values in dict_of_objectives.items():
-            self.state.points[i].objective_values = objective_values
+            self.state.points[i].objective_values = objective_values  # type: ignore[assignment]  # mypy silliness
 
         self.state.save_to_json(self.state.state_json)
 
@@ -423,13 +426,13 @@ class Experiment:
     def run_experiment_step_direct(self) -> None:
 
         assert issubclass(type(self.batch_manager), DirectBatchManager), (
-            f"Batch manager must be subclassing DirectBatchManager to call this method."
+            "Batch manager must be subclassing DirectBatchManager to call this method."
         )
         self.optimiser.run_optimisation_step()
 
         dict_of_parameters = self.get_parameters_from_optimiser()
 
-        results = self.batch_manager.run_batch(
+        results = self.batch_manager.run_batch(  # type: ignore[union-attr]  # Checked above
             dict_of_parameters=dict_of_parameters,
             experimental_state=self.state
         )
@@ -442,16 +445,16 @@ class Experiment:
             dict_of_objectives=dict_of_objectives
         )
 
-    def run_experiment_step_submitted(self):
+    def run_experiment_step_submitted(self) -> None:
 
         # Note for the future: Could consider doing two Optimiser and two Experiment classes instead of these checks
         assert issubclass(type(self.batch_manager), SubmitBatchManager), (
-            f"Batch manager must be subclassing SubmitBatchManager to call this method"
+            "Batch manager must be subclassing SubmitBatchManager to call this method"
         )
 
         if not self.current_step == 0:
 
-            self.batch_manager.wait_for_jobs(
+            self.batch_manager.wait_for_jobs(  # type: ignore[union-attr]  # Checked above
                 experimental_state=self.state
             )
 
@@ -481,12 +484,12 @@ class Experiment:
         self._save_optimiser()
 
         if not self.current_step == (self.n_total_steps - 1):
-            self.batch_manager.submit_batch(
+            self.batch_manager.submit_batch(  # type: ignore[union-attr]  # Checked above
                 dict_of_parameters=dict_of_parameters,
                 experimental_state=self.state
             )
 
-    def run_experiment_step(self):
+    def run_experiment_step(self) -> None:
         if self.experiment_config.experiment_mode == ExperimentMode.local:
             self.run_experiment_step_direct()
 
@@ -511,7 +514,7 @@ class Experiment:
         return self.n_points_submitted // self.n_evaluations_per_step
 
     @property
-    def n_total_steps(self):
+    def n_total_steps(self) -> int:
         total_full_steps = (self.n_initial_points + self.n_bayesian_points) // self.n_evaluations_per_step
         return total_full_steps + 1
 

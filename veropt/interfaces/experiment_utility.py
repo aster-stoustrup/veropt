@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Optional, Self, Literal, Any
+from typing import Optional, Self
 import os
 
 from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
@@ -62,8 +62,13 @@ class ExperimentalState(Config):
             end_point: int
     ) -> SimulationResultsDict:
 
-        points_batch = {point_no: self.points[point_no] for point_no in range(start_point, end_point+1)}
-        return {point_no: point.result for point_no, point in points_batch.items()}
+        points_batch = {point_no: self.points[point_no] for point_no in range(start_point, end_point + 1)}
+        results_batch = {point_no: point.result for point_no, point in points_batch.items()}
+
+        for point_no, result in results_batch.items():
+            assert result is not None, f"No result found for point {point_no}"
+
+        return results_batch  # type: ignore[return-value] #  Type asserted just above
 
     def get_parameters(
             self,
