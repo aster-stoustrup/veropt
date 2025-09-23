@@ -91,7 +91,7 @@ experiment_config = "veropt/interfaces/configs/veros_experiment_config.json"
 
 result_processor = TestVerosResultProcessor(objective_names=["amoc"])
 
-experiment = Experiment(
+experiment = Experiment.from_the_beginning(
     simulation_runner=simulation_runner,
     result_processor=result_processor,
     experiment_config=experiment_config,
