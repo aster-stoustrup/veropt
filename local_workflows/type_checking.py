@@ -7,7 +7,7 @@ def run_mypy():
 
     go_up_to_find_veropt_folder()
 
-    os.system('mypy veropt tests')
+    os.system('mypy veropt tests examples')
 
 
 if __name__ == '__main__':
