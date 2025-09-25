@@ -175,6 +175,9 @@ class ModelPredictionContainer:
         else:
             raise RuntimeError("Unexpected error.")
 
+    def __len__(self) -> int:
+        return len(self.data)
+
     def __call__(
             self,
             variable_index: int,
@@ -194,6 +197,9 @@ class ModelPredictionContainer:
             self,
             point: torch.Tensor
     ) -> bool:
+
+        if len(self) == 0:
+            return False
 
         # Just checking if it has it for var_ind = 0, might be sensible to make it a bit more general/stable
         data_index = self.locate_data(

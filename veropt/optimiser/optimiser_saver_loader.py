@@ -11,15 +11,18 @@ from veropt.optimiser.utility import get_arguments_of_function
 
 def save_to_json(
         object_to_save: SavableClass,
-        file_name: str,
+        file_path: str,
 ) -> None:
     # TODO: prolly add some path stuff o:)
 
     save_dict = object_to_save.gather_dicts_to_save()
 
-    # TODO: Check if file_name has .json ending or not, add if not
+    if '.json' in file_path:
+        file_path_with_json = file_path
+    else:
+        file_path_with_json = file_path + '.json'
 
-    with open(f'{file_name}.json', 'w') as json_file:
+    with open(file_path_with_json, 'w') as json_file:
         json.dump(save_dict, json_file, cls=TensorsAsListsEncoder)
 
 

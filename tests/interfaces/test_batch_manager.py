@@ -3,7 +3,7 @@ import os
 
 from veropt.interfaces.local_simulation import MockSimulationRunner, MockSimulationConfig
 from veropt.interfaces.slurm_simulation import SlurmVerosConfig, SlurmVerosRunner
-from veropt.interfaces.batch_manager import batch_manager, ExperimentMode, LocalSlurmBatchManager
+from veropt.interfaces.batch_manager import make_batch_manager, LocalSlurmBatchManager
 from veropt.interfaces.experiment_utility import ExperimentalState
 
 
@@ -39,8 +39,8 @@ def test_local_batch_manager() -> None:
         simulation_config = MockSimulationConfig()
         runner = MockSimulationRunner(config=simulation_config)
 
-        my_batch_manager = batch_manager(
-            experiment_mode=ExperimentMode.LOCAL,
+        my_batch_manager = make_batch_manager(
+            experiment_mode='local',
             simulation_runner=runner,
             run_script_filename=run_script_filename,
             run_script_root_directory=run_script_root_directory,
@@ -48,7 +48,7 @@ def test_local_batch_manager() -> None:
             output_filename=""
         )
 
-        results = my_batch_manager.run_batch(
+        results = my_batch_manager.run_batch(  # type: ignore[union-attr]  # It will be DirectBM because mode is 'local'
             dict_of_parameters=parameters,
             experimental_state=experimental_state
         )
@@ -91,7 +91,7 @@ def test_local_slurm_batch_manager() -> None:
             state_json="path/to/experiment/results/test_state.json"
         )
 
-        batch_manager.run_batch(
+        batch_manager.submit_batch(
             dict_of_parameters=dict_of_parameters,
             experimental_state=experimental_state
         )

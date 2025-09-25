@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Union
 import os
 
 from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
@@ -7,7 +7,7 @@ from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
 import xarray as xr
 
 
-ObjectivesDict = dict[int, dict[str, float]]
+ObjectivesDict = dict[int, Union[dict[str, float], dict[str, float]]]
 
 
 class ResultProcessor(ABC):
@@ -32,6 +32,12 @@ class ResultProcessor(ABC):
             result: SimulationResult
     ) -> Any:
         """Method to open the output file to check if it exists and can be opened."""
+
+        # TODO: This method isn't compliant with Liskov as the input/output is not consistent (returns Any)
+        #   - Delete this
+        #   - If we think it's important to check that specific files have been created by sims, let's make an
+        #   - abstract to do that specifically (happens now in return_nan)
+
         """Can be used in calculate_objectives() to read data from output files."""
         ...
 
@@ -48,9 +54,10 @@ class ResultProcessor(ABC):
                 objectives_dict[i] = {name: float('nan') for name in self.objective_names}
             else:
                 objectives = self.calculate_objectives(result=result)
-                assert [isinstance(objectives[name], float) for name in self.objective_names], \
+                assert [isinstance(objectives[name], float) for name in self.objective_names], (
                     "Objective values must be floats."
-                objectives_dict[i] = objectives
+                )
+                objectives_dict[i] = objectives  # type: ignore[assignment]  # mypy silliness
 
         return objectives_dict
 

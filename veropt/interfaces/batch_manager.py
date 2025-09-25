@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
-from enum import StrEnum
 import os
 import tqdm
 import subprocess
 import time
-from typing import Optional
+from typing import Optional, Literal, Union
 
 from veropt.interfaces.simulation import SimulationResult, SimulationRunner, SimulationResultsDict
-from veropt.interfaces.experiment_utility import ExperimentalState, Point, PathManager
+from veropt.interfaces.experiment_utility import (
+    ExperimentMode, ExperimentalState, Point, PathManager
+)
 from veropt.interfaces.utility import create_directory, copy_files
 
 
@@ -73,12 +74,6 @@ def _check_if_job_completed(
     return completed
 
 
-class ExperimentMode(StrEnum):
-    LOCAL = "local"
-    LOCAL_SLURM = "local_slurm"
-    REMOTE_SLURM = "remote_slurm"
-
-
 class BatchManager(ABC):
     def __init__(
             self,
@@ -101,14 +96,6 @@ class BatchManager(ABC):
         self.remote = remote
         self.hostname = hostname
 
-    @abstractmethod
-    def run_batch(
-            self,
-            dict_of_parameters: dict[int, dict],
-            experimental_state: ExperimentalState
-    ) -> SimulationResultsDict:
-        ...
-
     def _set_up_directory(
             self,
             i: int
@@ -129,6 +116,117 @@ class BatchManager(ABC):
 
         return simulation_id, result_i_directory
 
+
+def _get_batch_manager_class(
+        experiment_mode: Literal['local', 'local_slurm', 'remote_slurm'],
+) -> type[BatchManager]:
+    batch_manager_classes = {
+        "local": LocalBatchManager,
+        "local_slurm": LocalSlurmBatchManager,
+        "remote_slurm": RemoteSlurmBatchManager
+    }
+
+    return batch_manager_classes[experiment_mode]
+
+
+def make_batch_manager(
+        experiment_mode: Literal['local', 'local_slurm', 'remote_slurm'],
+        simulation_runner: SimulationRunner,
+        run_script_filename: str,
+        run_script_root_directory: str,
+        results_directory: str,
+        output_filename: str,
+        check_job_status_frequency: int = 60,
+        batch_manager_class: Optional[type[BatchManager]] = None
+) -> Union['DirectBatchManager', 'SubmitBatchManager']:
+
+    assert experiment_mode in ExperimentMode, \
+        f"Unsupported experiment mode: {experiment_mode};" \
+        f"expected one of: {[mode.value for mode in ExperimentMode]}."
+
+    remote = True if experiment_mode == "remote_slurm" else False
+
+    batch_manager_class = batch_manager_class or _get_batch_manager_class(experiment_mode)
+
+    return batch_manager_class(  # type: ignore # abstract BatchManager is never initialised here
+        simulation_runner=simulation_runner,
+        run_script_filename=run_script_filename,
+        run_script_root_directory=run_script_root_directory,
+        results_directory=results_directory,
+        output_filename=output_filename,
+        check_job_status_frequency=check_job_status_frequency,
+        remote=remote
+    )
+
+
+class DirectBatchManager(BatchManager, ABC):
+    @abstractmethod
+    def run_batch(
+            self,
+            dict_of_parameters: dict[int, dict],
+            experimental_state: ExperimentalState
+    ) -> SimulationResultsDict:
+        ...
+
+
+class LocalBatchManager(DirectBatchManager):
+    def run_batch(
+            self,
+            dict_of_parameters: dict[int, dict],
+            experimental_state: ExperimentalState
+    ) -> SimulationResultsDict:
+
+        results = {}
+
+        for i, parameters in dict_of_parameters.items():
+            simulation_id, result_i_directory = self._set_up_directory(i=i)
+
+            _check_if_point_exists(
+                i=i,
+                parameters=parameters,
+                experimental_state=experimental_state
+            )
+
+            experimental_state.points[i].state = "Simulation started"
+            result = self.simulation_runner.save_set_up_and_run(
+                simulation_id=simulation_id,
+                parameters=parameters,
+                run_script_directory=result_i_directory,
+                run_script_filename=self.run_script_filename,
+                output_filename=self.output_filename
+            )
+            experimental_state.points[i].state = "Simulation completed"
+            experimental_state.points[i].result = result
+
+            results[i] = result
+
+            experimental_state.save_to_json(experimental_state.state_json)
+
+        return results
+
+
+class SubmitBatchManager(BatchManager, ABC):
+
+    @abstractmethod
+    def submit_batch(
+            self,
+            dict_of_parameters: dict[int, dict],
+            experimental_state: ExperimentalState
+    ) -> None:
+        ...
+
+    @abstractmethod
+    def wait_for_jobs(
+            self,
+            experimental_state: ExperimentalState
+    ) -> None:
+        ...
+
+
+class LocalSlurmBatchManager(SubmitBatchManager):
+
+    # TODO: These slurm specific class methods should be moved to a new SlurmBatchManager superclass if
+    #  RemoteSlurmBatchManager needs them
     def _submit_job(
             self,
             parameters: dict[str, float],
@@ -144,18 +242,34 @@ class BatchManager(ABC):
             output_filename=self.output_filename
         )
 
-        with open(result.stdout_file, "r") as f:
-            output = f.read()
+        job_id = self._get_job_id(
+            result=result
+        )
+
+        if job_id is None:
+            print(f"Submission of simulation {result.simulation_id} failed.")
+            print("Maximum retries limit reached. Proceeding without resubmission.")
+
+        return job_id, result
+
+    def _get_job_id(
+            self,
+            result: SimulationResult
+    ) -> Optional[int]:
+
+        # TODO: Probably need to detect if the stdout is of the expected format?
+        #   - And otherwise raise exception so the user will know they need to overwrite this
+        #   - Could also leave this as an abstract, but maybe it's a good assumption that this will work for many cases?
+
+        with open(result.stdout_file, "r") as stdout_file:
+            output = stdout_file.read()
 
         if os.path.getsize(result.stderr_file) == 0 and output.strip().isdigit():
             job_id = int(output.strip())
-
         else:
-            print(f"Submission of simulation {result.simulation_id} failed.")
-            print("Maximum retries limit reached. Proceeding without resubmission.")
             job_id = None
 
-        return job_id, result
+        return job_id
 
     def _check_job_status(
             self,
@@ -195,6 +309,12 @@ class BatchManager(ABC):
             elif job_status_dict["JobState"] == "FAILED":
                 print(f"{job_id} status: FAILED")
                 state = "Simulation failed"  # TODO: Extra check for slurm log file
+
+        elif "slurm_load_jobs error: Invalid job id specified" in error:
+            # TODO: Make this nicer
+            #  - note, Aster: Made this as a quick fix as current solution wasn't working
+            print(f"{job_id} status: COMPLETED")
+            state = "Simulation completed"
 
         elif error and "slurm_load_jobs error: Invalid job id specified" not in error:
             print(f"Error checking job {job_id}: {error}")
@@ -247,84 +367,11 @@ class BatchManager(ABC):
                 for i in tqdm.tqdm(range(self.check_job_status_frequency), "Time until next server poll"):
                     time.sleep(1)
 
-
-def batch_manager(
-        experiment_mode: str,
-        simulation_runner: SimulationRunner,
-        run_script_filename: str,
-        run_script_root_directory: str,
-        results_directory: str,
-        output_filename: str,
-        check_job_status_frequency: int = 60
-) -> BatchManager:
-
-    batch_manager_classes = {
-        "local": LocalBatchManager,
-        "local_slurm": LocalSlurmBatchManager,
-        "remote_slurm": RemoteSlurmBatchManager
-    }
-
-    assert experiment_mode in ExperimentMode, \
-        f"Unsupported experiment mode: {experiment_mode};" \
-        f"expected one of: {[mode.value for mode in ExperimentMode]}."
-
-    remote = True if experiment_mode == "remote_slurm" else False
-
-    BatchManagerClass = batch_manager_classes[experiment_mode]
-
-    return BatchManagerClass(  # type: ignore # abstract BatchManager is never initialised here
-        simulation_runner=simulation_runner,
-        run_script_filename=run_script_filename,
-        run_script_root_directory=run_script_root_directory,
-        results_directory=results_directory,
-        output_filename=output_filename,
-        check_job_status_frequency=check_job_status_frequency,
-        remote=remote
-    )
-
-
-class LocalBatchManager(BatchManager):
-    def run_batch(
+    def submit_batch(
             self,
             dict_of_parameters: dict[int, dict],
             experimental_state: ExperimentalState
-    ) -> SimulationResultsDict:
-
-        results = {}
-
-        for i, parameters in dict_of_parameters.items():
-            simulation_id, result_i_directory = self._set_up_directory(i=i)
-
-            _check_if_point_exists(
-                i=i,
-                parameters=parameters,
-                experimental_state=experimental_state
-            )
-
-            experimental_state.points[i].state = "Simulation started"
-            result = self.simulation_runner.save_set_up_and_run(
-                simulation_id=simulation_id,
-                parameters=parameters,
-                run_script_directory=result_i_directory,
-                run_script_filename=self.run_script_filename,
-                output_filename=self.output_filename
-            )
-            experimental_state.points[i].state = "Simulation completed"
-            experimental_state.points[i].result = result
-
-            results[i] = result
-
-            experimental_state.save_to_json(experimental_state.state_json)
-
-        return results
-
-
-class LocalSlurmBatchManager(BatchManager):
-    def run_batch(
-            self,
-            dict_of_parameters: dict[int, dict],
-            experimental_state: ExperimentalState
-    ) -> SimulationResultsDict:
+    ) -> None:
 
         results = {}
 
@@ -350,17 +397,28 @@ class LocalSlurmBatchManager(BatchManager):
             experimental_state.points[i].result = result
 
         experimental_state.save_to_json(experimental_state.state_json)
+
+    def wait_for_jobs(
+            self,
+            experimental_state: ExperimentalState
+    ) -> None:
+
         self._check_pending_jobs(experimental_state=experimental_state)
         experimental_state.save_to_json(experimental_state.state_json)
 
-        return results
 
-
-class RemoteSlurmBatchManager(BatchManager):
-    def run_batch(
+class RemoteSlurmBatchManager(SubmitBatchManager):
+    def submit_batch(
             self,
             dict_of_parameters: dict[int, dict],
             experimental_state: ExperimentalState
-    ) -> SimulationResultsDict:
+    ) -> None:
+        # TODO: Implement
+        raise NotImplementedError("Remote slurm experiments are not supported yet.")
+
+    def wait_for_jobs(
+            self,
+            experimental_state: ExperimentalState
+    ) -> None:
         # TODO: Implement
         raise NotImplementedError("Remote slurm experiments are not supported yet.")

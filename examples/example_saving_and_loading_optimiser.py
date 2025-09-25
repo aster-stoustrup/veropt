@@ -17,7 +17,7 @@ optimiser.run_optimisation_step()
 
 save_to_json(
     optimiser,
-    file_name='test'
+    file_path='test'
 )
 
 reloaded_optimiser = load_optimiser_from_state(

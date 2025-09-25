@@ -209,7 +209,7 @@ def plot_progression(
     n_objectives = objective_values.shape[DataShape.index_dimensions]
 
     colour_scale = colors.qualitative.Dark2
-    if n_objectives > 2:
+    if n_objectives > 1:
         colour_list = colors.sample_colorscale(
             colorscale=colour_scale,
             samplepoints=n_objectives
@@ -810,7 +810,7 @@ def plot_prediction_grid(
             n_variables=n_variables,
             variable_values=joint_points,
             evaluated_point=evaluated_point,
-            alpha_min=0.7,
+            alpha_min=0.4,
             alpha_max=1.0
         )
 
