@@ -264,7 +264,9 @@ class BayesianOptimiser(SavableClass):
         )
 
         if optimiser.model_has_been_trained:
-            optimiser._update_predictor()
+            optimiser._update_predictor(
+                train=False
+            )
 
         return optimiser
 
@@ -592,14 +594,18 @@ class BayesianOptimiser(SavableClass):
         self.suggested_points_history.append(self.suggested_points.copy())
         self.suggested_points = None
 
-    def _update_predictor(self) -> None:
+    def _update_predictor(
+            self,
+            train: bool = True
+    ) -> None:
 
         if self.settings.normalise:
             assert self.normalisers_have_been_initialised
 
         self.predictor.update_with_new_data(
             variable_values=self.evaluated_variable_values.tensor,
-            objective_values=self.evaluated_objective_values.tensor
+            objective_values=self.evaluated_objective_values.tensor,
+            train=train
         )
 
         self.suggested_points = None

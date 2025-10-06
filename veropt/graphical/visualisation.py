@@ -510,7 +510,7 @@ def _calculate_proximity_punished_acquisition_values(
         optimiser: BayesianOptimiser,
         evaluated_point: torch.Tensor,
         variable_index: int,
-        variable_array: np.ndarray,
+        variable_array: torch.Tensor,
         acquisition_function: AcquisitionFunction,
         suggested_points_variables: torch.Tensor
 ) -> list[torch.Tensor]:
@@ -538,7 +538,7 @@ def _calculate_proximity_punished_acquisition_values(
     modified_acquisition_values: list[torch.Tensor] = []
 
     full_variable_array = evaluated_point.repeat(len(variable_array), 1)
-    full_variable_array[:, variable_index] = torch.tensor(variable_array)
+    full_variable_array[:, variable_index] = variable_array
 
     suggested_points_variables_list = [suggested_points_variables[i, :] for i in range(n_suggested_points)]
 
@@ -588,14 +588,14 @@ def fill_model_prediction_from_optimiser(
     else:
         title = ''
 
-    variable_array = np.linspace(
+    variable_array = torch.linspace(
         start=optimiser.bounds[0, variable_index].tensor,
-        stop=optimiser.bounds[1, variable_index].tensor,
-        num=n
+        end=optimiser.bounds[1, variable_index].tensor,
+        steps=n
     )
 
     all_variables_array = evaluated_point.repeat(len(variable_array), 1)
-    all_variables_array[:, variable_index] = torch.tensor(variable_array)  # TODO: Figure out variable_array type issue
+    all_variables_array[:, variable_index] = variable_array
 
     return ModelPrediction(
         variable_index=variable_index,
@@ -806,8 +806,7 @@ def plot_prediction_grid(
             joint_points = variable_values
 
         joint_opacity_list, joint_distance_list = opacity_for_multidimensional_points(
-            variable_index=variable_index,
-            n_variables=n_variables,
+            variable_indices=[variable_index],
             variable_values=joint_points,
             evaluated_point=evaluated_point,
             alpha_min=0.4,
