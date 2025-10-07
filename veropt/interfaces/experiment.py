@@ -290,6 +290,29 @@ class Experiment:
                 batch_manager_class=batch_manager_class
             )
 
+    @classmethod
+    def continue_with_new_objectives(
+            cls,
+            simulation_runner: SimulationRunner,
+            result_processor: ResultProcessor,
+            experiment_config: Union[str, ExperimentConfig],
+            optimiser_config: Union[str, dict],
+            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
+    ) -> Self:
+
+        experiment = cls.continue_if_possible(
+            simulation_runner=simulation_runner,
+            result_processor=result_processor,
+            experiment_config=experiment_config,
+            optimiser_config=optimiser_config,
+            batch_manager_class=batch_manager_class
+        )
+
+        # TODO: Clear out all objective values
+        #   - And probably (p)re-run all the old points here?
+
+        raise NotImplementedError()
+
     @staticmethod
     def _make_fresh_optimiser(
             n_parameters: int,
@@ -488,6 +511,38 @@ class Experiment:
                 dict_of_parameters=dict_of_parameters,
                 experimental_state=self.state
             )
+
+    def run_experiment_step_existing_data(self):
+
+        results = self.state.get_results(
+            start_point=self.current_batch_indices['start'],
+            end_point=self.current_batch_indices['end']
+        )
+
+        dict_of_objectives = self.result_processor.process(
+            results=results
+        )
+        dict_of_parameters = self.state.get_parameters(
+            start_point=self.current_batch_indices['start'],
+            end_point=self.current_batch_indices['end']
+        )
+
+        # TODO: Make sure new exp state does not overwrite old one (new name, probably)
+        #   - Maybe refactor exp saving a little? Should probably be clear when this happens
+        self.save_objectives_to_state(dict_of_objectives=dict_of_objectives)
+
+        self.send_objectives_to_optimiser(
+            dict_of_parameters=dict_of_parameters,
+            dict_of_objectives=dict_of_objectives
+        )
+
+        # TODO: Set up optimiser so it doesn't train model until all points are in
+        #   - Potentially a new method to just add data to optimiser?
+        #   - Alternatively, create optimiser once all points are collected
+        self.optimiser.run_optimisation_step()
+
+        # Note: Could wait with this until we get all data
+        self._save_optimiser()
 
     def run_experiment_step(self) -> None:
         if self.experiment_config.experiment_mode == ExperimentMode.local:
