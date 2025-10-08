@@ -147,7 +147,7 @@ class Experiment:
             path_manager: PathManager,
             batch_manager: Union[DirectBatchManager, SubmitBatchManager],
             state: ExperimentalState
-    ):
+    ) -> None:
         self.experiment_config = experiment_config
         self.path_manager = path_manager
 
@@ -300,6 +300,17 @@ class Experiment:
             batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
     ) -> Self:
 
+        # TODO: Change name
+        #   - But allow us to stay in same directoy
+        #   - So maybe add an addendum to the name?
+        #       - Maybe we do versions...?
+
+        # TODO: Add option to change parameters as well
+        #   - assuming a new parameter has just been the default value up until this point,
+        #   can just add it with the same value at each point
+        #   - so would need to check if parameters are already there or not
+        #       * and be provided a default value
+
         experiment = cls.continue_if_possible(
             simulation_runner=simulation_runner,
             result_processor=result_processor,
@@ -308,10 +319,22 @@ class Experiment:
             batch_manager_class=batch_manager_class
         )
 
-        # TODO: Clear out all objective values
-        #   - And probably (p)re-run all the old points here?
+        n_steps_evaluated = experiment.n_points_evaluated // experiment.n_evaluations_per_step
 
-        raise NotImplementedError()
+        experiment._reset_objective_values()
+        experiment.optimiser = experiment._make_fresh_optimiser(
+            n_parameters=experiment.n_parameters,
+            n_objectives=experiment.n_objectives,
+            experiment_config=experiment.experiment_config,
+            result_processor=experiment.result_processor,
+            path_manager=experiment.path_manager,
+            optimiser_config=optimiser_config,
+        )
+
+        for step_no in range(n_steps_evaluated):
+            experiment.run_experiment_step_existing_data()
+
+        return experiment
 
     @staticmethod
     def _make_fresh_optimiser(
@@ -391,6 +414,13 @@ class Experiment:
         with open(self.path_manager.evaluated_objectives_json, "w") as f:
             json.dump(initial_objectives_dict, f)
 
+    def _reset_objective_values(
+            self
+    ) -> None:
+
+        for point in self.state.points:
+            point.objective_values = None
+
     def get_parameters_from_optimiser(self) -> dict[int, dict]:
 
         with open(self.path_manager.suggested_parameters_json, 'r') as f:
@@ -428,13 +458,16 @@ class Experiment:
             dict_of_objectives: ObjectivesDict
     ) -> None:
 
+        # TODO: Remove when veropt core supports nan imputs
         dict_of_objectives = _mask_nans(
             dict_of_objectives=dict_of_objectives,
             experimental_state=self.state
-        )  # TODO: Remove when veropt core supports nan imputs
+        )
 
-        evaluated_objectives = {name: [dict_of_objectives[i][name] for i in dict_of_parameters.keys()]
-                                for name in self.result_processor.objective_names}
+        evaluated_objectives = {
+            name: [dict_of_objectives[i][name] for i in dict_of_parameters.keys()]
+            for name in self.result_processor.objective_names
+        }
 
         with open(self.path_manager.evaluated_objectives_json, "w") as f:
             json.dump(evaluated_objectives, f)
@@ -460,9 +493,13 @@ class Experiment:
             experimental_state=self.state
         )
 
-        dict_of_objectives = self.result_processor.process(results=results)
+        dict_of_objectives = self.result_processor.process(
+            results=results
+        )
 
-        self.save_objectives_to_state(dict_of_objectives=dict_of_objectives)
+        self.save_objectives_to_state(
+            dict_of_objectives=dict_of_objectives
+        )
         self.send_objectives_to_optimiser(
             dict_of_parameters=dict_of_parameters,
             dict_of_objectives=dict_of_objectives
@@ -494,7 +531,9 @@ class Experiment:
                 end_point=self.current_batch_indices['end']
             )
 
-            self.save_objectives_to_state(dict_of_objectives=dict_of_objectives)
+            self.save_objectives_to_state(
+                dict_of_objectives=dict_of_objectives
+            )
             self.send_objectives_to_optimiser(
                 dict_of_parameters=dict_of_parameters,
                 dict_of_objectives=dict_of_objectives
@@ -529,8 +568,11 @@ class Experiment:
 
         # TODO: Make sure new exp state does not overwrite old one (new name, probably)
         #   - Maybe refactor exp saving a little? Should probably be clear when this happens
-        self.save_objectives_to_state(dict_of_objectives=dict_of_objectives)
+        self.save_objectives_to_state(
+            dict_of_objectives=dict_of_objectives
+        )
 
+        # TODO: Avoid overwriting old objective values
         self.send_objectives_to_optimiser(
             dict_of_parameters=dict_of_parameters,
             dict_of_objectives=dict_of_objectives

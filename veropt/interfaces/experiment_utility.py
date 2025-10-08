@@ -160,7 +160,7 @@ class PathManager:
 
     def make_experimental_state_json(self) -> str:
         return os.path.join(
-            self.results_directory,
+            self.experiment_directory,
             f"{self.experiment_config.experiment_name}_experimental_state.json"
         )
 
