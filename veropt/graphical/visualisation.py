@@ -243,6 +243,10 @@ def plot_progression(
         ))
 
     figure.update_layout(
+        hovermode="x"
+    )
+
+    figure.update_layout(
         xaxis={
             'title': {
                 'text': "Evaluated points",
@@ -250,8 +254,7 @@ def plot_progression(
         yaxis={
             'title': {
                 'text': "Objective values",
-            }},
-
+            }}
     )
 
     return figure
