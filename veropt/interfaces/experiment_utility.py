@@ -114,8 +114,6 @@ class PathManager:
         assert os.path.isdir(self.run_script_root_directory), "Run script root directory not found."
         create_directory(self.results_directory)
 
-        self.optimiser_state_json = f"{self.experiment_directory}/optimiser_state.json"
-
     @property
     def experiment_directory(self) -> str:
         if self.experiment_config.experiment_directory_name is not None:

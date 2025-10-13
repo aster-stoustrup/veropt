@@ -98,23 +98,25 @@ class BatchManager(ABC):
 
     def _set_up_directory(
             self,
-            i: int
+            point_no: int
     ) -> tuple[str, str]:
 
-        simulation_id = PathManager.make_simulation_id(i=i)
-        result_i_directory = os.path.join(
+        simulation_id = PathManager.make_simulation_id(
+            point_no=point_no
+        )
+        result_directory = os.path.join(
             self.results_directory,
             simulation_id
         )
 
-        create_directory(path=result_i_directory)
+        create_directory(path=result_directory)
 
         copy_files(
             source_directory=self.run_script_root_directory,
-            destination_directory=result_i_directory
+            destination_directory=result_directory
         )
 
-        return simulation_id, result_i_directory
+        return simulation_id, result_directory
 
 
 def _get_batch_manager_class(
@@ -179,7 +181,7 @@ class LocalBatchManager(DirectBatchManager):
         results = {}
 
         for i, parameters in dict_of_parameters.items():
-            simulation_id, result_i_directory = self._set_up_directory(i=i)
+            simulation_id, result_i_directory = self._set_up_directory(point_no=i)
 
             _check_if_point_exists(
                 i=i,
@@ -376,7 +378,7 @@ class LocalSlurmBatchManager(SubmitBatchManager):
         results = {}
 
         for i, parameters in dict_of_parameters.items():
-            simulation_id, result_i_directory = self._set_up_directory(i=i)
+            simulation_id, result_i_directory = self._set_up_directory(point_no=i)
             job_id, result = self._submit_job(
                 parameters=parameters,
                 simulation_id=simulation_id,
