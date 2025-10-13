@@ -84,7 +84,8 @@ class BatchManager(ABC):
             output_filename: str,
             check_job_status_frequency: Optional[int],
             remote: bool = False,
-            hostname: Optional[str] = None
+            hostname: Optional[str] = None,
+            experiment_version: str = None
     ):
         self.simulation_runner = simulation_runner
         self.run_script_filename = run_script_filename
@@ -95,6 +96,7 @@ class BatchManager(ABC):
             else check_job_status_frequency
         self.remote = remote
         self.hostname = hostname
+        self.experiment_version = experiment_version
 
     def _set_up_directory(
             self,
@@ -102,7 +104,8 @@ class BatchManager(ABC):
     ) -> tuple[str, str]:
 
         simulation_id = PathManager.make_simulation_id(
-            point_no=point_no
+            point_no=point_no,
+            version=self.experiment_version
         )
         result_directory = os.path.join(
             self.results_directory,
@@ -139,7 +142,8 @@ def make_batch_manager(
         results_directory: str,
         output_filename: str,
         check_job_status_frequency: int = 60,
-        batch_manager_class: Optional[type[BatchManager]] = None
+        batch_manager_class: Optional[type[BatchManager]] = None,
+        experiment_version: Optional[str] = None
 ) -> Union['DirectBatchManager', 'SubmitBatchManager']:
 
     assert experiment_mode in ExperimentMode, \
@@ -157,7 +161,8 @@ def make_batch_manager(
         results_directory=results_directory,
         output_filename=output_filename,
         check_job_status_frequency=check_job_status_frequency,
-        remote=remote
+        remote=remote,
+        experiment_version=experiment_version
     )
 
 

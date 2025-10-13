@@ -1,4 +1,4 @@
-from veropt.interfaces.experiment import Experiment
+from veropt.interfaces.constructors import experiment
 from veropt.interfaces.local_simulation import LocalVerosRunner, LocalVerosConfig
 from veropt.interfaces.result_processing import TestVerosResultProcessor
 
@@ -10,7 +10,7 @@ experiment_config = "veropt/interfaces/configs/veros_experiment_config.json"
 
 result_processor = TestVerosResultProcessor(objective_names=["amoc"])
 
-experiment = Experiment.continue_if_possible(
+experiment = experiment(
     simulation_runner=simulation_runner,
     result_processor=result_processor,
     experiment_config=experiment_config,

@@ -366,6 +366,14 @@ class BayesianOptimiser(SavableClass):
 
             self._save_candidates()
 
+    def load_optimisation_step(self):
+
+        assert self.objective_type == ObjectiveKind.interface, (
+            "This method requires an interface objective."
+        )
+
+        self._load_latest_points()
+
     def suggest_candidates(self) -> None:
 
         if self.optimisation_mode == OptimisationMode.initial:

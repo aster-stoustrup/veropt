@@ -265,17 +265,19 @@ class Experiment:
             result_processor: ResultProcessor,
             experiment_config: Union[str, ExperimentConfig],
             optimiser_config: Union[str, dict],
-            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
+            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None,
+            state_path: str = None
     ) -> Self:
 
         experiment_config = ExperimentConfig.load(experiment_config)
-        path_manager = PathManager(experiment_config)
 
-        state_json_path = path_manager.experimental_state_json
+        if state_path is None:
+            path_manager = PathManager(experiment_config)
+            state_path = path_manager.experimental_state_json
 
-        if os.path.exists(state_json_path):
+        if os.path.exists(state_path):
             return cls._continue_existing(
-                state_path=state_json_path,
+                state_path=state_path,
                 simulation_runner=simulation_runner,
                 result_processor=result_processor,
                 experiment_config=experiment_config,
@@ -291,11 +293,12 @@ class Experiment:
             )
 
     @classmethod
-    def continue_with_new_objectives(
+    def continue_with_new_version(
             cls,
             simulation_runner: SimulationRunner,
             result_processor: ResultProcessor,
-            experiment_config: Union[str, ExperimentConfig],
+            old_experiment_config: Union[str, ExperimentConfig],
+            new_experiment_config: Union[str, ExperimentConfig],
             optimiser_config: Union[str, dict],
             batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
     ) -> Self:
@@ -311,12 +314,32 @@ class Experiment:
         #   - so would need to check if parameters are already there or not
         #       * and be provided a default value
 
-        experiment = cls.continue_if_possible(
+        new_experiment_config = ExperimentConfig.load(new_experiment_config)
+        new_path_manager = PathManager(new_experiment_config)
+        new_state_path = new_path_manager.experimental_state_json
+
+        old_experiment_config = ExperimentConfig.load(old_experiment_config)
+        old_path_manager = PathManager(old_experiment_config)
+        old_state_path = old_path_manager.experimental_state_json
+
+        assert new_experiment_config.experiment_name == old_experiment_config.experiment_name, (
+            f"Attempted to make new version of experiment '{old_experiment_config.experiment_name}' but name doesn't"
+            f"match with the one in the new configuration file ('{new_experiment_config.experiment_name}')."
+        )
+
+        if os.path.exists(new_state_path):
+            raise RuntimeError(
+                f"Attempted to make new version of experiment {old_experiment_config.experiment_name}, but "
+                f"experimental state for version {new_experiment_config.version} already exists at {new_state_path}. "
+                f"Either 1) change the version name, 2) erase the existing files or 3) continue the existing run."
+            )
+
+        experiment = cls._continue_existing(
             simulation_runner=simulation_runner,
             result_processor=result_processor,
-            experiment_config=experiment_config,
-            optimiser_config=optimiser_config,
-            batch_manager_class=batch_manager_class
+            experiment_config=new_experiment_config,
+            batch_manager_class=batch_manager_class,
+            state_path=old_state_path
         )
 
         n_steps_evaluated = experiment.n_points_evaluated // experiment.n_evaluations_per_step
@@ -332,7 +355,7 @@ class Experiment:
         )
 
         for step_no in range(n_steps_evaluated):
-            experiment.run_experiment_step_existing_data()
+            experiment.re_run_experiment_step_from_existing_data()
 
         return experiment
 
@@ -400,7 +423,8 @@ class Experiment:
             results_directory=path_manager.results_directory,
             output_filename=experiment_config.output_filename,
             check_job_status_frequency=60,  # TODO: put in server config,
-            batch_manager_class=batch_manager_class
+            batch_manager_class=batch_manager_class,
+            experiment_version=experiment_config.version
         )
 
     def _initialise_objective_jsons(self) -> None:
@@ -447,8 +471,8 @@ class Experiment:
             dict_of_objectives: ObjectivesDict
     ) -> None:
 
-        for i, objective_values in dict_of_objectives.items():
-            self.state.points[i].objective_values = objective_values  # type: ignore[assignment]  # mypy silliness
+        for point_no, objective_values in dict_of_objectives.items():
+            self.state.points[point_no].objective_values = objective_values  # type: ignore[assignment]  # mypy silliness
 
         self.state.save_to_json(self.state.state_json)
 
@@ -464,8 +488,10 @@ class Experiment:
             experimental_state=self.state
         )
 
+        # TODO: Can we just loop over dict_of_objectives...?
+        #   - Does dict_of_parameters even need to be in this method?
         evaluated_objectives = {
-            name: [dict_of_objectives[i][name] for i in dict_of_parameters.keys()]
+            name: [dict_of_objectives[point_no][name] for point_no in dict_of_parameters.keys()]
             for name in self.result_processor.objective_names
         }
 
@@ -551,7 +577,7 @@ class Experiment:
                 experimental_state=self.state
             )
 
-    def run_experiment_step_existing_data(self):
+    def re_run_experiment_step_from_existing_data(self):
 
         results = self.state.get_results(
             start_point=self.current_batch_indices['start'],
@@ -566,22 +592,16 @@ class Experiment:
             end_point=self.current_batch_indices['end']
         )
 
-        # TODO: Make sure new exp state does not overwrite old one (new name, probably)
-        #   - Maybe refactor exp saving a little? Should probably be clear when this happens
         self.save_objectives_to_state(
             dict_of_objectives=dict_of_objectives
         )
 
-        # TODO: Avoid overwriting old objective values
         self.send_objectives_to_optimiser(
             dict_of_parameters=dict_of_parameters,
             dict_of_objectives=dict_of_objectives
         )
 
-        # TODO: Set up optimiser so it doesn't train model until all points are in
-        #   - Potentially a new method to just add data to optimiser?
-        #   - Alternatively, create optimiser once all points are collected
-        self.optimiser.run_optimisation_step()
+        self.optimiser.load_optimisation_step()
 
         # Note: Could wait with this until we get all data
         self._save_optimiser()

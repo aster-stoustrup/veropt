@@ -27,7 +27,6 @@ class ExperimentMode(StrEnum):
 
 class ExperimentalState(Config):
     experiment_name: str
-    version: Optional[str] = None
     experiment_directory: str
     state_json: str
     points: dict[int, Point]
@@ -153,21 +152,21 @@ class PathManager:
 
         return os.path.join(
             self.experiment_directory,
-            f"{self.experiment_config.experiment_name}{self.version_string}_experimental_state.json"
+            f"{self.experiment_name_with_version}_experimental_state.json"
         )
 
     @property
     def suggested_parameters_json(self) -> str:
         return os.path.join(
             self.results_directory,
-            f"{self.experiment_config.experiment_name}_suggested_parameters.json"
+            f"{self.experiment_name_with_version}_suggested_parameters.json"
         )
 
     @property
     def evaluated_objectives_json(self) -> str:
         return os.path.join(
             self.results_directory,
-            f"{self.experiment_config.experiment_name}_evaluated_objectives.json"
+            f"{self.experiment_name_with_version}_evaluated_objectives.json"
         )
 
     @property
@@ -175,21 +174,31 @@ class PathManager:
 
         return os.path.join(
             self.experiment_directory,
-            f"{self.experiment_config.experiment_name}{self.version_string}_optimiser_state.json"
+            f"{self.experiment_name_with_version}_optimiser_state.json"
         )
 
     @property
     def version_string(self) -> str:
         if self.experiment_config.version is not None:
-            version_str = f"_{self.experiment_config.version}"
+            version_string = f"_{self.experiment_config.version}"
         else:
-            version_str = ""
+            version_string = ""
 
-        return version_str
+        return version_string
 
+    @property
+    def experiment_name_with_version(self) -> str:
+        return f"{self.experiment_config.experiment_name}{self.version_string}"
+
+    @staticmethod
     def make_simulation_id(
-            self,
-            point_no: int
+            point_no: int,
+            version: Optional[str] = None
     ) -> str:
 
-        return f"point_{point_no}{self.version_string}"
+        if version is not None:
+            version_string = f"_{version}"
+        else:
+            version_string = ""
+
+        return f"point_{point_no}{version_string}"
