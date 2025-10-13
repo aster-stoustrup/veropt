@@ -150,9 +150,10 @@ class PathManager:
 
     @property
     def experimental_state_json(self) -> str:
+
         return os.path.join(
             self.experiment_directory,
-            f"{self.experiment_config.experiment_name}_experimental_state.json"
+            f"{self.experiment_config.experiment_name}{self.version_string}_experimental_state.json"
         )
 
     @property
@@ -172,18 +173,23 @@ class PathManager:
     @property
     def optimiser_state_json(self) -> str:
 
-        if self.experiment_config.version is None:
-            optimiser_state_file_name = "optimiser_state.json"
-        else:
-            optimiser_state_file_name = f"optimiser_state_{self.experiment_config.version}.json"
-
         return os.path.join(
             self.experiment_directory,
-            optimiser_state_file_name
+            f"{self.experiment_config.experiment_name}{self.version_string}_optimiser_state.json"
         )
 
-    @staticmethod
+    @property
+    def version_string(self) -> str:
+        if self.experiment_config.version is not None:
+            version_str = f"_{self.experiment_config.version}"
+        else:
+            version_str = ""
+
+        return version_str
+
     def make_simulation_id(
+            self,
             point_no: int
     ) -> str:
-        return f"point_{point_no}"
+
+        return f"point_{point_no}{self.version_string}"
