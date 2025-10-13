@@ -43,7 +43,7 @@ def experiment_with_new_version(
         old_experiment_config: Union[str, ExperimentConfig],
         new_experiment_config: Union[str, ExperimentConfig],
         optimiser_config: Union[str, dict],
-        batch_manager_class: Optional[type[DirectBatchManager]] = None
+        batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
 ) -> Experiment:
 
     experiment_ = Experiment.continue_with_new_version(

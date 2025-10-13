@@ -46,6 +46,7 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
             *,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor,
+            train: bool = True
     ) -> None:
         pass
 
@@ -189,13 +190,15 @@ class BotorchPredictor(Predictor):
             self,
             *,
             variable_values: torch.Tensor,
-            objective_values: torch.Tensor
+            objective_values: torch.Tensor,
+            train: bool = True
     ) -> None:
 
-        self.model.train_model(
-            variable_values=variable_values,
-            objective_values=objective_values
-        )
+        if train:
+            self.model.train_model(
+                variable_values=variable_values,
+                objective_values=objective_values
+            )
 
         self.acquisition_function.refresh(
             model=self.model.get_gpytorch_model(),

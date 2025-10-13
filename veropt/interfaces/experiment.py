@@ -334,12 +334,27 @@ class Experiment:
                 f"Either 1) change the version name, 2) erase the existing files or 3) continue the existing run."
             )
 
-        experiment = cls._continue_existing(
+        old_state = ExperimentalState.load(old_state_path)
+
+        batch_manager = cls._make_fresh_batch_manager(
+            experiment_config=new_experiment_config,
+            simulation_runner=simulation_runner,
+            path_manager=new_path_manager,
+            batch_manager_class=batch_manager_class
+        )
+
+        optimiser = load_optimiser_from_state(
+            file_name=old_path_manager.optimiser_state_json
+        )
+
+        experiment = cls(
             simulation_runner=simulation_runner,
             result_processor=result_processor,
             experiment_config=new_experiment_config,
-            batch_manager_class=batch_manager_class,
-            state_path=old_state_path
+            optimiser=optimiser,
+            path_manager=new_path_manager,
+            batch_manager=batch_manager,
+            state=old_state
         )
 
         n_steps_evaluated = experiment.n_points_evaluated // experiment.n_evaluations_per_step
@@ -442,7 +457,7 @@ class Experiment:
             self
     ) -> None:
 
-        for point in self.state.points:
+        for point_no, point in self.state.points.items():
             point.objective_values = None
 
     def get_parameters_from_optimiser(self) -> dict[int, dict]:
