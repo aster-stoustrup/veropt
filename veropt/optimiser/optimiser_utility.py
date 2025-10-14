@@ -162,9 +162,9 @@ class SuggestedPoints(SavableDataClass):
 def _format_number(
         number: float
 ) -> str:
-    if number < 0.01:
+    if abs(number) < 0.01:
         return f"{number:.2e}"
-    elif number >= 10_000:
+    elif abs(number) >= 10_000:
         return f"{number:.2e}"
     else:
         return f"{number:.2f}"
