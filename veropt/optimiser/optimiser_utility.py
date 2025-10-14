@@ -53,7 +53,13 @@ class OptimiserSettings(SavableClass):
             self.renormalise_each_step = renormalise_each_step
 
         if n_points_before_fitting is None:
-            self.n_points_before_fitting = self.n_initial_points - self.n_evaluations_per_step * 2
+
+            n_points_before_fitting = self.n_initial_points - self.n_evaluations_per_step
+
+            if n_points_before_fitting < 1:
+                n_points_before_fitting = self.n_initial_points
+
+            self.n_points_before_fitting = n_points_before_fitting
         else:
             self.n_points_before_fitting = n_points_before_fitting
 
@@ -153,6 +159,32 @@ class SuggestedPoints(SavableDataClass):
         )
 
 
+def _format_number(
+        number: float
+) -> str:
+    if number < 0.01:
+        return f"{number:.2e}"
+    elif number >= 10_000:
+        return f"{number:.2e}"
+    else:
+        return f"{number:.2f}"
+
+
+def _single_list_with_floats_to_string(
+        unformatted_list: list[float]
+) -> str:
+
+    formatted_list = "["
+
+    for iteration, list_item in enumerate(unformatted_list):
+        if iteration < len(unformatted_list) - 1:
+            formatted_list += f"{_format_number(list_item)}, "
+        else:
+            formatted_list += f"{_format_number(list_item)}]"
+
+    return formatted_list
+
+
 def list_with_floats_to_string(
         unformatted_list: Union[list[float], list[list[float]]]
 ) -> str:
@@ -166,13 +198,7 @@ def list_with_floats_to_string(
 
     else:
 
-        formatted_list = "["
-
-        for iteration, list_item in enumerate(unformatted_list):
-            if iteration < len(unformatted_list) - 1:
-                formatted_list += f"{list_item:.2f}, "
-            else:
-                formatted_list += f"{list_item:.2f}]"
+        formatted_list = _single_list_with_floats_to_string(unformatted_list)  # type: ignore[arg-type]
 
     return formatted_list
 
@@ -182,14 +208,14 @@ def _nested_list_of_floats_to_string(
 ) -> str:
     formatted_list = "["
 
-    for iteration, list_item in enumerate(unformatted_list):
-        for number_ind, number in enumerate(list_item):
-            if number_ind < len(list_item) - 1:
-                formatted_list += f"{number:.2f}, "
-            elif iteration < len(unformatted_list) - 1:
-                formatted_list += f"{number:.2f}], ["
+    for list_ind, list_of_floats in enumerate(unformatted_list):
+        for number_ind, number in enumerate(list_of_floats):
+            if number_ind < len(list_of_floats) - 1:
+                formatted_list += f"{_format_number(number)}, "
+            elif list_ind < len(unformatted_list) - 1:
+                formatted_list += f"{_format_number(number)}], ["
             else:
-                formatted_list += f"{number:.2f}]"
+                formatted_list += f"{_format_number(number)}]"
 
     return formatted_list
 

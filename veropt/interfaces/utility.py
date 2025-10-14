@@ -12,8 +12,9 @@ def create_directory(path: str) -> None:
         os.makedirs(path, exist_ok=True)
         print(f"Created directory: {path}")
 
-    else:
-        print(f"Directory already exists: {path}")
+    # TODO: Marta, you okay with deleting this?
+    # else:
+    #     print(f"Directory already exists: {path}")
 
 
 def copy_files(

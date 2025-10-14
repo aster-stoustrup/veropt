@@ -44,8 +44,7 @@ def test_mask_nans() -> None:
 
     experimental_state = ExperimentalState.make_fresh_state(
         experiment_name="",
-        experiment_directory="",
-        state_json=""
+        experiment_directory=""
     )
 
     values = [20.0, 0.5, 17.0, -0.01, -13.0]
@@ -81,8 +80,7 @@ def test_mask_nans() -> None:
 
     new_experimental_state = ExperimentalState.make_fresh_state(
         experiment_name="",
-        experiment_directory="",
-        state_json=""
+        experiment_directory=""
     )
 
     with pytest.raises(AssertionError):

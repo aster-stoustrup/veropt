@@ -360,21 +360,41 @@ class BayesianOptimiser(SavableClass):
                 objective_values_flagged=new_values
             )
 
+            self._train_and_normalise_if_needed()
+
+            if self.settings.verbose and self.n_points_evaluated > 0:
+                self._print_status()
+
         elif self.objective_type == ObjectiveKind.interface:
 
             self._load_latest_points()
+
+            self._train_and_normalise_if_needed()
+
+            if self.settings.verbose and self.n_points_evaluated > 0:
+                self._print_status()
 
             self.suggest_candidates()
 
             self._save_candidates()
 
-    def load_optimisation_step(self):
+    def load_optimisation_step(self) -> None:
 
         assert self.objective_type == ObjectiveKind.interface, (
             "This method requires an interface objective."
         )
 
         self._load_latest_points()
+
+        if self.settings.verbose and self.n_points_evaluated > 0:
+            self._print_load_status()
+
+    def train_model(self) -> None:
+
+        if self.settings.normalise:
+            self._fit_normaliser()
+
+        self._update_predictor()
 
     def suggest_candidates(self) -> None:
 
@@ -501,26 +521,23 @@ class BayesianOptimiser(SavableClass):
                     dim=DataShape.index_points
                 )
 
-            if self.model_has_been_trained:
+    def _train_and_normalise_if_needed(self) -> None:
 
-                if self.settings.normalise:
+        if self.model_has_been_trained:
 
-                    if self.settings.renormalise_each_step:
+            if self.settings.normalise:
 
-                        self._fit_normaliser()
-
-                self._update_predictor()
-
-            elif self.n_points_evaluated > self.settings.n_points_before_fitting:
-
-                if self.settings.normalise:
-
+                if self.settings.renormalise_each_step:
                     self._fit_normaliser()
 
-                self._update_predictor()
+            self._update_predictor()
 
-            if self.settings.verbose:
-                self._print_status()
+        elif self.n_points_evaluated >= self.settings.n_points_before_fitting:
+
+            if self.settings.normalise:
+                self._fit_normaliser()
+
+            self._update_predictor()
 
     def _load_latest_points(self) -> None:
 
@@ -681,9 +698,10 @@ class BayesianOptimiser(SavableClass):
             normalised=False
         )
 
-    def _print_status(self) -> None:
-
-        best_point = self.get_best_points()
+    def _make_strings_for_status(
+            self,
+            best_point: BestPoints
+    ) -> tuple[str, str, str, str]:
 
         best_variables, best_values, _ = (
             best_point['variables'], best_point['objectives'], best_point['index']
@@ -697,11 +715,40 @@ class BayesianOptimiser(SavableClass):
 
         newest_variables_string = list_with_floats_to_string(self.evaluated_variable_values[-1, :].tensor.tolist())
 
+        # TODO: Ideally shorten names and make this a dict
+        return best_values_string, best_values_variables_string, newest_value_string, newest_variables_string
+
+    def _print_status(self) -> None:
+
+        best_point = self.get_best_points()
+
+        strings = self._make_strings_for_status(
+            best_point=best_point
+        )
+        best_values_string, best_values_variables_string, newest_value_string, newest_variables_string = strings
+
         total_steps = (self.n_initial_points + self.n_bayesian_points) // self.n_evaluations_per_step
 
         status_string = (
             f"Optimisation running in {self.optimisation_mode.name} mode "
             f"at step {self.current_step} out of {total_steps} \n"
+            f"Best objective value(s): {best_values_string} at variable values {best_values_variables_string} \n"
+            f"Newest objective value(s): {newest_value_string} at variable values {newest_variables_string} \n"
+        )
+
+        print(status_string)
+
+    def _print_load_status(self) -> None:
+
+        best_point = self.get_best_points()
+
+        strings = self._make_strings_for_status(
+            best_point=best_point
+        )
+        best_values_string, best_values_variables_string, newest_value_string, newest_variables_string = strings
+
+        status_string = (
+            f"Successfully loaded step {self.current_step} \n"
             f"Best objective value(s): {best_values_string} at variable values {best_values_variables_string} \n"
             f"Newest objective value(s): {newest_value_string} at variable values {newest_variables_string} \n"
         )

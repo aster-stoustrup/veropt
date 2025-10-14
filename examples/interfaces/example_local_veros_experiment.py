@@ -10,11 +10,11 @@ experiment_config = "veropt/interfaces/configs/veros_experiment_config.json"
 
 result_processor = TestVerosResultProcessor(objective_names=["amoc"])
 
-experiment = experiment(
+veros_experiment = experiment(
     simulation_runner=simulation_runner,
     result_processor=result_processor,
     experiment_config=experiment_config,
     optimiser_config=optimiser_config
 )
 
-experiment.run_experiment()
+veros_experiment.run_experiment()

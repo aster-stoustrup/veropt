@@ -32,8 +32,7 @@ def test_local_batch_manager() -> None:
 
         experimental_state = ExperimentalState.make_fresh_state(
             experiment_name=experiment_name,
-            experiment_directory=experiment_directory,
-            state_json=state_json
+            experiment_directory=experiment_directory
         )
 
         simulation_config = MockSimulationConfig()
@@ -44,6 +43,7 @@ def test_local_batch_manager() -> None:
             simulation_runner=runner,
             run_script_filename=run_script_filename,
             run_script_root_directory=run_script_root_directory,
+            experimental_state_json=state_json,
             results_directory=results_directory,
             output_filename=""
         )
@@ -75,6 +75,7 @@ def test_local_slurm_batch_manager() -> None:
             simulation_runner=simulation_runner,
             run_script_filename="acc",
             run_script_root_directory="path/to/run/script/root",
+            experimental_state_json="path/to/experiment/results/test_state.json",
             results_directory="path/to/results",
             output_filename="test",
             check_job_status_frequency=10
@@ -87,8 +88,7 @@ def test_local_slurm_batch_manager() -> None:
 
         experimental_state = ExperimentalState.make_fresh_state(
             experiment_name="test_experiment",
-            experiment_directory="path/to/experiment",
-            state_json="path/to/experiment/results/test_state.json"
+            experiment_directory="path/to/experiment"
         )
 
         batch_manager.submit_batch(

@@ -7,7 +7,7 @@ from veropt.interfaces.batch_manager import make_batch_manager, DirectBatchManag
     SubmitBatchManager
 from veropt.interfaces.result_processing import ResultProcessor, ObjectivesDict
 from veropt.interfaces.experiment_utility import (
-    ExperimentConfig, ExperimentMode, ExperimentalState, PathManager, Point
+    ExperimentConfig, ExperimentMode, ExperimentalState, PathManager, Point, ParametersDict
 )
 from veropt.optimiser.objective import InterfaceObjective
 from veropt.optimiser.optimiser import BayesianOptimiser
@@ -176,8 +176,7 @@ class Experiment:
 
         state = ExperimentalState.make_fresh_state(
             experiment_name=experiment_config.experiment_name,
-            experiment_directory=path_manager.experiment_directory,
-            state_json=path_manager.experimental_state_json
+            experiment_directory=path_manager.experiment_directory
         )
 
         state_json_path = path_manager.experimental_state_json
@@ -266,7 +265,7 @@ class Experiment:
             experiment_config: Union[str, ExperimentConfig],
             optimiser_config: Union[str, dict],
             batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None,
-            state_path: str = None
+            state_path: Optional[str] = None
     ) -> Self:
 
         experiment_config = ExperimentConfig.load(experiment_config)
@@ -327,50 +326,77 @@ class Experiment:
             f"match with the one in the new configuration file ('{new_experiment_config.experiment_name}')."
         )
 
-        if os.path.exists(new_state_path):
-            raise RuntimeError(
-                f"Attempted to make new version of experiment {old_experiment_config.experiment_name}, but "
-                f"experimental state for version {new_experiment_config.version} already exists at {new_state_path}. "
-                f"Either 1) change the version name, 2) erase the existing files or 3) continue the existing run."
-            )
-
         old_state = ExperimentalState.load(old_state_path)
-
-        batch_manager = cls._make_fresh_batch_manager(
-            experiment_config=new_experiment_config,
-            simulation_runner=simulation_runner,
-            path_manager=new_path_manager,
-            batch_manager_class=batch_manager_class
-        )
-
-        optimiser = load_optimiser_from_state(
+        old_optimiser = load_optimiser_from_state(
             file_name=old_path_manager.optimiser_state_json
         )
 
-        experiment = cls(
-            simulation_runner=simulation_runner,
-            result_processor=result_processor,
-            experiment_config=new_experiment_config,
-            optimiser=optimiser,
-            path_manager=new_path_manager,
-            batch_manager=batch_manager,
-            state=old_state
-        )
+        if os.path.exists(new_state_path):
 
-        n_steps_evaluated = experiment.n_points_evaluated // experiment.n_evaluations_per_step
+            assert os.path.exists(new_path_manager.optimiser_state_json), (
+                "Found existing experimental state but no existing optimiser. Please clean up your files "
+                "and try again."
+            )
 
-        experiment._reset_objective_values()
-        experiment.optimiser = experiment._make_fresh_optimiser(
-            n_parameters=experiment.n_parameters,
-            n_objectives=experiment.n_objectives,
-            experiment_config=experiment.experiment_config,
-            result_processor=experiment.result_processor,
-            path_manager=experiment.path_manager,
-            optimiser_config=optimiser_config,
-        )
+            new_optimiser = load_optimiser_from_state(
+                file_name=new_path_manager.optimiser_state_json
+            )
 
-        for step_no in range(n_steps_evaluated):
+            assert new_optimiser.n_points_evaluated < old_optimiser.n_points_evaluated, (
+                f"Attempted to create new version of experiment {old_experiment_config.experiment_name}, but "
+                f"it seems like that version has already loaded all points from the old version. "
+                f"Either 1) change to a new version name, 2) erase the existing files or "
+                f"3) continue running the existing version."
+            )
+
+            experiment = cls._continue_existing(
+                state_path=new_state_path,
+                simulation_runner=simulation_runner,
+                result_processor=result_processor,
+                experiment_config=new_experiment_config,
+                batch_manager_class=batch_manager_class
+            )
+
+            n_steps_evaluated = old_optimiser.n_points_evaluated // experiment.n_evaluations_per_step
+            n_steps_loaded = new_optimiser.n_points_evaluated // experiment.n_evaluations_per_step
+            n_steps_to_reevaluate = n_steps_evaluated - n_steps_loaded
+
+        else:
+
+            batch_manager = cls._make_fresh_batch_manager(
+                experiment_config=new_experiment_config,
+                simulation_runner=simulation_runner,
+                path_manager=new_path_manager,
+                batch_manager_class=batch_manager_class
+            )
+
+            experiment = cls(
+                simulation_runner=simulation_runner,
+                result_processor=result_processor,
+                experiment_config=new_experiment_config,
+                optimiser=old_optimiser,
+                path_manager=new_path_manager,
+                batch_manager=batch_manager,
+                state=old_state
+            )
+
+            n_steps_to_reevaluate = experiment.n_points_evaluated // experiment.n_evaluations_per_step
+
+            experiment._reset_objective_values()
+
+            experiment.optimiser = experiment._make_fresh_optimiser(
+                n_parameters=experiment.n_parameters,
+                n_objectives=experiment.n_objectives,
+                experiment_config=experiment.experiment_config,
+                result_processor=experiment.result_processor,
+                path_manager=experiment.path_manager,
+                optimiser_config=optimiser_config,
+            )
+
+        for step_no in range(n_steps_to_reevaluate):
             experiment.re_run_experiment_step_from_existing_data()
+
+        experiment.optimiser.train_model()
 
         return experiment
 
@@ -436,6 +462,7 @@ class Experiment:
             run_script_filename=experiment_config.run_script_filename,
             run_script_root_directory=path_manager.run_script_root_directory,
             results_directory=path_manager.results_directory,
+            experimental_state_json=path_manager.experimental_state_json,
             output_filename=experiment_config.output_filename,
             check_job_status_frequency=60,  # TODO: put in server config,
             batch_manager_class=batch_manager_class,
@@ -477,7 +504,7 @@ class Experiment:
 
             self.state.update(new_point)
 
-        self.state.save_to_json(self.state.state_json)
+        self.state.save_to_json(self.path_manager.experimental_state_json)
 
         return dict_of_parameters
 
@@ -487,13 +514,12 @@ class Experiment:
     ) -> None:
 
         for point_no, objective_values in dict_of_objectives.items():
-            self.state.points[point_no].objective_values = objective_values  # type: ignore[assignment]  # mypy silliness
+            self.state.points[point_no].objective_values = objective_values  # type: ignore[assignment]  # silly mypy
 
-        self.state.save_to_json(self.state.state_json)
+        self.state.save_to_json(self.path_manager.experimental_state_json)
 
     def send_objectives_to_optimiser(
             self,
-            dict_of_parameters: dict[int, dict],
             dict_of_objectives: ObjectivesDict
     ) -> None:
 
@@ -503,15 +529,32 @@ class Experiment:
             experimental_state=self.state
         )
 
-        # TODO: Can we just loop over dict_of_objectives...?
-        #   - Does dict_of_parameters even need to be in this method?
         evaluated_objectives = {
-            name: [dict_of_objectives[point_no][name] for point_no in dict_of_parameters.keys()]
+            name: [dict_of_objectives[point_no][name] for point_no in dict_of_objectives.keys()]
             for name in self.result_processor.objective_names
         }
 
         with open(self.path_manager.evaluated_objectives_json, "w") as f:
             json.dump(evaluated_objectives, f)
+
+    def send_parameters_to_optimiser(
+            self,
+            dict_of_parameters: ParametersDict
+    ) -> None:
+
+        # TODO: Either change optimiser interface in general or make sure this saves the same as the ExperimentObj
+        #   - Is saving/loading to/from the optimiser necessary?
+        #       - Maybe refactor InterfaceObjective to allow passing directly?
+        #   - Otherwise, make some shared function to save with
+        #       - Currently just kind of assuming it'll be the same, oops
+
+        evaluated_parameters = {
+            name: [dict_of_parameters[point_no][name] for point_no in dict_of_parameters.keys()]
+            for name in self.experiment_config.parameter_names
+        }
+
+        with open(self.path_manager.suggested_parameters_json, "w") as f:
+            json.dump(evaluated_parameters, f)
 
     def _save_optimiser(self) -> None:
 
@@ -542,7 +585,6 @@ class Experiment:
             dict_of_objectives=dict_of_objectives
         )
         self.send_objectives_to_optimiser(
-            dict_of_parameters=dict_of_parameters,
             dict_of_objectives=dict_of_objectives
         )
 
@@ -567,16 +609,11 @@ class Experiment:
             dict_of_objectives = self.result_processor.process(
                 results=results
             )
-            dict_of_parameters = self.state.get_parameters(
-                start_point=self.current_batch_indices['start'],
-                end_point=self.current_batch_indices['end']
-            )
 
             self.save_objectives_to_state(
                 dict_of_objectives=dict_of_objectives
             )
             self.send_objectives_to_optimiser(
-                dict_of_parameters=dict_of_parameters,
                 dict_of_objectives=dict_of_objectives
             )
 
@@ -592,7 +629,7 @@ class Experiment:
                 experimental_state=self.state
             )
 
-    def re_run_experiment_step_from_existing_data(self):
+    def re_run_experiment_step_from_existing_data(self) -> None:
 
         results = self.state.get_results(
             start_point=self.current_batch_indices['start'],
@@ -612,8 +649,10 @@ class Experiment:
         )
 
         self.send_objectives_to_optimiser(
-            dict_of_parameters=dict_of_parameters,
             dict_of_objectives=dict_of_objectives
+        )
+        self.send_parameters_to_optimiser(
+            dict_of_parameters=dict_of_parameters
         )
 
         self.optimiser.load_optimisation_step()

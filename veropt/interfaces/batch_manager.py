@@ -81,21 +81,27 @@ class BatchManager(ABC):
             run_script_filename: str,
             run_script_root_directory: str,
             results_directory: str,
+            experimental_state_json: str,
             output_filename: str,
             check_job_status_frequency: Optional[int],
             remote: bool = False,
             hostname: Optional[str] = None,
-            experiment_version: str = None
+            experiment_version: Optional[str] = None
     ):
         self.simulation_runner = simulation_runner
+
         self.run_script_filename = run_script_filename
         self.run_script_root_directory = run_script_root_directory
         self.results_directory = results_directory
+        self.experimental_state_json = experimental_state_json
         self.output_filename = output_filename
+
         self.check_job_status_frequency = 60 if check_job_status_frequency is None \
             else check_job_status_frequency
+
         self.remote = remote
         self.hostname = hostname
+
         self.experiment_version = experiment_version
 
     def _set_up_directory(
@@ -140,6 +146,7 @@ def make_batch_manager(
         run_script_filename: str,
         run_script_root_directory: str,
         results_directory: str,
+        experimental_state_json: str,
         output_filename: str,
         check_job_status_frequency: int = 60,
         batch_manager_class: Optional[type[BatchManager]] = None,
@@ -154,10 +161,14 @@ def make_batch_manager(
 
     batch_manager_class = batch_manager_class or _get_batch_manager_class(experiment_mode)
 
+    # TODO: mypy might actually have a point with the error it's giving here
+    #   - the init of a class isn't bound by Liskov so this isn't safe
+    #   - we might need to make a classmethod to guarantee this interface
     return batch_manager_class(  # type: ignore # abstract BatchManager is never initialised here
         simulation_runner=simulation_runner,
         run_script_filename=run_script_filename,
         run_script_root_directory=run_script_root_directory,
+        experimental_state_json=experimental_state_json,
         results_directory=results_directory,
         output_filename=output_filename,
         check_job_status_frequency=check_job_status_frequency,
@@ -207,7 +218,9 @@ class LocalBatchManager(DirectBatchManager):
 
             results[i] = result
 
-            experimental_state.save_to_json(experimental_state.state_json)
+            experimental_state.save_to_json(
+                self.experimental_state_json
+            )
 
         return results
 
@@ -369,7 +382,7 @@ class LocalSlurmBatchManager(SubmitBatchManager):
                     if pending_jobs & (1 << i):
                         print(f"Point {submitted_points[i]}, Slurm Job ID {submitted_jobs[i]}")
 
-                experimental_state.save_to_json(experimental_state.state_json)
+                experimental_state.save_to_json(self.experimental_state_json)
 
                 for i in tqdm.tqdm(range(self.check_job_status_frequency), "Time until next server poll"):
                     time.sleep(1)
@@ -403,7 +416,7 @@ class LocalSlurmBatchManager(SubmitBatchManager):
             experimental_state.points[i].job_id = job_id
             experimental_state.points[i].result = result
 
-        experimental_state.save_to_json(experimental_state.state_json)
+        experimental_state.save_to_json(self.experimental_state_json)
 
     def wait_for_jobs(
             self,
@@ -411,7 +424,7 @@ class LocalSlurmBatchManager(SubmitBatchManager):
     ) -> None:
 
         self._check_pending_jobs(experimental_state=experimental_state)
-        experimental_state.save_to_json(experimental_state.state_json)
+        experimental_state.save_to_json(self.experimental_state_json)
 
 
 class RemoteSlurmBatchManager(SubmitBatchManager):

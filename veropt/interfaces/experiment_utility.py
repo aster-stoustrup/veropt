@@ -28,7 +28,6 @@ class ExperimentMode(StrEnum):
 class ExperimentalState(Config):
     experiment_name: str
     experiment_directory: str
-    state_json: str
     points: dict[int, Point]
     next_point: int
 
@@ -44,14 +43,12 @@ class ExperimentalState(Config):
     def make_fresh_state(
             cls,
             experiment_name: str,
-            experiment_directory: str,
-            state_json: str,
+            experiment_directory: str
     ) -> Self:
 
         return cls(
             experiment_name=experiment_name,
             experiment_directory=experiment_directory,
-            state_json=state_json,
             points={},
             next_point=0
         )
