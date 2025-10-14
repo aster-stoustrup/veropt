@@ -397,6 +397,7 @@ class Experiment:
             experiment.re_run_experiment_step_from_existing_data()
 
         experiment.optimiser.train_model()
+        experiment._save_optimiser()
 
         return experiment
 
