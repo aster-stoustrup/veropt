@@ -1,3 +1,4 @@
+from veropt.interfaces.constructors import make_experiment
 
 # _veropt_ - the versatile optimiser
 
@@ -79,7 +80,7 @@ If you want to try out the library with a practice objective before setting up y
 For optimization of computationally heavy, complex models, _veropt_ interfaces provide a framework to automatically submit, track and evaluate user-defined simulations. Below is an example of an experiment where a parameter of the ocean model [veros](https://veros.readthedocs.io/en/latest/) is optimised to simulate realistic current strength in an idealised setup.
 
 ```python
-from veropt.interfaces.experiment import Experiment
+from veropt.interfaces.constructors import experiment
 from veropt.interfaces.local_simulation import LocalVerosRunner, LocalVerosConfig
 from veropt.interfaces.result_processing import TestVerosResultProcessor
 
@@ -91,14 +92,15 @@ experiment_config = "veropt/interfaces/configs/veros_experiment_config.json"
 
 result_processor = TestVerosResultProcessor(objective_names=["amoc"])
 
-experiment = Experiment.from_the_beginning(
+veros_experiment = experiment(
     simulation_runner=simulation_runner,
     result_processor=result_processor,
     experiment_config=experiment_config,
-    optimiser_config=optimiser_config
+    optimiser_config=optimiser_config,
+    continue_if_possible=True
 )
 
-experiment.run_experiment()
+veros_experiment.run_experiment()
 ```
 
 _veropt_ interfaces support the implementation of two types of experiments: local (for simulations running locally) and local slurm (for simulations running on a cluster).

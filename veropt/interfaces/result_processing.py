@@ -1,13 +1,12 @@
-from abc import ABC, abstractmethod
-from typing import Any, Union
 import os
-
-from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
+from abc import ABC, abstractmethod
+from typing import Any
 
 import xarray as xr
 
+from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
 
-ObjectivesDict = dict[int, Union[dict[str, float], dict[str, float]]]
+ObjectivesDict = dict[int, dict[str, float]]
 
 
 class ResultProcessor(ABC):

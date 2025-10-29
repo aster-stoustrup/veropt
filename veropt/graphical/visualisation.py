@@ -251,7 +251,7 @@ def plot_progression(
             'title': {
                 'text': "Objective values",
             }},
-
+        hovermode="x"
     )
 
     return figure
