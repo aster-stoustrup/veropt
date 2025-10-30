@@ -43,26 +43,63 @@ def get_continuous_colour(
         colortype="rgb"
     )
 
-    return intermediate_colour
+    # Trying to fix a plotly bug >:(
+    #   - Might still make a small error, should test when some of the colours are very small
+    unlabeled_colour = colors.unlabel_rgb(intermediate_colour)
+    relabeled_colour = f"rgb({unlabeled_colour[0]:.2f}, {unlabeled_colour[1]:.2f}, {unlabeled_colour[2]:.2f})"
+
+    return relabeled_colour
+
+
+# def opacity_for_multidimensional_points(
+#         variable_index: int,
+#         n_variables: int,
+#         variable_values: torch.Tensor,
+#         evaluated_point: torch.Tensor,
+#         alpha_min: float = 0.1,
+#         alpha_max: float = 0.8
+# ) -> tuple[torch.Tensor, torch.Tensor]:
+#
+#     distances_list = []
+#     index_wo_var_ind = torch.arange(n_variables) != variable_index
+#     for point_no in range(variable_values.shape[DataShape.index_points]):
+#         distances_list.append(np.linalg.norm(
+#             evaluated_point[0, index_wo_var_ind] - variable_values[point_no, index_wo_var_ind]
+#         ))
+#
+#     distances = torch.tensor(distances_list)
+#
+#     normalised_distances = (
+#         ((distances - distances.min()) / distances.max()) / ((distances - distances.min()) / distances.max()).max()
+#     )
+#
+#     normalised_proximity = 1 - normalised_distances
+#
+#     alpha_values = (alpha_max - alpha_min) * normalised_proximity + alpha_min
+#
+#     alpha_values[alpha_values.argmax()] = 1.0
+#
+#     return alpha_values, normalised_distances
 
 
 def opacity_for_multidimensional_points(
-        variable_index: int,
-        n_variables: int,
+        variable_indices: list[int],
         variable_values: torch.Tensor,
         evaluated_point: torch.Tensor,
         alpha_min: float = 0.1,
         alpha_max: float = 0.8
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
-    distances_list = []
-    index_wo_var_ind = torch.arange(n_variables) != variable_index
-    for point_no in range(variable_values.shape[DataShape.index_points]):
-        distances_list.append(np.linalg.norm(
-            evaluated_point[0, index_wo_var_ind] - variable_values[point_no, index_wo_var_ind]
-        ))
+    n_variables = variable_values.shape[DataShape.index_dimensions]
 
-    distances = torch.tensor(distances_list)
+    indices_except_plane = torch.ones(n_variables, dtype=torch.bool)
+    for variable_index in variable_indices:
+        indices_except_plane[variable_index] = False
+
+    distances = torch.linalg.vector_norm(
+        evaluated_point[0, indices_except_plane] - variable_values[:, indices_except_plane],
+        dim=1
+    )
 
     normalised_distances = (
         ((distances - distances.min()) / distances.max()) / ((distances - distances.min()) / distances.max()).max()
@@ -83,7 +120,7 @@ class ModelPrediction:
             variable_index: int,
             point: torch.Tensor,
             title: str,
-            variable_array: np.ndarray,
+            variable_array: torch.Tensor,
             predicted_objective_values: PredictionDict,
             acquisition_values: Optional[torch.Tensor],
             samples: Optional[torch.Tensor] = None

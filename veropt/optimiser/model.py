@@ -380,6 +380,7 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
 class MaternParametersInputDict(TypedDict, total=False):
     lengthscale_lower_bound: float
     lengthscale_upper_bound: float
+    nu: float
     noise: float
     noise_lower_bound: float
     train_noise: bool
@@ -389,6 +390,7 @@ class MaternParametersInputDict(TypedDict, total=False):
 class MaternParameters(SavableDataClass):
     lengthscale_lower_bound: float = 0.1
     lengthscale_upper_bound: float = 2.0
+    nu: float = 2.5
     noise: float = 1e-8
     noise_lower_bound: float = 1e-8
     train_noise: bool = False
@@ -397,8 +399,10 @@ class MaternParameters(SavableDataClass):
 class DoubleMaternParametersInputDict(TypedDict, total=False):
     lengthscale_long_lower_bound: float
     lengthscale_long_upper_bound: float
+    nu_long: float
     lengthscale_short_lower_bound: float
     lengthscale_short_upper_bound: float
+    nu_short: float
     noise: float
     noise_lower_bound: float
     train_noise: bool
@@ -408,8 +412,10 @@ class DoubleMaternParametersInputDict(TypedDict, total=False):
 class DoubleMaternParameters(SavableDataClass):
     lengthscale_long_lower_bound: float = 0.1
     lengthscale_long_upper_bound: float = 2.0
+    nu_long: float = 2.5
     lengthscale_short_lower_bound: float = 0.001
     lengthscale_short_upper_bound: float = 0.1
+    nu_short: float = 2.5
     noise: float = 1e-8
     noise_lower_bound: float = 1e-8
     train_noise: bool = False
@@ -425,15 +431,16 @@ class MaternKernel(GPyTorchSingleModel):
             **settings: Unpack[MaternParametersInputDict]
     ):
 
+        self.settings = MaternParameters(
+            **settings
+        )
+
         likelihood = gpytorch.likelihoods.GaussianLikelihood()
         mean_module = gpytorch.means.ConstantMean()
         kernel = gpytorch.kernels.MaternKernel(
             ard_num_dims=n_variables,
-            batch_shape=torch.Size([])  # Can we delete this...?
-        )
-
-        self.settings = MaternParameters(
-            **settings
+            batch_shape=torch.Size([]),
+            nu=self.settings.nu
         )
 
         super().__init__(
@@ -513,24 +520,26 @@ class DoubleMaternKernel(GPyTorchSingleModel):
             **settings: Unpack[DoubleMaternParametersInputDict]
     ):
 
-        likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        mean_module = gpytorch.means.ConstantMean()
-
-        kernel_0 = gpytorch.kernels.MaternKernel(
-            ard_num_dims=n_variables,
-            batch_shape=torch.Size([])
-        )
-
-        kernel_1 = gpytorch.kernels.MaternKernel(
-            ard_num_dims=n_variables,
-            batch_shape=torch.Size([])
-        )
-
-        kernel = kernel_0 + kernel_1
-
         self.settings = DoubleMaternParameters(
             **settings
         )
+
+        likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        mean_module = gpytorch.means.ConstantMean()
+
+        kernel_long = gpytorch.kernels.MaternKernel(
+            ard_num_dims=n_variables,
+            batch_shape=torch.Size([]),
+            nu=self.settings.nu_long
+        )
+
+        kernel_short = gpytorch.kernels.MaternKernel(
+            ard_num_dims=n_variables,
+            batch_shape=torch.Size([]),
+            nu=self.settings.nu_short
+        )
+
+        kernel = kernel_long + kernel_short
 
         super().__init__(
             likelihood=likelihood,
