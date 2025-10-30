@@ -165,6 +165,26 @@ class BotorchPredictor(Predictor):
             'upper': model_upper
         }
 
+    @_check_input_dimensions
+    def make_samples(
+            self,
+            *,
+            variable_values: torch.Tensor,
+            n_samples: int
+    ) -> torch.Tensor:
+
+        model_output = self.model(
+            variable_values=variable_values,
+        )
+
+        samples = torch.zeros(n_samples, self.model.n_objectives, variable_values.shape[DataShape.index_points])
+
+        for sample_index in range(n_samples):
+            for objective_index in range(self.model.n_objectives):
+                samples[sample_index, objective_index, :] = model_output[objective_index].sample()
+
+        return samples
+
     def get_acquisition_values(
             self,
             *,

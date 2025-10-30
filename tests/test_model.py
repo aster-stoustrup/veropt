@@ -1,13 +1,13 @@
 import pytest
 import torch
 
-from veropt.optimiser.model import MaternSingleModel, DoubleMaternKernelSingleModel
+from veropt.optimiser.model import MaternKernel, DoubleMaternKernel
 from veropt.optimiser.utility import DataShape
 
 
 def test_gpy_torch_single_model_init_mandatory_name() -> None:
 
-    class TestModel(MaternSingleModel):
+    class TestModel(MaternKernel):
         pass
 
     with pytest.raises(AssertionError):
@@ -40,7 +40,7 @@ def test_double_matern() -> None:
         dim=DataShape.index_dimensions
     )
 
-    model = DoubleMaternKernelSingleModel(
+    model = DoubleMaternKernel(
         n_variables=3
     )
 

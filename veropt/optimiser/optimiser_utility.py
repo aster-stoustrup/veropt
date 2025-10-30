@@ -313,7 +313,7 @@ def _get_points_greater_than(
 class ParetoOptimalPoints(TypedDict):
     variables: torch.Tensor
     objectives: torch.Tensor
-    indices: list[int]
+    index: list[int]
 
 
 def get_pareto_optimal_points(
@@ -352,7 +352,7 @@ def get_pareto_optimal_points(
     return {
         'variables': variable_values[pareto_optimal_indices_tensor],
         'objectives': objective_values[pareto_optimal_indices_tensor],
-        'indices': pareto_optimal_indices
+        'index': pareto_optimal_indices
     }
 
 

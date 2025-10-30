@@ -85,7 +85,7 @@ class ModelPrediction:
             title: str,
             variable_array: np.ndarray,
             predicted_objective_values: PredictionDict,
-            acquisition_values: torch.Tensor,
+            acquisition_values: Optional[torch.Tensor],
             samples: Optional[torch.Tensor] = None
     ) -> None:
 
@@ -98,7 +98,10 @@ class ModelPrediction:
         self.predicted_values_mean = predicted_objective_values['mean']
         self.predicted_values_lower = predicted_objective_values['lower']
         self.predicted_values_upper = predicted_objective_values['upper']
-        self.acquisition_values: np.ndarray = acquisition_values.detach().numpy()
+        if acquisition_values is None:
+            self.acquisition_values = acquisition_values
+        else:
+            self.acquisition_values: np.ndarray = acquisition_values.detach().numpy()
         self.samples: Optional[torch.Tensor] = samples
 
         self.modified_acquisition_values: Optional[list[torch.Tensor]] = None

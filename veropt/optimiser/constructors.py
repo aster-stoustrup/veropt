@@ -189,6 +189,7 @@ def gpytorch_model(
 
     model_optimiser = torch_model_optimiser(
         kernel_optimiser=kernel_optimiser,
+        learning_rate=training_settings['learning_rate']  # TODO: FIX THIS
     )
 
     return GPyTorchFullModel.from_the_beginning(
@@ -361,12 +362,17 @@ def gpytorch_single_model(
 
 def torch_model_optimiser(
         kernel_optimiser: Optional[KernelOptimiserOptions] = None,
+        learning_rate: float = 0.01
 ) -> TorchModelOptimiser:
 
     # TODO: Should maybe add settings here as well
 
+    # TODO: Fix this mess >:))
+
     if kernel_optimiser == 'adam':
-        return AdamModelOptimiser()
+        return AdamModelOptimiser(
+            **{'lr': learning_rate}
+        )
 
     elif kernel_optimiser is None:
 

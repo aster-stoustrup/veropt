@@ -1,5 +1,5 @@
 from veropt.optimiser.constructors import gpytorch_model, torch_model_optimiser
-from veropt.optimiser.model import GPyTorchFullModel, MaternSingleModel
+from veropt.optimiser.model import GPyTorchFullModel, MaternKernel
 
 
 # TODO: Make tests. Some with correct input and some with wrong
@@ -15,7 +15,7 @@ def test_gpytorch_model() -> None:
     single_model_list = []
     for obj_no in range(n_objectives):
         single_model_list.append(
-            MaternSingleModel(
+            MaternKernel(
                 n_variables=n_variables,
                 lengthscale_upper_bound=lengthscale_upper_bound
             )
@@ -50,4 +50,4 @@ def test_gpytorch_model() -> None:
 
         assert class_name == class_name_from_constructors
 
-    assert model.training_settings == model_from_constructors.training_settings
+    assert model.settings == model_from_constructors.settings
