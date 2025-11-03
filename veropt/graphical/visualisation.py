@@ -575,6 +575,7 @@ def plot_pareto_front(
         objective_values: torch.Tensor,
         dominating_objective_values: torch.Tensor,
         plotted_objective_indices: list[int],
+        objective_names: list[str],
         suggested_points: Optional[SuggestedPoints] = None,
         return_figure: bool = False
 ) -> Union[go.Figure, None]:
@@ -593,6 +594,14 @@ def plot_pareto_front(
             objective_index_y=obj_ind_y,
             dominating_objective_values=dominating_objective_values,
             suggested_points=suggested_points
+        )
+
+        figure.update_xaxes(
+            title_text=objective_names[obj_ind_x]
+        )
+
+        figure.update_yaxes(
+            title_text=objective_names[obj_ind_y]
         )
 
     elif len(plotted_objective_indices) == 3:
@@ -631,6 +640,7 @@ def plot_pareto_front_from_optimiser(
         objective_values=objective_values,
         dominating_objective_values=pareto_optimal_objectives,
         plotted_objective_indices=plotted_objective_indices,
+        objective_names=optimiser.objective.objective_names,
         suggested_points=optimiser.suggested_points
     )
 
@@ -690,7 +700,6 @@ def choose_plot_point(
 ) -> tuple[torch.Tensor, str]:
 
     if optimiser.suggested_points is None:
-        # TODO: Use some general method instead of hard-coding this here
         max_ind = optimiser.get_best_points()['index']
         eval_point = deepcopy(optimiser.evaluated_variable_values[max_ind:max_ind + 1].tensor)
         point_description = f"at the point with the highest known value (point no. {max_ind})"
@@ -762,7 +771,8 @@ def plot_prediction_grid_from_optimiser(
         return_figure: bool = False,
         model_prediction_container: Optional[ModelPredictionContainer] = None,
         evaluated_point: Optional[torch.Tensor] = None,
-        plot_acquisition: bool = False
+        plot_acquisition: bool = False,
+        n_calculated_points: Optional[int] = None
 ) -> Union[go.Figure, None]:
 
     variable_values = optimiser.evaluated_variable_values.tensor
@@ -796,7 +806,8 @@ def plot_prediction_grid_from_optimiser(
                 optimiser=optimiser,
                 variable_index=var_ind,
                 evaluated_point=evaluated_point,
-                calculate_acquisition=plot_acquisition
+                calculate_acquisition=plot_acquisition,
+                n_calculated_points=n_calculated_points
             )
 
             if optimiser.suggested_points and plot_acquisition:

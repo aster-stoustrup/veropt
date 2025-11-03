@@ -860,6 +860,7 @@ class RQMaternParametersInputDict(TypedDict, total=False):
 
 
 # TODO: Probably need to implement adding these kernel classes together
+#   - So we can avoid needing an extra class for every combination >:)
 @dataclass
 class RQMaternParameters(SavableDataClass):
     rq_lengthscale_lower_bound: float = 0.1
@@ -900,8 +901,8 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
 
         kernel = gpytorch.kernels.ScaleKernel(rq_kernel) + gpytorch.kernels.ScaleKernel(matern_kernel)
 
-        kernel.kernels[0].outputscale = 0.8
-        kernel.kernels[1].outputscale = 0.2
+        kernel.kernels[0].outputscale = 0.85
+        kernel.kernels[1].outputscale = 0.15
 
         super().__init__(
             likelihood=likelihood,
@@ -970,13 +971,16 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
 
         assert self.model_with_data is not None, "Must have trained model before calling this"
 
-        return self.model_with_data.covar_module.lengthscale
+        return {
+            'rational_quadratic': self.model_with_data.covar_module.kernels[0].base_kernel.lengthscale,
+            'matern': self.model_with_data.covar_module.kernels[1].base_kernel.lengthscale
+        }
 
     def get_alpha(self) -> torch.Tensor:
 
         assert self.model_with_data is not None, "Must have trained model before calling this"
 
-        return self.model_with_data.covar_module.alpha
+        return self.model_with_data.covar_module.kernels[0].base_kernel.alpha
 
     def get_settings(self) -> SavableDataClass:
         return self.settings
