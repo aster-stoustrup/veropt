@@ -263,6 +263,35 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             constraint: Union[Interval, GreaterThan, LessThan],
             parameter_name: str,
             module: str,
+            second_module: Optional[str] = None,
+            kernel_number: Optional[int] = None
+    ):
+        if kernel_number is not None:
+
+            assert second_module is None
+            assert module == 'covar_module'
+
+            self.set_constraint_multiple_kernels(
+                constraint=constraint,
+                parameter_name=parameter_name,
+                module=module,
+                kernel_number=kernel_number
+            )
+
+        else:
+
+            self.set_constraint_modules(
+                constraint=constraint,
+                parameter_name=parameter_name,
+                module=module,
+                second_module=second_module
+            )
+
+    def set_constraint_modules(
+            self,
+            constraint: Union[Interval, GreaterThan, LessThan],
+            parameter_name: str,
+            module: str,
             second_module: Optional[str] = None
     ) -> None:
         if self.model_with_data is not None:
@@ -285,14 +314,42 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             # Might want to store these constraints and feed them to the trained model when it's made?
             raise NotImplementedError("Currently don't support setting constraints before model is given data.")
 
+    def set_constraint_multiple_kernels(
+            self,
+            constraint: Union[Interval, GreaterThan, LessThan],
+            parameter_name: str,
+            module: str,
+            kernel_number: int
+    ):
+
+        assert self.model_with_data is not None, "Must have initialised with data before calling this"
+
+        kernel_to_alter = self.model_with_data.covar_module.kernels[kernel_number]
+
+        if isinstance(kernel_to_alter, gpytorch.kernels.ScaleKernel):
+
+            kernel_to_alter.base_kernel.register_constraint(
+                param_name=parameter_name,
+                constraint=constraint
+            )
+
+        else:
+
+            self.model_with_data.covar_module.kernels[kernel_number].register_constraint(
+                param_name=parameter_name,
+                constraint=constraint
+            )
+
     def change_interval_constraints(
             self,
             lower_bound: float,
             upper_bound: float,
             parameter_name: str,
             module: str,
-            second_module: Optional[str] = None
+            second_module: Optional[str] = None,
+            kernel_number: Optional[int] = None
     ) -> None:
+
         constraint = Interval(
             lower_bound=lower_bound,
             upper_bound=upper_bound
@@ -302,7 +359,8 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             constraint=constraint,
             parameter_name=parameter_name,
             module=module,
-            second_module=second_module
+            second_module=second_module,
+            kernel_number=kernel_number
         )
 
     def change_greater_than_constraint(
@@ -310,8 +368,8 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             lower_bound: float,
             parameter_name: str,
             module: str,
-            second_module: Optional[str] = None
-
+            second_module: Optional[str] = None,
+            kernel_number: Optional[int] = None
     ) -> None:
         constraint = GreaterThan(
             lower_bound=lower_bound
@@ -321,7 +379,8 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             constraint=constraint,
             parameter_name=parameter_name,
             module=module,
-            second_module=second_module
+            second_module=second_module,
+            kernel_number=kernel_number
         )
 
     def change_less_than_constraint(
@@ -329,7 +388,8 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             upper_bound: float,
             parameter_name: str,
             module: str,
-            second_module: Optional[str] = None
+            second_module: Optional[str] = None,
+            kernel_number: Optional[int] = None
     ) -> None:
         constraint = LessThan(
             upper_bound=upper_bound
@@ -339,7 +399,8 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             constraint=constraint,
             parameter_name=parameter_name,
             module=module,
-            second_module=second_module
+            second_module=second_module,
+            kernel_number=kernel_number
         )
 
     def set_noise_constraint(
@@ -359,7 +420,6 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             module='likelihood',
             second_module='noise_covar'
         )
-
 
     def set_noise(
             self,
@@ -652,6 +712,299 @@ class DoubleMaternKernel(GPyTorchSingleModel):
 
     def get_settings(self) -> SavableDataClass:
         return self.settings
+
+
+class RQParametersInputDict(TypedDict, total=False):
+    lengthscale_lower_bound: float
+    lengthscale_upper_bound: float
+    alpha_lower_bound: Optional[float]
+    alpha_upper_bound: Optional[float]
+    noise: float
+    noise_lower_bound: float
+    train_noise: bool
+
+
+@dataclass
+class RQParameters(SavableDataClass):
+    lengthscale_lower_bound: float = 0.1
+    lengthscale_upper_bound: float = 2.0
+    alpha_lower_bound: Optional[float] = None
+    alpha_upper_bound: Optional[float] = None
+    noise: float = 1e-8
+    noise_lower_bound: float = 1e-8
+    train_noise: bool = False
+
+
+class RationalQuadraticKernel(GPyTorchSingleModel):
+
+    name = 'rational_quadratic'
+
+    def __init__(
+            self,
+            n_variables: int,
+            **settings: Unpack[RQParametersInputDict]
+    ):
+
+        self.settings = RQParameters(
+            **settings
+        )
+
+        likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        mean_module = gpytorch.means.ConstantMean()
+        kernel = gpytorch.kernels.RQKernel(
+            ard_num_dims=n_variables
+        )
+
+        super().__init__(
+            likelihood=likelihood,
+            mean_module=mean_module,
+            kernel=kernel,
+            n_variables=n_variables,
+            train_noise=self.settings.train_noise  # TODO: Handle this in a nicer way >:)
+        )
+
+    @classmethod
+    def from_n_variables_and_settings(
+            cls,
+            n_variables: int,
+            settings: Mapping[str, Any]
+    ) -> Self:
+
+        _validate_typed_dict(
+            typed_dict=settings,
+            expected_typed_dict_class=RQParametersInputDict,
+            object_name=cls.name,
+        )
+
+        return cls(
+            n_variables=n_variables,
+            **settings
+        )
+
+    def _set_up_model_constraints(self) -> None:
+
+        self.change_lengthscale_constraints(
+            lower_bound=self.settings.lengthscale_lower_bound,
+            upper_bound=self.settings.lengthscale_upper_bound
+        )
+
+        if (self.settings.alpha_lower_bound is not None) and (self.settings.alpha_upper_bound is not None):
+            self.change_alpha_constraints(
+                lower_bound=self.settings.alpha_lower_bound,
+                upper_bound=self.settings.alpha_upper_bound
+            )
+
+        elif (self.settings.alpha_lower_bound is not None) or (self.settings.alpha_upper_bound is not None):
+            raise NotImplementedError("Currently only support setting both or none of alpha's bounds.")
+
+        self.set_noise(
+            noise=self.settings.noise
+        )
+
+        self.set_noise_constraint(
+            lower_bound=self.settings.noise_lower_bound
+        )
+
+    def change_alpha_constraints(
+            self,
+            lower_bound: float,
+            upper_bound: float
+    ) -> None:
+
+        self.change_interval_constraints(
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            module='covar_module',
+            parameter_name='alpha'
+        )
+
+    def change_lengthscale_constraints(
+            self,
+            lower_bound: float,
+            upper_bound: float
+    ) -> None:
+
+        self.change_interval_constraints(
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            module='covar_module',
+            parameter_name='raw_lengthscale'
+        )
+
+    def get_lengthscale(self) -> torch.Tensor:
+
+        assert self.model_with_data is not None, "Must have trained model before calling this"
+
+        return self.model_with_data.covar_module.lengthscale
+
+    def get_alpha(self) -> torch.Tensor:
+
+        assert self.model_with_data is not None, "Must have trained model before calling this"
+
+        return self.model_with_data.covar_module.alpha
+
+    def get_settings(self) -> SavableDataClass:
+        return self.settings
+
+
+class RQMaternParametersInputDict(TypedDict, total=False):
+    rq_lengthscale_lower_bound: float
+    rq_lengthscale_upper_bound: float
+    alpha_lower_bound: Optional[float]
+    alpha_upper_bound: Optional[float]
+    matern_lengthscale_lower_bound: float
+    matern_lengthscale_upper_bound: float
+    noise: float
+    noise_lower_bound: float
+    train_noise: bool
+
+
+# TODO: Probably need to implement adding these kernel classes together
+@dataclass
+class RQMaternParameters(SavableDataClass):
+    rq_lengthscale_lower_bound: float = 0.1
+    rq_lengthscale_upper_bound: float = 2.0
+    alpha_lower_bound: Optional[float] = None
+    alpha_upper_bound: Optional[float] = None
+    matern_lengthscale_lower_bound: float = 0.1
+    matern_lengthscale_upper_bound: float = 2.0
+    noise: float = 1e-8
+    noise_lower_bound: float = 1e-8
+    train_noise: bool = False
+
+
+class RationalQuadraticMaternKernel(GPyTorchSingleModel):
+
+    name = 'rational_quadratic_and_matern'
+
+    def __init__(
+            self,
+            n_variables: int,
+            **settings: RQMaternParametersInputDict
+    ):
+
+        self.settings = RQMaternParameters(
+            **settings
+        )
+
+        likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        mean_module = gpytorch.means.ConstantMean()
+        rq_kernel = gpytorch.kernels.RQKernel(
+            ard_num_dims=n_variables
+        )
+
+        matern_kernel = gpytorch.kernels.MaternKernel(
+            ard_num_dims=n_variables,
+            nu=0.5
+        )
+
+        kernel = gpytorch.kernels.ScaleKernel(rq_kernel) + gpytorch.kernels.ScaleKernel(matern_kernel)
+
+        kernel.kernels[0].outputscale = 0.8
+        kernel.kernels[1].outputscale = 0.2
+
+        super().__init__(
+            likelihood=likelihood,
+            mean_module=mean_module,
+            kernel=kernel,
+            n_variables=n_variables,
+            train_noise=self.settings.train_noise  # TODO: Handle this in a nicer way >:)
+        )
+
+    @classmethod
+    def from_n_variables_and_settings(
+            cls,
+            n_variables: int,
+            settings: Mapping[str, Any]
+    ) -> Self:
+
+        _validate_typed_dict(
+            typed_dict=settings,
+            expected_typed_dict_class=RQMaternParameters,
+            object_name=cls.name,
+        )
+
+        return cls(
+            n_variables=n_variables,
+            **settings
+        )
+
+    def _set_up_model_constraints(self) -> None:
+
+        self.change_interval_constraints(
+            lower_bound=self.settings.rq_lengthscale_lower_bound,
+            upper_bound=self.settings.rq_lengthscale_upper_bound,
+            module='covar_module',
+            parameter_name='raw_lengthscale',
+            kernel_number=0
+        )
+
+        if (self.settings.alpha_lower_bound is not None) and (self.settings.alpha_upper_bound is not None):
+            self.change_interval_constraints(
+                lower_bound=self.settings.alpha_lower_bound,
+                upper_bound=self.settings.alpha_upper_bound,
+                module='covar_module',
+                parameter_name='raw_alpha',
+                kernel_number=0
+            )
+
+        elif (self.settings.alpha_lower_bound is not None) or (self.settings.alpha_upper_bound is not None):
+            raise NotImplementedError("Currently only support setting both or none of alpha's bounds.")
+
+        self.change_interval_constraints(
+            lower_bound=self.settings.matern_lengthscale_lower_bound,
+            upper_bound=self.settings.matern_lengthscale_upper_bound,
+            module='covar_module',
+            parameter_name='raw_lengthscale',
+            kernel_number=1
+        )
+        self.set_noise(
+            noise=self.settings.noise
+        )
+
+        self.set_noise_constraint(
+            lower_bound=self.settings.noise_lower_bound
+        )
+
+    def get_lengthscale(self) -> torch.Tensor:
+
+        assert self.model_with_data is not None, "Must have trained model before calling this"
+
+        return self.model_with_data.covar_module.lengthscale
+
+    def get_alpha(self) -> torch.Tensor:
+
+        assert self.model_with_data is not None, "Must have trained model before calling this"
+
+        return self.model_with_data.covar_module.alpha
+
+    def get_settings(self) -> SavableDataClass:
+        return self.settings
+
+    def _set_up_trained_parameters(self) -> None:
+
+        # Note: Overwriting this method to exclude the outputscales in the ScaleKernel's
+
+        parameter_group_list = []
+
+        assert self.model_with_data is not None, "Model must be initialised to use this function."
+
+        if self.train_noise is True:
+            raise NotImplementedError("Not implemented for this kernel")
+
+        parameter_group_list.append(
+            {'params': self.model_with_data.mean_module.parameters()}
+        )
+
+        parameter_group_list.append(
+            {'params': self.model_with_data.covar_module.kernels[0].base_kernel.parameters()}
+        )
+
+        parameter_group_list.append(
+            {'params': self.model_with_data.covar_module.kernels[1].base_kernel.parameters()}
+        )
+
+        self.trained_parameters = parameter_group_list
 
 
 class SMKParametersInputDict(TypedDict, total=False):
@@ -1234,7 +1587,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         # TODO: Do something better with this
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer=self._model_optimiser.optimiser,
-            milestones=[100, 2_000, 5_000, 8_000]
+            milestones=[1_000, 3_000, 5_000, 8_000]
         )
 
         # TODO: This stupid thing is breaking the structure :(

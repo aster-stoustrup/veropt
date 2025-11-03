@@ -706,7 +706,7 @@ def fill_model_prediction_from_optimiser(
         optimiser: BayesianOptimiser,
         variable_index: int,
         evaluated_point: Optional[torch.Tensor],
-        n: int = 2_000
+        n: int = 10_000
 ) -> ModelPrediction:
 
     if evaluated_point is None:
