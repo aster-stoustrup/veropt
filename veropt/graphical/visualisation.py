@@ -706,8 +706,15 @@ def fill_model_prediction_from_optimiser(
         optimiser: BayesianOptimiser,
         variable_index: int,
         evaluated_point: Optional[torch.Tensor],
-        n: int = 10_000
+        n_calculated_points: Optional[int] = None,
+        calculate_acquisition: bool = False
 ) -> ModelPrediction:
+
+    if n_calculated_points is None:
+        if calculate_acquisition is False:
+            n_calculated_points = 10_000
+        else:
+            n_calculated_points = 200
 
     if evaluated_point is None:
 
@@ -721,11 +728,18 @@ def fill_model_prediction_from_optimiser(
     variable_array = torch.linspace(
         start=optimiser.bounds[0, variable_index].tensor,
         end=optimiser.bounds[1, variable_index].tensor,
-        steps=n
+        steps=n_calculated_points
     )
 
     all_variables_array = evaluated_point.repeat(len(variable_array), 1)
     all_variables_array[:, variable_index] = variable_array
+
+    if calculate_acquisition:
+        acquisition_values = optimiser.predictor.get_acquisition_values(
+            variable_values=all_variables_array
+        )
+    else:
+        acquisition_values = None
 
     return ModelPrediction(
         variable_index=variable_index,
@@ -735,7 +749,7 @@ def fill_model_prediction_from_optimiser(
         predicted_objective_values=optimiser.predictor.predict_values(
             variable_values=all_variables_array
         ),
-        acquisition_values=None,  # TODO: Fix :))
+        acquisition_values=acquisition_values,
         samples=optimiser.predictor.make_samples(
             variable_values=all_variables_array,
             n_samples=5
@@ -782,6 +796,7 @@ def plot_prediction_grid_from_optimiser(
                 optimiser=optimiser,
                 variable_index=var_ind,
                 evaluated_point=evaluated_point,
+                calculate_acquisition=plot_acquisition
             )
 
             if optimiser.suggested_points and plot_acquisition:
@@ -819,7 +834,8 @@ def plot_prediction_grid_from_optimiser(
         objective_values=objective_values,
         objective_names=objective_names,
         variable_names=variable_names,
-        suggested_points=suggested_points
+        suggested_points=suggested_points,
+        plot_acquisition=plot_acquisition
     )
 
     if return_figure:
@@ -887,7 +903,7 @@ def _add_model_traces(
             go.Scatter(
                 x=model_prediction.variable_array,
                 y=model_prediction.samples[sample_no, objective_index, :].detach().numpy(),
-                line={'color': "rgba(0.5, 0.5, 0.5, 0.5)"},
+                line={'color': "rgba(0.5, 0.5, 0.5, 0.3)"},
                 name='Model sample',
                 legendgroup=legend_group,
                 showlegend=True if (row_no == 1 and col_no == 1) else False
@@ -903,7 +919,8 @@ def plot_prediction_grid(
         objective_values: torch.Tensor,
         objective_names: list[str],
         variable_names: list[str],
-        suggested_points: Optional[SuggestedPoints] = None
+        suggested_points: Optional[SuggestedPoints] = None,
+        plot_acquisition: bool = False
 ) -> go.Figure:
 
     # TODO: Add option to plot subset of all these
@@ -1019,37 +1036,37 @@ def plot_prediction_grid(
                 legend_group='model'
             )
 
-            # TODO: Re-activate acq func but make optional
+            if plot_acquisition:
             # TODO: Make acq func colours nicer
-            # acquisition_function_colour = 'grey'
-            #
-            # figure.add_trace(
-            #     go.Scatter(
-            #         x=model_prediction.variable_array,
-            #         y=model_prediction.acquisition_values / acq_func_scaling,
-            #         line={'color': acquisition_function_colour},
-            #         name='Acquisition function',
-            #         legendgroup='acq func',
-            #         showlegend=True if (row_no == 1 and col_no == 1) else False
-            #     ),
-            #     row=row_no, col=col_no
-            # )
-            #
-            # if model_prediction.modified_acquisition_values is not None:
-            #
-            #     for punish_ind, punished_acq_fun_vals in enumerate(model_prediction.modified_acquisition_values):
-            #
-            #         figure.add_trace(
-            #             go.Scatter(
-            #                 x=model_prediction.variable_array,
-            #                 y=punished_acq_fun_vals.detach() / acq_func_scaling,
-            #                 line={'color': acquisition_function_colour},
-            #                 name=f'Acq. func., as seen by suggested point {punish_ind + 1}',
-            #                 legendgroup=f'acq func {punish_ind}',
-            #                 showlegend=True if (row_no == 1 and col_no == 1) else False
-            #             ),
-            #             row=row_no, col=col_no
-            #         )
+                acquisition_function_colour = 'grey'
+
+                figure.add_trace(
+                    go.Scatter(
+                        x=model_prediction.variable_array,
+                        y=model_prediction.acquisition_values / acq_func_scaling,
+                        line={'color': acquisition_function_colour},
+                        name='Acquisition function',
+                        legendgroup='acq func',
+                        showlegend=True if (row_no == 1 and col_no == 1) else False
+                    ),
+                    row=row_no, col=col_no
+                )
+
+                if model_prediction.modified_acquisition_values is not None:
+
+                    for punish_ind, punished_acq_fun_vals in enumerate(model_prediction.modified_acquisition_values):
+
+                        figure.add_trace(
+                            go.Scatter(
+                                x=model_prediction.variable_array,
+                                y=punished_acq_fun_vals.detach() / acq_func_scaling,
+                                line={'color': acquisition_function_colour},
+                                name=f'Acq. func., as seen by suggested point {punish_ind + 1}',
+                                legendgroup=f'acq func {punish_ind}',
+                                showlegend=True if (row_no == 1 and col_no == 1) else False
+                            ),
+                            row=row_no, col=col_no
+                        )
 
             figure.add_trace(
                 go.Scatter(
