@@ -20,6 +20,7 @@ from veropt.optimiser.utility import (
 )
 from veropt.optimiser.optimiser_utility import list_with_floats_to_string
 
+
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
 class SurrogateModel(metaclass=abc.ABCMeta):
 

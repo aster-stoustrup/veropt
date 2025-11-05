@@ -7,9 +7,10 @@ from veropt.optimiser.acquisition_optimiser import (
     AcquisitionOptimiser, DualAnnealingSettingsInputDict,
     ProximityPunishSettingsInputDict, ProximityPunishmentSequentialOptimiser
 )
+from veropt.optimiser.kernels import KernelInputDict
 from veropt.optimiser.model import (
     AdamModelOptimiser, GPyTorchFullModel, GPyTorchSingleModel,
-    GPyTorchTrainingParametersInputDict, MaternParametersInputDict, TorchModelOptimiser
+    GPyTorchTrainingParametersInputDict, TorchModelOptimiser
 )
 from veropt.optimiser.normalisation import Normaliser, NormaliserChoice, get_normaliser_class
 from veropt.optimiser.objective import CallableObjective, InterfaceObjective
@@ -25,7 +26,6 @@ KernelOptimiserOptions = Literal['adam']
 AcquisitionOptions = Literal['qlogehvi', 'ucb']
 AcquisitionOptimiserOptions = Literal['dual_annealing']
 
-KernelInputDict = MaternParametersInputDict  # To be expanded when more kernels are added
 AcquisitionSettings = UpperConfidenceBoundOptionsInputDict  # expand with more options when adding acq_funcs
 AcquisitionOptimiserSettings = DualAnnealingSettingsInputDict  # expand when adding more options
 

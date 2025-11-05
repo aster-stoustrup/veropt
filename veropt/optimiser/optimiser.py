@@ -22,7 +22,7 @@ from veropt.optimiser.optimiser_utility import (
 from veropt.optimiser.prediction import Predictor
 from veropt.optimiser.utility import (
     DataShape, TensorWithNormalisationFlag, check_variable_and_objective_shapes,
-    enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs
+    enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs, PredictionDict
 )
 from veropt.optimiser.saver_loader_utility import SavableClass, rehydrate_object
 
@@ -455,6 +455,37 @@ class BayesianOptimiser(SavableClass):
 
         return pareto_optimal_points
 
+    def predict_values(
+            self,
+            *,
+            variable_values_flagged: TensorWithNormalisationFlag,
+            normalised: bool
+    ) -> PredictionDict:
+
+        # if self.return_normalised_data and (variable_values_flagged.normalised is False):
+        #
+        #     # TODO: change input to something better
+        #
+        #     # TODO: Check if incoming vars are normalised and convert if not (model needs normed vars)
+        #     raise NotImplementedError()
+        #
+        # prediction = self.predictor.predict_values(
+        #     variable_values=variable_values
+        # )
+        #
+        # if self.return_normalised_data and (normalised is False):
+        #     for prediction_type in ['mean', 'lower', 'upper']:
+        #         prediction[prediction_type] = self._normaliser_objectives.inverse_transform(
+        #             tensor=prediction['mean']
+        #         )
+        #
+        # return  prediction
+
+        # TODO: Finish
+
+        raise NotImplementedError()
+
+
     def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:
 
         assert self.objective_type == ObjectiveKind.callable, (
@@ -675,6 +706,29 @@ class BayesianOptimiser(SavableClass):
 
         self.predictor.update_bounds(
             new_bounds=self.bounds.tensor
+        )
+
+    @_check_input_dimensions
+    def _unnormalise_objectives(
+            self,
+            *,
+            objective_values_flagged: TensorWithNormalisationFlag
+    ) -> TensorWithNormalisationFlag:
+
+        if objective_values_flagged.normalised:
+
+            assert self._normaliser_objectives is not None, "Normaliser must be initialised at this point"
+
+            objectives_real_units = self._normaliser_objectives.inverse_transform(
+                tensor=objective_values_flagged.tensor
+            )
+
+        else:
+            objectives_real_units = objective_values_flagged.tensor
+
+        return TensorWithNormalisationFlag(
+            tensor=objectives_real_units,
+            normalised=False
         )
 
     @_check_input_dimensions

@@ -1,10 +1,19 @@
 from dataclasses import dataclass
-from typing import TypedDict, Unpack, Mapping, Any, Optional, Self
+from typing import TypedDict, Unpack, Mapping, Any, Optional, Self, Union
 
 import gpytorch
 import torch
 from gpytorch.constraints import Interval
 from veropt.optimiser.model import GPyTorchSingleModel
+from veropt.optimiser.saver_loader_utility import SavableDataClass
+from veropt.optimiser.utility import _validate_typed_dict
+
+
+KernelInputDict = Union[
+    'MaternParametersInputDict', 'DoubleMaternParametersInputDict',
+    'RQParametersInputDict', 'RQMaternParametersInputDict',
+    'SMKParametersInputDict', 'SpectralDeltaParametersInputDict'
+]
 
 
 class MaternParametersInputDict(TypedDict, total=False):

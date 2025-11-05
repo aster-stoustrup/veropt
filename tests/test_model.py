@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from veropt.optimiser.model import MaternKernel, DoubleMaternKernel
+from veropt.optimiser.kernels import MaternKernel, DoubleMaternKernel
 from veropt.optimiser.utility import DataShape
 
 

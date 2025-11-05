@@ -1,5 +1,6 @@
 from veropt.optimiser.constructors import gpytorch_model, torch_model_optimiser
-from veropt.optimiser.model import GPyTorchFullModel, MaternKernel
+from veropt.optimiser.kernels import MaternKernel
+from veropt.optimiser.model import GPyTorchFullModel
 
 
 # TODO: Make tests. Some with correct input and some with wrong

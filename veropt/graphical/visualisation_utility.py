@@ -151,7 +151,13 @@ class ModelPrediction:
 
 
 class ModelPredictionContainer:
-    def __init__(self) -> None:
+    def __init__(
+            self,
+            normalised: bool
+    ) -> None:
+
+        self.normalised = normalised
+
         self.data: list[ModelPrediction] = []
         self.points: torch.Tensor = torch.tensor([])
         self.variable_indices: np.ndarray = np.array([])

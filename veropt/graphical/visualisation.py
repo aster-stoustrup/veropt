@@ -716,7 +716,8 @@ def fill_model_prediction_from_optimiser(
         variable_index: int,
         evaluated_point: Optional[torch.Tensor],
         n_calculated_points: Optional[int] = None,
-        calculate_acquisition: bool = False
+        calculate_acquisition: bool = False,
+        normalised: bool = True
 ) -> ModelPrediction:
 
     if n_calculated_points is None:
@@ -734,6 +735,10 @@ def fill_model_prediction_from_optimiser(
     else:
         title = ''
 
+    # TODO: Figure out how to handle normalisation in the variables
+    #   - Need to make sure we don't unnormalise input for model + acq func
+    #   - But need to fill the container with unnormalised (when asked)
+
     variable_array = torch.linspace(
         start=optimiser.bounds[0, variable_index].tensor,
         end=optimiser.bounds[1, variable_index].tensor,
@@ -750,19 +755,33 @@ def fill_model_prediction_from_optimiser(
     else:
         acquisition_values = None
 
+    # TODO: Figure out nicest way to do this
+    if normalised and optimiser.return_normalised_data:
+        samples = optimiser.predictor.make_samples(
+            variable_values=all_variables_array,
+            n_samples=5
+        )
+    else:
+        samples_normalised = optimiser.predictor.make_samples(
+            variable_values=all_variables_array,
+            n_samples=5
+        )
+
+        samples = optimiser._normaliser_objectives.inverse_transform(
+            tensor=samples_normalised
+        )
+
     return ModelPrediction(
         variable_index=variable_index,
         point=evaluated_point,
         title=title,
         variable_array=variable_array,
-        predicted_objective_values=optimiser.predictor.predict_values(
-            variable_values=all_variables_array
+        predicted_objective_values=optimiser.predict_values(
+            variable_values=all_variables_array,
+            normalised=normalised
         ),
         acquisition_values=acquisition_values,
-        samples=optimiser.predictor.make_samples(
-            variable_values=all_variables_array,
-            n_samples=5
-        )
+        samples=samples
     )
 
 
@@ -772,7 +791,8 @@ def plot_prediction_grid_from_optimiser(
         model_prediction_container: Optional[ModelPredictionContainer] = None,
         evaluated_point: Optional[torch.Tensor] = None,
         plot_acquisition: bool = False,
-        n_calculated_points: Optional[int] = None
+        n_calculated_points: Optional[int] = None,
+        normalised: bool = True
 ) -> Union[go.Figure, None]:
 
     variable_values = optimiser.evaluated_variable_values.tensor
@@ -783,7 +803,13 @@ def plot_prediction_grid_from_optimiser(
     n_variables = variable_values.shape[DataShape.index_dimensions]
 
     if model_prediction_container is None:
-        model_prediction_container = ModelPredictionContainer()
+        model_prediction_container = ModelPredictionContainer(
+            normalised=normalised
+        )
+
+    else:
+        # Could do more checks to make sure this is consistent but this will probably catch most potential errors
+        assert model_prediction_container.normalised == normalised
 
     if evaluated_point is None:
         # I guess there's a non-caught case where no point was chosen but the auto-selected point is already calculated
