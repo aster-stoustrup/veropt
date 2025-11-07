@@ -432,8 +432,6 @@ def plot_pareto_front_grid_from_optimiser(
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
 
-    # pareto_optimal_objectives = optimiser.get_pareto_optimal_points()['objectives']
-
     pareto_optimal_objectives = get_pareto_optimal_points(
         variable_values=variable_values,
         objective_values=objective_values,
@@ -442,7 +440,7 @@ def plot_pareto_front_grid_from_optimiser(
     objective_names = optimiser.objective.objective_names
 
     figure_or_none = plot_pareto_front_grid(
-        variable_values=variable_values,
+        objective_values=objective_values,
         objective_names=objective_names,
         dominating_objective_values=pareto_optimal_objectives,
         suggested_points=optimiser.suggested_points,
@@ -453,7 +451,7 @@ def plot_pareto_front_grid_from_optimiser(
 
 
 def plot_pareto_front_grid(
-        variable_values: torch.Tensor,
+        objective_values: torch.Tensor,
         objective_names: list[str],
         dominating_objective_values: torch.Tensor,
         suggested_points: Optional[SuggestedPoints] = None,
@@ -476,7 +474,7 @@ def plot_pareto_front_grid(
             if not objective_index_x == objective_index_y:
                 figure = _add_pareto_traces_2d(
                     figure=figure,
-                    objective_values=variable_values,
+                    objective_values=objective_values,
                     objective_index_x=objective_index_x,
                     objective_index_y=objective_index_y,
                     dominating_objective_values=dominating_objective_values,
@@ -649,18 +647,34 @@ def plot_pareto_front(
 
 def plot_pareto_front_from_optimiser(
         optimiser: BayesianOptimiser,
-        plotted_objective_indices: list[int]
+        plotted_objective_indices: list[int],
+        return_figure: bool = False,
+        normalised: bool = True
 ) -> None:
-    objective_values = optimiser.evaluated_objective_values.tensor
-    pareto_optimal_objectives = optimiser.get_pareto_optimal_points()['objectives']
 
-    plot_pareto_front(
+    if optimiser.return_normalised_data and normalised is False:
+        variable_values = optimiser.evaluated_variables_real_units
+        objective_values = optimiser.evaluated_objectives_real_units
+
+    else:
+        variable_values = optimiser.evaluated_variable_values.tensor
+        objective_values = optimiser.evaluated_objective_values.tensor
+
+    pareto_optimal_objectives = get_pareto_optimal_points(
+        variable_values=variable_values,
+        objective_values=objective_values,
+    )['objectives']
+
+    figure_or_none = plot_pareto_front(
         objective_values=objective_values,
         dominating_objective_values=pareto_optimal_objectives,
         plotted_objective_indices=plotted_objective_indices,
         objective_names=optimiser.objective.objective_names,
-        suggested_points=optimiser.suggested_points
+        suggested_points=optimiser.suggested_points,
+        return_figure=return_figure,
     )
+
+    return figure_or_none
 
 
 # TODO: Move somewhere nice
