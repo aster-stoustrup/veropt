@@ -245,6 +245,9 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
 
             if second_module is None:
 
+                module = self.model_with_data.__getattr__(module)
+                assert isinstance(module, gpytorch.Module)
+
                 self.model_with_data.__getattr__(module).register_constraint(
                     param_name=parameter_name,
                     constraint=constraint
@@ -252,7 +255,10 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
 
             else:
 
-                self.model_with_data.__getattr__(module).__getattr__(second_module).register_constraint(
+                module = (self.model_with_data.__getattr__(module).__getattr__(second_module))
+                assert isinstance(module, gpytorch.Module)
+
+                module.register_constraint(
                     param_name=parameter_name,
                     constraint=constraint
                 )
