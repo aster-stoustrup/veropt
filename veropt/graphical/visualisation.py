@@ -880,7 +880,16 @@ def plot_prediction_grid_from_optimiser(
         assert model_prediction_container.normalised == normalised
 
     if isinstance(evaluated_point, int):
-        raise NotImplementedError()
+
+        if suggested_points is not None:
+            concatenated_variable_values = torch.concat([
+                variable_values,
+                suggested_points.variable_values
+            ])
+        else:
+            concatenated_variable_values = variable_values
+
+        evaluated_point = concatenated_variable_values[evaluated_point]
 
     if evaluated_point is None:
         # I guess there's a non-caught case where no point was chosen but the auto-selected point is already calculated
@@ -1009,16 +1018,20 @@ def _add_model_traces(
         ),
         row=row_no, col=col_no
     )
-    
+
     for sample_no in range(model_prediction.samples.shape[0]):
+
+        show_legend_sample = True if (row_no == 1 and col_no == 1) else False
+        show_legend_sample = show_legend_sample and (sample_no == 0)
+
         figure.add_trace(
             go.Scatter(
                 x=model_prediction.variable_array,
                 y=model_prediction.samples[sample_no, :, objective_index].detach().numpy(),
                 line={'color': "rgba(0.5, 0.5, 0.5, 0.3)"},
                 name='Model sample',
-                legendgroup=legend_group,
-                showlegend=True if (row_no == 1 and col_no == 1) else False
+                legendgroup='Model sample',
+                showlegend=show_legend_sample
             ),
             row=row_no, col=col_no
         )
