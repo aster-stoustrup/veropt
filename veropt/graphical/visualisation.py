@@ -419,19 +419,37 @@ def plot_progression_from_optimiser(
 
 
 def plot_pareto_front_grid_from_optimiser(
-        optimiser: BayesianOptimiser
-) -> None:
-    variable_values = optimiser.evaluated_variable_values.tensor
-    pareto_optimal_objectives = optimiser.get_pareto_optimal_points()['objectives']
+        optimiser: BayesianOptimiser,
+        return_figure: bool = False,
+        normalised: bool = True
+) -> None | go.Figure:
+
+    if optimiser.return_normalised_data and normalised is False:
+        variable_values = optimiser.evaluated_variables_real_units
+        objective_values = optimiser.evaluated_objectives_real_units
+
+    else:
+        variable_values = optimiser.evaluated_variable_values.tensor
+        objective_values = optimiser.evaluated_objective_values.tensor
+
+    # pareto_optimal_objectives = optimiser.get_pareto_optimal_points()['objectives']
+
+    pareto_optimal_objectives = get_pareto_optimal_points(
+        variable_values=variable_values,
+        objective_values=objective_values,
+    )['objectives']
 
     objective_names = optimiser.objective.objective_names
 
-    plot_pareto_front_grid(
+    figure_or_none = plot_pareto_front_grid(
         variable_values=variable_values,
         objective_names=objective_names,
         dominating_objective_values=pareto_optimal_objectives,
         suggested_points=optimiser.suggested_points,
+        return_figure=return_figure
     )
+
+    return figure_or_none
 
 
 def plot_pareto_front_grid(
@@ -715,10 +733,14 @@ def fill_model_prediction_from_optimiser(
         optimiser: BayesianOptimiser,
         variable_index: int,
         evaluated_point: Optional[torch.Tensor],
+        fill_with_normalised_data: bool,
         n_calculated_points: Optional[int] = None,
         calculate_acquisition: bool = False,
-        normalised: bool = True
 ) -> ModelPrediction:
+
+    # TODO: CLEAN THIS UP (Fix ugly norm. stuff >:))
+    #   - Ideally normalisation should be handled more smoothly and just be a flag somewhere
+    #   - i.e. this method shouldn't really be doing anything about that on its own
 
     if n_calculated_points is None:
         if calculate_acquisition is False:
@@ -734,10 +756,6 @@ def fill_model_prediction_from_optimiser(
 
     else:
         title = ''
-
-    # TODO: Figure out how to handle normalisation in the variables
-    #   - Need to make sure we don't unnormalise input for model + acq func
-    #   - But need to fill the container with unnormalised (when asked)
 
     variable_array = torch.linspace(
         start=optimiser.bounds[0, variable_index].tensor,
@@ -755,31 +773,58 @@ def fill_model_prediction_from_optimiser(
     else:
         acquisition_values = None
 
-    # TODO: Figure out nicest way to do this
-    if normalised and optimiser.return_normalised_data:
-        samples = optimiser.predictor.make_samples(
-            variable_values=all_variables_array,
-            n_samples=5
-        )
-    else:
+    # TODO: Figure out nicer way to handle norm.
+    if fill_with_normalised_data is False and optimiser.return_normalised_data:
+
         samples_normalised = optimiser.predictor.make_samples(
             variable_values=all_variables_array,
             n_samples=5
         )
 
-        samples = optimiser._normaliser_objectives.inverse_transform(
-            tensor=samples_normalised
+        samples = torch.zeros(samples_normalised.shape)
+        for sample_no in range(samples_normalised.shape[0]):
+            samples[sample_no] = optimiser._normaliser_objectives.inverse_transform(
+                tensor=samples_normalised[sample_no]
+            )
+
+        variable_array_is_normalised = False
+
+        # This is messy >:)) ( TODO: FIX )
+        #   - This is just unnormalised after this I guess >:) (oops, very confusing)
+        all_variables_array = optimiser._normaliser_variables.inverse_transform(
+            tensor=all_variables_array
         )
+
+        variable_array = all_variables_array[:, variable_index]
+
+        evaluated_point = optimiser._normaliser_variables.inverse_transform(
+            tensor=evaluated_point
+        )
+
+    else:
+
+        if optimiser.return_normalised_data:
+            variable_array_is_normalised = True
+        else:
+            variable_array_is_normalised = False
+
+        samples = optimiser.predictor.make_samples(
+            variable_values=all_variables_array,
+            n_samples=5
+        )
+
+    predicted_objective_values = optimiser.predict_values(
+        variable_values=all_variables_array,
+        variables_normalised=variable_array_is_normalised,
+        return_normalised_objectives=fill_with_normalised_data
+    )
 
     return ModelPrediction(
         variable_index=variable_index,
         point=evaluated_point,
         title=title,
         variable_array=variable_array,
-        predicted_objective_values=optimiser.predict_values(
-            variable_values=all_variables_array,
-            normalised=normalised
-        ),
+        predicted_objective_values=predicted_objective_values,
         acquisition_values=acquisition_values,
         samples=samples
     )
@@ -789,14 +834,23 @@ def plot_prediction_grid_from_optimiser(
         optimiser: BayesianOptimiser,
         return_figure: bool = False,
         model_prediction_container: Optional[ModelPredictionContainer] = None,
-        evaluated_point: Optional[torch.Tensor] = None,
+        evaluated_point: Optional[Union[torch.Tensor, int]] = None,
         plot_acquisition: bool = False,
         n_calculated_points: Optional[int] = None,
         normalised: bool = True
 ) -> Union[go.Figure, None]:
 
-    variable_values = optimiser.evaluated_variable_values.tensor
-    objective_values = optimiser.evaluated_objective_values.tensor
+    if normalised is False and optimiser.return_normalised_data:
+        variable_values = optimiser.evaluated_variables_real_units
+        objective_values = optimiser.evaluated_objectives_real_units
+        suggested_points = optimiser.suggested_points_real_units
+
+    else:
+        variable_values = optimiser.evaluated_variable_values.tensor
+        objective_values = optimiser.evaluated_objective_values.tensor
+        suggested_points = optimiser.suggested_points
+
+
     objective_names = optimiser.objective.objective_names
     variable_names = optimiser.objective.variable_names
 
@@ -810,6 +864,9 @@ def plot_prediction_grid_from_optimiser(
     else:
         # Could do more checks to make sure this is consistent but this will probably catch most potential errors
         assert model_prediction_container.normalised == normalised
+
+    if isinstance(evaluated_point, int):
+        raise NotImplementedError()
 
     if evaluated_point is None:
         # I guess there's a non-caught case where no point was chosen but the auto-selected point is already calculated
@@ -833,7 +890,8 @@ def plot_prediction_grid_from_optimiser(
                 variable_index=var_ind,
                 evaluated_point=evaluated_point,
                 calculate_acquisition=plot_acquisition,
-                n_calculated_points=n_calculated_points
+                n_calculated_points=n_calculated_points,
+                fill_with_normalised_data=normalised
             )
 
             if optimiser.suggested_points and plot_acquisition:
@@ -842,6 +900,9 @@ def plot_prediction_grid_from_optimiser(
 
                     if type(optimiser.predictor.acquisition_optimiser) is ProximityPunishmentSequentialOptimiser:
 
+                        # TODO: Fix norm. in variable array :3
+                        if normalised is False:
+                            raise NotImplementedError()
                         punished_acquisition_values = _calculate_proximity_punished_acquisition_values(
                             optimiser=optimiser,
                             evaluated_point=calculated_prediction.point,
@@ -861,8 +922,6 @@ def plot_prediction_grid_from_optimiser(
 
     if evaluated_point is None:
         evaluated_point = calculated_prediction.point
-
-    suggested_points = optimiser.suggested_points
 
     figure = plot_prediction_grid(
         model_prediction_container=model_prediction_container,
@@ -898,11 +957,13 @@ def _add_model_traces(
     predicted_values_lower = model_prediction.predicted_values_lower[:, objective_index]
     predicted_values_upper = model_prediction.predicted_values_upper[:, objective_index]
 
+    variance_fill_colour = 'rgba(0.7, 0.7, 0.7, 0.3)'
+
     figure.add_trace(
         go.Scatter(
             x=model_prediction.variable_array,
             y=predicted_values_upper.detach().numpy(),
-            line={'width': 0.0, 'color': 'rgba(156, 156, 156, 0.4)'},
+            line={'width': 0.0, 'color': variance_fill_colour},
             name='Upper bound prediction',
             legendgroup=legend_group,
             showlegend=False
@@ -915,7 +976,7 @@ def _add_model_traces(
             x=model_prediction.variable_array,
             y=predicted_values_lower.detach().numpy(),
             fill='tonexty',  # This fills between this and the line above
-            line={'width': 0.0, 'color': 'rgba(156, 156, 156, 0.4)'},
+            line={'width': 0.0, 'color': variance_fill_colour},
             name='Lower bound prediction',
             legendgroup=legend_group,
             showlegend=False,
@@ -939,7 +1000,7 @@ def _add_model_traces(
         figure.add_trace(
             go.Scatter(
                 x=model_prediction.variable_array,
-                y=model_prediction.samples[sample_no, objective_index, :].detach().numpy(),
+                y=model_prediction.samples[sample_no, :, objective_index].detach().numpy(),
                 line={'color': "rgba(0.5, 0.5, 0.5, 0.3)"},
                 name='Model sample',
                 legendgroup=legend_group,
@@ -1220,7 +1281,8 @@ def plot_prediction_grid(
 
 
 def run_prediction_grid_app(
-        optimiser: BayesianOptimiser
+        optimiser: BayesianOptimiser,
+        normalised: bool = True
 ) -> None:
 
     @callback(
@@ -1273,7 +1335,9 @@ def run_prediction_grid_app(
             [f"Point no. {point_no}" for point_no in range(n_points_evaluated)] + suggested_point_names
         )
 
-    model_prediction_container = ModelPredictionContainer()
+    model_prediction_container = ModelPredictionContainer(
+        normalised=normalised
+    )
 
     fig_1 = plot_prediction_grid_from_optimiser(
         optimiser=optimiser,

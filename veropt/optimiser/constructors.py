@@ -186,6 +186,8 @@ def gpytorch_model(
     if training_settings is not None:
         if 'learning_rate' in training_settings:
             learning_rate = training_settings['learning_rate']
+        else:
+            learning_rate = None
     else:
         learning_rate = None
 

@@ -7,6 +7,7 @@ import torch
 
 from veropt.optimiser.initial_points import InitialPointsChoice
 from veropt.optimiser.initial_points import InitialPointsGenerationMode
+from veropt.optimiser.normalisation import Normaliser
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
 from veropt.optimiser.utility import DataShape, PredictionDict, TensorWithNormalisationFlag
 
@@ -157,6 +158,92 @@ class SuggestedPoints(SavableDataClass):
             generated_with_mode=deepcopy(self.generated_with_mode),
             normalised=deepcopy(self.normalised),
         )
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+
+        if saved_state["predicted_objective_values"] is None:
+            prediction = None
+
+        else:
+            prediction = {}
+
+            for prediction_type in ('mean', 'lower', 'upper'):
+                prediction[prediction_type] = torch.tensor(saved_state['predicted_objective_values'][prediction_type])
+
+        return cls(
+            variable_values=torch.tensor(saved_state['variable_values']),
+            predicted_objective_values=prediction,
+            generated_at_step=saved_state['generated_at_step'],
+            generated_with_mode=saved_state['generated_with_mode'],
+            normalised=saved_state['normalised'],
+        )
+
+
+def normalise_suggested_points(
+        suggested_points: SuggestedPoints,
+        normaliser_variables: Normaliser,
+        normaliser_objectives: Normaliser
+) -> SuggestedPoints:
+
+    assert suggested_points.normalised is False
+
+    normalised_variable_values = normaliser_variables.transform(
+        suggested_points.variable_values
+    )
+
+    if suggested_points.predicted_objective_values is not None:
+        normalised_prediction = {}
+
+        for prediction_type in ('mean', 'lower', 'upper'):
+            normalised_prediction[prediction_type] = normaliser_objectives.transform(
+                suggested_points.predicted_objective_values[prediction_type]
+            )
+
+    else:
+        normalised_prediction = None
+
+    return SuggestedPoints(
+        variable_values=normalised_variable_values,
+        predicted_objective_values=normalised_prediction,
+        generated_at_step=suggested_points.generated_at_step,
+        generated_with_mode=suggested_points.generated_with_mode,
+        normalised=True
+    )
+
+
+def unnormalise_suggested_points(
+        suggested_points: SuggestedPoints,
+        normaliser_variables: Normaliser,
+        normaliser_objectives: Normaliser
+) -> SuggestedPoints:
+
+    assert suggested_points.normalised
+
+    normalised_variable_values = normaliser_variables.inverse_transform(
+        suggested_points.variable_values
+    )
+
+    if suggested_points.predicted_objective_values is not None:
+        normalised_prediction = {}
+
+        for prediction_type in ('mean', 'lower', 'upper'):
+            normalised_prediction[prediction_type] = normaliser_objectives.inverse_transform(
+                suggested_points.predicted_objective_values[prediction_type]
+            )
+    else:
+        normalised_prediction = None
+
+    return SuggestedPoints(
+        variable_values=normalised_variable_values,
+        predicted_objective_values=normalised_prediction,
+        generated_at_step=suggested_points.generated_at_step,
+        generated_with_mode=suggested_points.generated_with_mode,
+        normalised=False
+    )
 
 
 def _format_number(

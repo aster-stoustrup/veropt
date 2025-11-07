@@ -177,11 +177,13 @@ class BotorchPredictor(Predictor):
             variable_values=variable_values,
         )
 
-        samples = torch.zeros(n_samples, self.model.n_objectives, variable_values.shape[DataShape.index_points])
+        samples = torch.zeros(
+            size=(n_samples, variable_values.shape[DataShape.index_points], self.model.n_objectives)
+        )
 
         for sample_index in range(n_samples):
             for objective_index in range(self.model.n_objectives):
-                samples[sample_index, objective_index, :] = model_output[objective_index].sample()
+                samples[sample_index, :, objective_index] = model_output[objective_index].sample()
 
         return samples
 
