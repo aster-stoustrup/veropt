@@ -1029,8 +1029,8 @@ def _add_model_traces(
                 x=model_prediction.variable_array,
                 y=model_prediction.samples[sample_no, :, objective_index].detach().numpy(),
                 line={'color': "rgba(0.5, 0.5, 0.5, 0.3)"},
-                name='Model sample',
-                legendgroup='Model sample',
+                name='Model samples',
+                legendgroup='Model samples',
                 showlegend=show_legend_sample
             ),
             row=row_no, col=col_no
