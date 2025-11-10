@@ -832,12 +832,13 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         iteration = 1
 
         # TODO: Do something better with this
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer=self._model_optimiser.optimiser,
-            milestones=[1_000, 3_000, 5_000, 8_000]
-        )
+        # scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        #     optimizer=self._model_optimiser.optimiser,
+        #     milestones=[1_000, 3_000, 5_000, 8_000]
+        # )
 
         # TODO: This stupid thing is breaking the structure :(
+        #       * But it might be a kernel we don't rly need, so probably shouldn't do too much about this
         #   - This should be 0 when using spectral delta (I think :)) )
         #   - Need to somehow set this if one of the models is spectral delta...?
         if self.settings.max_cholesky_size is not None:
@@ -863,13 +864,13 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
                 loss_difference = torch.abs(previous_loss - loss)
 
                 self._model_optimiser.optimiser.step()
-                scheduler.step()
+                # scheduler.step()
 
                 if self.settings.verbose and (iteration % 10 == 0):
                     print(
                         f"Training model... Iteration {iteration} (of a maximum {self.settings.max_iter})"
                         f" - MLL: {loss.item():.3f}",
-                        f", learning rate: {list_with_floats_to_string(scheduler.get_last_lr())}",
+                        # f", learning rate: {list_with_floats_to_string(scheduler.get_last_lr())}",
                         end="\r"
                     )
 
