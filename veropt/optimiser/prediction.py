@@ -34,6 +34,15 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
+    def get_samples_from_model(
+            self,
+            *,
+            variable_values: torch.Tensor,
+            n_samples: int
+    ) -> torch.Tensor:
+        ...
+
+    @abc.abstractmethod
     def suggest_points(
             self,
             verbose: bool
@@ -166,24 +175,25 @@ class BotorchPredictor(Predictor):
         }
 
     @_check_input_dimensions
-    def make_samples(
+    def get_samples_from_model(
             self,
             *,
             variable_values: torch.Tensor,
             n_samples: int
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
 
         model_output = self.model(
             variable_values=variable_values,
         )
 
-        samples = torch.zeros(
-            size=(n_samples, variable_values.shape[DataShape.index_points], self.model.n_objectives)
-        )
+        samples = [
+            torch.zeros(variable_values.shape[DataShape.index_points], self.model.n_objectives)
+            for _ in range(n_samples)
+        ]
 
         for sample_index in range(n_samples):
             for objective_index in range(self.model.n_objectives):
-                samples[sample_index, :, objective_index] = model_output[objective_index].sample()
+                samples[sample_index][:, objective_index] = model_output[objective_index].sample()
 
         return samples
 

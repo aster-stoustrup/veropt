@@ -22,7 +22,8 @@ from veropt.optimiser.optimiser_utility import (
 from veropt.optimiser.prediction import Predictor
 from veropt.optimiser.utility import (
     DataShape, TensorWithNormalisationFlag, check_variable_and_objective_shapes,
-    enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs, PredictionDict
+    enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs, PredictionDict,
+    unpack_variables_objectives_from_kwargs
 )
 from veropt.optimiser.saver_loader_utility import SavableClass, rehydrate_object
 
@@ -518,6 +519,32 @@ class BayesianOptimiser(SavableClass):
                 )
 
         return prediction
+
+    # def unnormalise_function[T, **P](
+    #         self,
+    #         function: Callable[P, T]
+    # ) -> Callable[P, T]:
+    #
+    #     @functools.wraps(function)
+    #     def unnormalise_variables_and_objectives(
+    #             *args: P.args,
+    #             **kwargs: P.kwargs,
+    #     ) -> T:
+    #
+    #         variable_values, _ = unpack_variables_objectives_from_kwargs(kwargs)
+    #
+    #         if variable_values is not None:
+    #             unnormalised_variables = self._normaliser_variables.inverse_transform(variable_values)
+    #
+    #         output = function(
+    #             *args,
+    #             **kwargs
+    #         )
+    #
+    #         raise NotImplementedError()
+    #
+    #
+    #     return unnormalise_variables_and_objectives
 
     def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:
 

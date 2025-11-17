@@ -792,13 +792,13 @@ def _fill_model_prediction_from_optimiser(
     # TODO: Figure out nicer way to handle norm.
     if fill_with_normalised_data is False and optimiser.return_normalised_data:
 
-        samples_normalised = optimiser.predictor.make_samples(
+        samples_normalised = optimiser.predictor.get_samples_from_model(
             variable_values=all_variables_array,
             n_samples=5
         )
 
-        samples = torch.zeros(samples_normalised.shape)
-        for sample_no in range(samples_normalised.shape[0]):
+        samples = []
+        for sample_no in range(len(samples_normalised)):
             samples[sample_no] = optimiser._normaliser_objectives.inverse_transform(
                 tensor=samples_normalised[sample_no]
             )
@@ -824,7 +824,7 @@ def _fill_model_prediction_from_optimiser(
         else:
             variable_array_is_normalised = False
 
-        samples = optimiser.predictor.make_samples(
+        samples = optimiser.predictor.get_samples_from_model(
             variable_values=all_variables_array,
             n_samples=5
         )
@@ -1029,7 +1029,7 @@ def _add_model_traces(
         figure.add_trace(
             go.Scatter(
                 x=model_prediction.variable_array,
-                y=model_prediction.samples[sample_no, :, objective_index].detach().numpy(),
+                y=model_prediction.samples[sample_no][:, objective_index].detach().numpy(),
                 line={'color': "rgba(0.5, 0.5, 0.5, 0.3)"},
                 name='Model samples',
                 legendgroup='Model samples',
