@@ -260,6 +260,35 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             }
         }
 
+    def set_noise_constraint(
+            self,
+            lower_bound: float
+    ) -> None:
+
+        # Default seems to be 1e-4
+        #   - Would like to make sure we don't have noise when we try to set it to zero
+        #   - Alternatively, setting it too low might risk numerical instability?
+
+        assert self.model_with_data is not None, "Model must be initiated to change constraints"
+
+        change_greater_than_constraint(
+            lower_bound=lower_bound,
+            parameter_name='raw_noise',
+            module=self.likelihood.noise_covar
+        )
+
+    def set_noise(
+            self,
+            noise: float
+    ) -> None:
+
+        assert self.model_with_data is not None, "Model must be initiated to call this function"
+
+        if noise < self.likelihood.noise_covar.raw_noise_constraint.lower_bound:
+            noise = self.likelihood.noise_covar.raw_noise_constraint.lower_bound
+
+        self.model_with_data.likelihood.noise = torch.tensor(noise)
+
 
 def change_interval_constraints(
         lower_bound: float,
@@ -309,158 +338,6 @@ def change_less_than_constraint(
         param_name=parameter_name,
         constraint=constraint
     )
-
-
-class MaternParametersInputDict(TypedDict, total=False):
-    lengthscale_lower_bound: float
-    lengthscale_upper_bound: float
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
-
-
-@dataclass
-class MaternParameters(SavableDataClass):
-    lengthscale_lower_bound: float = 0.1
-    lengthscale_upper_bound: float = 2.0
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
-
-
-class DoubleMaternParametersInputDict(TypedDict, total=False):
-    lengthscale_long_lower_bound: float
-    lengthscale_long_upper_bound: float
-    lengthscale_short_lower_bound: float
-    lengthscale_short_upper_bound: float
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
-
-
-@dataclass
-class DoubleMaternParameters(SavableDataClass):
-    lengthscale_long_lower_bound: float = 0.1
-    lengthscale_long_upper_bound: float = 2.0
-    lengthscale_short_lower_bound: float = 0.001
-    lengthscale_short_upper_bound: float = 0.1
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
-
-
-class MaternSingleModel(GPyTorchSingleModel):
-
-    name = 'matern'
-
-    def __init__(
-            self,
-            n_variables: int,
-            **settings: Unpack[MaternParametersInputDict]
-    ):
-
-        likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        mean_module = gpytorch.means.ConstantMean()
-        kernel = gpytorch.kernels.MaternKernel(
-            ard_num_dims=n_variables,
-            batch_shape=torch.Size([])
-        )
-
-        self.settings = MaternParameters(
-            **settings
-        )
-
-        super().__init__(
-            likelihood=likelihood,
-            mean_module=mean_module,
-            kernel=kernel,
-            n_variables=n_variables
-        )
-
-    @classmethod
-    def from_n_variables_and_settings(
-            cls,
-            n_variables: int,
-            settings: Mapping[str, Any]
-    ) -> 'MaternSingleModel':
-
-        _validate_typed_dict(
-            typed_dict=settings,
-            expected_typed_dict_class=MaternParametersInputDict,
-            object_name=cls.name,
-        )
-
-        return cls(
-            n_variables=n_variables,
-            **settings
-        )
-
-    def _set_up_trained_parameters(self) -> None:
-
-        parameter_group_list = []
-
-        assert self.model_with_data is not None, "Model must be initialised to use this function."
-
-        if self.settings.train_noise:
-
-            parameter_group_list.append(
-                {'params': self.model_with_data.parameters()}
-            )
-
-        else:
-
-            parameter_group_list.append(
-                {'params': self.model_with_data.mean_module.parameters()}
-            )
-
-            parameter_group_list.append(
-                {'params': self.model_with_data.covar_module.parameters()}
-            )
-
-        self.trained_parameters = parameter_group_list
-
-    def _set_up_model_constraints(self) -> None:
-
-        self.change_lengthscale_constraints(
-            lower_bound=self.settings.lengthscale_lower_bound,
-            upper_bound=self.settings.lengthscale_upper_bound
-        )
-
-        self.set_noise(
-            noise=self.settings.noise
-        )
-
-    def set_noise_constraint(
-            self,
-            lower_bound: float
-    ) -> None:
-
-        # Default seems to be 1e-4
-        #   - Would like to make sure we don't have noise when we try to set it to zero
-        #   - Alternatively, setting it too low might risk numerical instability?
-
-        assert self.model_with_data is not None, "Model must be initiated to change constraints"
-
-        change_greater_than_constraint(
-            lower_bound=lower_bound,
-            parameter_name='raw_noise',
-            module=self.model_with_data.likelihood.noise_covar
-        )
-
-    def set_noise(
-            self,
-            noise: float
-    ) -> None:
-
-        if self.model_with_data is not None:
-
-            if noise < self.likelihood.noise_covar.raw_noise_constraint.lower_bound:
-                noise = self.likelihood.noise_covar.raw_noise_constraint.lower_bound
-
-            self.model_with_data.likelihood.noise = torch.tensor(float(noise))
-
-        else:
-            raise NotImplementedError("Currently don't support setting constraints before model is given data.")
 
 
 class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):

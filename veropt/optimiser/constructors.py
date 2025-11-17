@@ -7,7 +7,7 @@ from veropt.optimiser.acquisition_optimiser import (
     AcquisitionOptimiser, DualAnnealingSettingsInputDict,
     ProximityPunishSettingsInputDict, ProximityPunishmentSequentialOptimiser
 )
-from veropt.optimiser.kernels import KernelInputDict
+from veropt.optimiser.kernels import KernelInputDict, SingleKernelOptions
 from veropt.optimiser.model import (
     AdamModelOptimiser, GPyTorchFullModel, GPyTorchSingleModel,
     GPyTorchTrainingParametersInputDict, TorchModelOptimiser
@@ -20,7 +20,6 @@ from veropt.optimiser.prediction import BotorchPredictor
 from veropt.optimiser.saver_loader_utility import get_all_subclasses
 from veropt.optimiser.utility import _load_defaults, _validate_typed_dict
 
-SingleKernelOptions = Literal['matern']
 KernelOptimiserOptions = Literal['adam']
 
 AcquisitionOptions = Literal['qlogehvi', 'ucb']

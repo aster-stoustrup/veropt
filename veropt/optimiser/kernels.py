@@ -1,13 +1,18 @@
 from dataclasses import dataclass
-from typing import TypedDict, Unpack, Mapping, Any, Optional, Self, Union
+from typing import TypedDict, Unpack, Mapping, Any, Optional, Self, Union, Literal
 
 import gpytorch
 import torch
 from gpytorch.constraints import Interval
-from veropt.optimiser.model import GPyTorchSingleModel
+from veropt.optimiser.model import GPyTorchSingleModel, change_interval_constraints
 from veropt.optimiser.saver_loader_utility import SavableDataClass
 from veropt.optimiser.utility import _validate_typed_dict
 
+
+SingleKernelOptions = Literal[
+    'matern', 'double_matern', 'rational_quadratic', 'rational_quadratic_and_matern',
+    'SMK', 'spectral_delta'
+]
 
 KernelInputDict = Union[
     'MaternParametersInputDict', 'DoubleMaternParametersInputDict',
@@ -129,10 +134,10 @@ class MaternKernel(GPyTorchSingleModel):
             upper_bound: float
     ) -> None:
 
-        self.change_interval_constraints(
+        change_interval_constraints(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
-            module='covar_module',
+            module=self.model_with_data.covar_module,
             parameter_name='raw_lengthscale'
         )
 
@@ -234,17 +239,11 @@ class DoubleMaternKernel(GPyTorchSingleModel):
 
         assert self.model_with_data is not None, "Model must be initialised to use this method"
 
-        # TODO: Ideally use normal system
-        #   - Might need to make that system more general
-
-        constraint = Interval(
+        change_interval_constraints(
             lower_bound=lower_bound,
-            upper_bound=upper_bound
-        )
-
-        self.model_with_data.covar_module.kernels[kernel_number].register_constraint(
-            param_name='raw_lengthscale',
-            constraint=constraint
+            upper_bound=upper_bound,
+            parameter_name='raw_lengthscale',
+            module=self.model_with_data.covar_module.kernels[kernel_number]
         )
 
     def get_lengthscale(self) -> torch.Tensor:
@@ -267,24 +266,6 @@ class DoubleMaternKernel(GPyTorchSingleModel):
 
         else:
             raise NotImplementedError("Currently don't support setting constraints before model is given data.")
-
-    def set_noise_constraint(
-            self,
-            lower_bound: float
-    ) -> None:
-
-        # Default seems to be 1e-4
-        #   - Would like to make sure we don't have noise when we try to set it to zero
-        #   - Alternatively, setting it too low might risk numerical instability?
-
-        assert self.model_with_data is not None, "Model must be initiated to change constraints"
-
-        self.change_greater_than_constraint(
-            lower_bound=lower_bound,
-            parameter_name='raw_noise',
-            module='likelihood',
-            second_module='noise_covar'
-        )
 
     def get_settings(self) -> SavableDataClass:
         return self.settings
@@ -387,10 +368,10 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
             upper_bound: float
     ) -> None:
 
-        self.change_interval_constraints(
+        change_interval_constraints(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
-            module='covar_module',
+            module=self.model_with_data.covar_module,
             parameter_name='alpha'
         )
 
@@ -400,10 +381,10 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
             upper_bound: float
     ) -> None:
 
-        self.change_interval_constraints(
+        change_interval_constraints(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
-            module='covar_module',
+            module=self.model_with_data.covar_module,
             parameter_name='raw_lengthscale'
         )
 
@@ -508,32 +489,29 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
 
     def _set_up_model_constraints(self) -> None:
 
-        self.change_interval_constraints(
+        change_interval_constraints(
             lower_bound=self.settings.rq_lengthscale_lower_bound,
             upper_bound=self.settings.rq_lengthscale_upper_bound,
-            module='covar_module',
-            parameter_name='raw_lengthscale',
-            kernel_number=0
+            module=self.model_with_data.covar_module.kernels[0].base_kernel,
+            parameter_name='raw_lengthscale'
         )
 
         if (self.settings.alpha_lower_bound is not None) and (self.settings.alpha_upper_bound is not None):
-            self.change_interval_constraints(
+            change_interval_constraints(
                 lower_bound=self.settings.alpha_lower_bound,
                 upper_bound=self.settings.alpha_upper_bound,
-                module='covar_module',
-                parameter_name='raw_alpha',
-                kernel_number=0
+                module=self.model_with_data.covar_module.kernels[0].base_kernel,
+                parameter_name='raw_alpha'
             )
 
         elif (self.settings.alpha_lower_bound is not None) or (self.settings.alpha_upper_bound is not None):
             raise NotImplementedError("Currently only support setting both or none of alpha's bounds.")
 
-        self.change_interval_constraints(
+        change_interval_constraints(
             lower_bound=self.settings.matern_lengthscale_lower_bound,
             upper_bound=self.settings.matern_lengthscale_upper_bound,
-            module='covar_module',
-            parameter_name='raw_lengthscale',
-            kernel_number=1
+            module=self.model_with_data.covar_module.kernels[1].base_kernel,
+            parameter_name='raw_lengthscale'
         )
         self.set_noise(
             noise=self.settings.noise
@@ -543,7 +521,7 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
             lower_bound=self.settings.noise_lower_bound
         )
 
-    def get_lengthscale(self) -> torch.Tensor:
+    def get_lengthscale(self) -> dict[str, torch.Tensor]:
 
         assert self.model_with_data is not None, "Must have trained model before calling this"
 
