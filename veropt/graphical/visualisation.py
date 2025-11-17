@@ -650,15 +650,17 @@ def plot_pareto_front_from_optimiser(
         plotted_objective_indices: list[int],
         return_figure: bool = False,
         normalised: bool = True
-) -> None:
+) -> None | go.Figure:
 
     if optimiser.return_normalised_data and normalised is False:
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
+        suggested_points = optimiser.suggested_points_real_units
 
     else:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
+        suggested_points = optimiser.suggested_points
 
     pareto_optimal_objectives = get_pareto_optimal_points(
         variable_values=variable_values,
@@ -670,7 +672,7 @@ def plot_pareto_front_from_optimiser(
         dominating_objective_values=pareto_optimal_objectives,
         plotted_objective_indices=plotted_objective_indices,
         objective_names=optimiser.objective.objective_names,
-        suggested_points=optimiser.suggested_points,
+        suggested_points=suggested_points,
         return_figure=return_figure,
     )
 
@@ -728,22 +730,35 @@ def _calculate_proximity_punished_acquisition_values(
 
 
 def choose_plot_point(
-        optimiser: BayesianOptimiser
+        optimiser: BayesianOptimiser,
+        normalised: bool
 ) -> tuple[torch.Tensor, str]:
 
     if optimiser.suggested_points is None:
+
+        if normalised is False and optimiser.return_normalised_data:
+            variable_values = optimiser.evaluated_variables_real_units
+        else:
+            variable_values = optimiser.evaluated_variable_values.tensor
+
         max_ind = optimiser.get_best_points()['index']
-        eval_point = deepcopy(optimiser.evaluated_variable_values[max_ind:max_ind + 1].tensor)
+        eval_point = deepcopy(variable_values[max_ind:max_ind + 1])
         point_description = f"at the point with the highest known value (point no. {max_ind})"
     else:
+
+        if normalised is False and optimiser.return_normalised_data:
+            suggested_variable_values = optimiser.suggested_points_real_units.variable_values
+        else:
+            suggested_variable_values = optimiser.suggested_variable_values.tensor
+
         suggested_point_ind = 0  # In the future, might want the best one
-        eval_point = deepcopy(optimiser.suggested_points.variable_values[suggested_point_ind:suggested_point_ind + 1])
+        eval_point = deepcopy(suggested_variable_values[suggested_point_ind:suggested_point_ind + 1])
         point_description = "at the first suggested step"
 
     return eval_point, point_description
 
 
-def fill_model_prediction_from_optimiser(
+def _fill_model_prediction_from_optimiser(
         optimiser: BayesianOptimiser,
         variable_index: int,
         evaluated_point: Optional[torch.Tensor],
@@ -753,7 +768,7 @@ def fill_model_prediction_from_optimiser(
 ) -> ModelPrediction:
 
     # TODO: CLEAN THIS UP (Fix ugly norm. stuff >:))
-    #   - Ideally normalisation should be handled more smoothly and just be a flag somewhere
+    #   - Normalisation should be handled more smoothly and just be a flag somewhere
     #   - i.e. this method shouldn't really be doing anything about that on its own
 
     if n_calculated_points is None:
@@ -765,11 +780,17 @@ def fill_model_prediction_from_optimiser(
     if evaluated_point is None:
 
         evaluated_point, title = choose_plot_point(
-            optimiser=optimiser
+            optimiser=optimiser,
+            normalised=fill_with_normalised_data
         )
 
     else:
         title = ''
+
+    # Assume that evaluated_point will then be unnormalised
+    #   - Need to fix this assumption (but need to just re-do this whole thing because it's messy rn)
+    if fill_with_normalised_data is False and optimiser.return_normalised_data:
+        evaluated_point = optimiser._normaliser_variables.transform(evaluated_point)
 
     variable_array = torch.linspace(
         start=optimiser.bounds[0, variable_index].tensor,
@@ -889,7 +910,7 @@ def plot_prediction_grid_from_optimiser(
         else:
             concatenated_variable_values = variable_values
 
-        evaluated_point = concatenated_variable_values[evaluated_point]
+        evaluated_point = concatenated_variable_values[evaluated_point:evaluated_point+1]
 
     if evaluated_point is None:
         # I guess there's a non-caught case where no point was chosen but the auto-selected point is already calculated
@@ -908,7 +929,7 @@ def plot_prediction_grid_from_optimiser(
 
         for var_ind in range(n_variables):
 
-            calculated_prediction = fill_model_prediction_from_optimiser(
+            calculated_prediction = _fill_model_prediction_from_optimiser(
                 optimiser=optimiser,
                 variable_index=var_ind,
                 evaluated_point=evaluated_point,
