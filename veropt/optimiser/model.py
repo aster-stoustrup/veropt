@@ -3,7 +3,7 @@ import functools
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Iterator, Mapping, Optional, Self, Sequence, TypedDict, Union, Unpack
+from typing import Any, Callable, Iterator, Mapping, Optional, Self, Sequence, TypedDict, Unpack
 
 import botorch
 import gpytorch
@@ -234,95 +234,55 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             }
         }
 
-    def set_constraint(
-            self,
-            constraint: Union[Interval, GreaterThan, LessThan],
-            parameter_name: str,
-            module: str,
-            second_module: Optional[str] = None
-    ) -> None:
-        if self.model_with_data is not None:
 
-            if second_module is None:
+def change_interval_constraints(
+        lower_bound: float,
+        upper_bound: float,
+        parameter_name: str,
+        module: gpytorch.Module
+) -> None:
 
-                module = self.model_with_data.__getattr__(module)
-                assert isinstance(module, gpytorch.Module)
+    constraint = Interval(
+        lower_bound=lower_bound,
+        upper_bound=upper_bound
+    )
 
-                self.model_with_data.__getattr__(module).register_constraint(
-                    param_name=parameter_name,
-                    constraint=constraint
-                )
+    module.register_constraint(
+        param_name=parameter_name,
+        constraint=constraint
+    )
 
-            else:
 
-                module = (self.model_with_data.__getattr__(module).__getattr__(second_module))
-                assert isinstance(module, gpytorch.Module)
+def change_greater_than_constraint(
+        lower_bound: float,
+        parameter_name: str,
+        module: gpytorch.Module,
+) -> None:
 
-                module.register_constraint(
-                    param_name=parameter_name,
-                    constraint=constraint
-                )
+    constraint = GreaterThan(
+        lower_bound=lower_bound
+    )
 
-        else:
-            # Might want to store these constraints and feed them to the trained model when it's made?
-            raise NotImplementedError("Currently don't support setting constraints before model is given data.")
+    module.register_constraint(
+        param_name=parameter_name,
+        constraint=constraint
+    )
 
-    def change_interval_constraints(
-            self,
-            lower_bound: float,
-            upper_bound: float,
-            parameter_name: str,
-            module: str,
-            second_module: Optional[str] = None
-    ) -> None:
-        constraint = Interval(
-            lower_bound=lower_bound,
-            upper_bound=upper_bound
-        )
 
-        self.set_constraint(
-            constraint=constraint,
-            parameter_name=parameter_name,
-            module=module,
-            second_module=second_module
-        )
+def change_less_than_constraint(
+        upper_bound: float,
+        parameter_name: str,
+        module: gpytorch.Module
+) -> None:
 
-    def change_greater_than_constraint(
-            self,
-            lower_bound: float,
-            parameter_name: str,
-            module: str,
-            second_module: Optional[str] = None
+    constraint = LessThan(
+        upper_bound=upper_bound
+    )
 
-    ) -> None:
-        constraint = GreaterThan(
-            lower_bound=lower_bound
-        )
-
-        self.set_constraint(
-            constraint=constraint,
-            parameter_name=parameter_name,
-            module=module,
-            second_module=second_module
-        )
-
-    def change_less_than_constraint(
-            self,
-            upper_bound: float,
-            parameter_name: str,
-            module: str,
-            second_module: Optional[str] = None
-    ) -> None:
-        constraint = LessThan(
-            upper_bound=upper_bound
-        )
-
-        self.set_constraint(
-            constraint=constraint,
-            parameter_name=parameter_name,
-            module=module,
-            second_module=second_module
-        )
+    module.register_constraint(
+        param_name=parameter_name,
+        constraint=constraint
+    )
 
 
 class MaternParametersInputDict(TypedDict, total=False):
@@ -454,10 +414,12 @@ class MaternSingleModel(GPyTorchSingleModel):
             upper_bound: float
     ) -> None:
 
-        self.change_interval_constraints(
+        assert self.model_with_data is not None, "Model must be initialised to use this function."
+
+        change_interval_constraints(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
-            module='covar_module',
+            module=self.model_with_data.covar_module,
             parameter_name='raw_lengthscale'
         )
 
@@ -493,11 +455,10 @@ class MaternSingleModel(GPyTorchSingleModel):
 
         assert self.model_with_data is not None, "Model must be initiated to change constraints"
 
-        self.change_greater_than_constraint(
+        change_greater_than_constraint(
             lower_bound=lower_bound,
             parameter_name='raw_noise',
-            module='likelihood',
-            second_module='noise_covar'
+            module=self.model_with_data.likelihood.noise_covar
         )
 
     def get_settings(self) -> SavableDataClass:
@@ -616,17 +577,11 @@ class DoubleMaternKernelSingleModel(GPyTorchSingleModel):
 
         assert self.model_with_data is not None, "Model must be initialised to use this method"
 
-        # TODO: Ideally use normal system
-        #   - Might need to make that system more general
-
-        constraint = Interval(
+        change_interval_constraints(
             lower_bound=lower_bound,
-            upper_bound=upper_bound
-        )
-
-        self.model_with_data.covar_module.kernels[kernel_number].register_constraint(
-            param_name='raw_lengthscale',
-            constraint=constraint
+            upper_bound=upper_bound,
+            parameter_name='raw_lengthscale',
+            module=self.model_with_data.covar_module.kernels[kernel_number]
         )
 
     def get_lengthscale(self) -> torch.Tensor:
@@ -661,11 +616,10 @@ class DoubleMaternKernelSingleModel(GPyTorchSingleModel):
 
         assert self.model_with_data is not None, "Model must be initiated to change constraints"
 
-        self.change_greater_than_constraint(
+        change_greater_than_constraint(
             lower_bound=lower_bound,
             parameter_name='raw_noise',
-            module='likelihood',
-            second_module='noise_covar'
+            module=self.model_with_data.likelihood.noise_covar
         )
 
     def get_settings(self) -> SavableDataClass:
