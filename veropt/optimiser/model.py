@@ -1010,7 +1010,10 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
             self._model_optimiser.optimiser.zero_grad()
 
-            output = self._model(*self._model.train_inputs)
+            assert isinstance(self._model.train_inputs, list)
+            train_inputs: list = self._model.train_inputs
+
+            output = self._model(*train_inputs)
 
             previous_loss = loss
             loss = -self._marginal_log_likelihood(  # type: ignore  # gpytorch seems to be missing type-hints
