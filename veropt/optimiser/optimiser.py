@@ -444,6 +444,9 @@ class BayesianOptimiser(SavableClass):
                 normalised=True
             )
 
+            assert self._normaliser_variables is not None, "Normalisers must have been initialised at this point"
+            assert self._normaliser_objectives is not None, "Normalisers must have been initialised at this point"
+
             self.suggested_points_real_units = unnormalise_suggested_points(
                 suggested_points=suggested_points,
                 normaliser_variables=self._normaliser_variables,
@@ -495,6 +498,8 @@ class BayesianOptimiser(SavableClass):
 
         if self.return_normalised_data and (variables_normalised is False):
 
+            assert self._normaliser_variables is not None, "Normalisers must have been initialised at this point"
+
             variable_values = self._normaliser_variables.transform(
                 tensor=variable_values
             )
@@ -504,12 +509,15 @@ class BayesianOptimiser(SavableClass):
         )
 
         if self.return_normalised_data and (return_normalised_objectives is False):
+
+            assert self._normaliser_objectives is not None, "Normalisers must have been initialised at this point"
+
             for prediction_type in ['mean', 'lower', 'upper']:
                 prediction[prediction_type] = self._normaliser_objectives.inverse_transform(
                     tensor=prediction[prediction_type]
                 )
 
-        return  prediction
+        return prediction
 
     def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:
 
@@ -670,6 +678,8 @@ class BayesianOptimiser(SavableClass):
 
         if self.suggested_points is None:
             raise RuntimeError()
+
+        assert self.suggested_points_real_units is not None, "Must have suggested points to reset and add to history"
 
         self.suggested_points_history.append(self.suggested_points_real_units.copy())
         self.suggested_points_real_units = None

@@ -3,7 +3,6 @@ from typing import TypedDict, Unpack, Mapping, Any, Optional, Self, Union, Liter
 
 import gpytorch
 import torch
-from gpytorch.constraints import Interval
 from veropt.optimiser.model import GPyTorchSingleModel, change_interval_constraints
 from veropt.optimiser.saver_loader_utility import SavableDataClass
 from veropt.optimiser.utility import _validate_typed_dict
@@ -133,6 +132,8 @@ class MaternKernel(GPyTorchSingleModel):
             lower_bound: float,
             upper_bound: float
     ) -> None:
+
+        assert self.model_with_data is not None, "Model must be initialised to call this method"
 
         change_interval_constraints(
             lower_bound=lower_bound,
@@ -368,6 +369,8 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
             upper_bound: float
     ) -> None:
 
+        assert self.model_with_data is not None, "Model must be initialised to call this method"
+
         change_interval_constraints(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
@@ -380,6 +383,8 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
             lower_bound: float,
             upper_bound: float
     ) -> None:
+
+        assert self.model_with_data is not None, "Model must be initialised to call this method"
 
         change_interval_constraints(
             lower_bound=lower_bound,
@@ -438,7 +443,7 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
     def __init__(
             self,
             n_variables: int,
-            **settings: RQMaternParametersInputDict
+            **settings: Unpack[RQMaternParametersInputDict]
     ):
 
         self.settings = RQMaternParameters(
@@ -488,6 +493,8 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
         )
 
     def _set_up_model_constraints(self) -> None:
+
+        assert self.model_with_data is not None, "Model must be initialised to call this method"
 
         change_interval_constraints(
             lower_bound=self.settings.rq_lengthscale_lower_bound,
@@ -586,7 +593,7 @@ class SpectralMixtureKernel(GPyTorchSingleModel):
     def __init__(
             self,
             n_variables: int,
-            **settings: Unpack[MaternParametersInputDict]
+            **settings: Unpack[SMKParametersInputDict]
     ):
 
         self.settings = SMKParameters(
@@ -626,7 +633,6 @@ class SpectralMixtureKernel(GPyTorchSingleModel):
             **settings
         )
 
-
     def get_settings(self) -> SavableDataClass:
         return self.settings
 
@@ -645,7 +651,10 @@ class SpectralMixtureKernel(GPyTorchSingleModel):
             self,
             train_inputs: torch.Tensor,
             train_targets: torch.Tensor,
-    ):
+    ) -> None:
+
+        assert self.model_with_data is not None, "Model must be initialised to call this method"
+
         super().initialise_model_with_data(
             train_inputs=train_inputs,
             train_targets=train_targets,
@@ -741,7 +750,10 @@ class SpectralDeltaKernel(GPyTorchSingleModel):
             self,
             train_inputs: torch.Tensor,
             train_targets: torch.Tensor,
-    ):
+    ) -> None:
+
+        assert self.model_with_data is not None, "Model must be initialised to call this method"
+
         super().initialise_model_with_data(
             train_inputs=train_inputs,
             train_targets=train_targets,

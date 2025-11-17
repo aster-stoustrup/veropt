@@ -99,7 +99,6 @@ def plot_prediction_surface_from_optimiser(
         point_variable_values = optimiser.evaluated_variables_real_units
         point_objective_values = optimiser.evaluated_objectives_real_units[:, objective]
 
-
     x_axis_title = optimiser.objective.variable_names[variable_x]
     y_axis_title = optimiser.objective.variable_names[variable_y]
     z_axis_title = optimiser.objective.objective_names[objective]
@@ -183,7 +182,7 @@ def plot_prediction_surface(
 
     figure.update_layout(
         scene={
-            'xaxis':{
+            'xaxis': {
                 'title': {
                     'text': x_axis_title
                 }
@@ -202,4 +201,3 @@ def plot_prediction_surface(
     )
 
     return figure
-

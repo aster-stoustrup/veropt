@@ -138,7 +138,7 @@ class ModelPrediction:
         if acquisition_values is None:
             self.acquisition_values = acquisition_values
         else:
-            self.acquisition_values: np.ndarray = acquisition_values.detach().numpy()
+            self.acquisition_values = acquisition_values.detach().numpy()
         self.samples: Optional[torch.Tensor] = samples
 
         self.modified_acquisition_values: Optional[list[torch.Tensor]] = None
