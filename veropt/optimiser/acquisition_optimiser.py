@@ -278,6 +278,7 @@ class ProximityPunishAcquisitionFunction(AcquisitionFunction):
             *,
             variable_values: torch.Tensor
     ) -> torch.Tensor:
+
         original_acquisition_value = self.original_acquisition_function(
             variable_values=variable_values
         )
@@ -421,6 +422,38 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
         super().update_bounds(
             new_bounds=new_bounds
         )
+
+    def get_modified_acquisition_values(
+            self,
+            *,
+            acquisition_function: AcquisitionFunction,
+            variable_values: torch.Tensor,
+            points_to_punish: list[torch.Tensor],
+    ) -> list[torch.Tensor]:
+
+        assert self.scaling is not None, "Must have found scaling to call this method"
+
+        punishing_acquisition_function = ProximityPunishAcquisitionFunction(
+            original_acquisition_function=acquisition_function,
+            other_points=[],
+            scaling=self.scaling,
+            alpha=self.settings.alpha,
+            omega=self.settings.omega
+        )
+
+        modified_acquisition_values: list[torch.Tensor] = []
+
+        for last_included_point_no in range(1, len(points_to_punish)):
+
+            punishing_acquisition_function.update_points(
+                new_points=points_to_punish[0:last_included_point_no]
+            )
+
+            modified_acquisition_values.append(punishing_acquisition_function(
+                variable_values=variable_values,
+            ))
+
+        return modified_acquisition_values
 
     def _sample_acq_func(
             self,

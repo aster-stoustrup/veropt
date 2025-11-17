@@ -187,6 +187,7 @@ class BotorchPredictor(Predictor):
 
         return samples
 
+    @_check_input_dimensions
     def get_acquisition_values(
             self,
             *,

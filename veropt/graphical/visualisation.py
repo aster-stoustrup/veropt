@@ -685,7 +685,6 @@ def _calculate_proximity_punished_acquisition_values(
         evaluated_point: torch.Tensor,
         variable_index: int,
         variable_array: torch.Tensor,
-        acquisition_function: AcquisitionFunction,
         suggested_points_variables: torch.Tensor
 ) -> list[torch.Tensor]:
 
@@ -697,34 +696,16 @@ def _calculate_proximity_punished_acquisition_values(
     assert type(predictor.acquisition_optimiser) is ProximityPunishmentSequentialOptimiser
     acquisition_optimiser: ProximityPunishmentSequentialOptimiser = predictor.acquisition_optimiser
 
-    assert acquisition_optimiser.scaling is not None, (
-        "Must have calculated scaling in proximity punishment acquisition optimiser before calling this"
-    )
-
-    punishing_acquisition_function = ProximityPunishAcquisitionFunction(
-        original_acquisition_function=acquisition_function,
-        other_points=[],
-        scaling=acquisition_optimiser.scaling,
-        alpha=acquisition_optimiser.settings.alpha,
-        omega=acquisition_optimiser.settings.omega
-    )
-
-    modified_acquisition_values: list[torch.Tensor] = []
-
     full_variable_array = evaluated_point.repeat(len(variable_array), 1)
     full_variable_array[:, variable_index] = variable_array
 
     suggested_points_variables_list = [suggested_points_variables[i, :] for i in range(n_suggested_points)]
 
-    for last_included_point_no in range(n_suggested_points - 1):
-
-        punishing_acquisition_function.update_points(
-            new_points=suggested_points_variables_list[0:last_included_point_no + 1]
-        )
-
-        modified_acquisition_values.append(punishing_acquisition_function(
-            variable_values=full_variable_array,
-        ))
+    modified_acquisition_values = acquisition_optimiser.get_modified_acquisition_values(
+        acquisition_function=optimiser.predictor.acquisition_function,
+        variable_values=full_variable_array,
+        points_to_punish=suggested_points_variables_list
+    )
 
     return modified_acquisition_values
 
