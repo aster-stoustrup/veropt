@@ -4,7 +4,7 @@ import warnings
 from contextlib import nullcontext
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Iterator, Mapping, Optional, Self, Sequence, TypedDict, Union, Unpack
+from typing import Any, Callable, Iterator, Mapping, Optional, Self, Sequence, TypedDict, Unpack
 
 import botorch
 import gpytorch
@@ -260,149 +260,174 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             }
         }
 
-    def set_constraint(
+
+def change_interval_constraints(
+        lower_bound: float,
+        upper_bound: float,
+        parameter_name: str,
+        module: gpytorch.Module
+) -> None:
+
+    constraint = Interval(
+        lower_bound=lower_bound,
+        upper_bound=upper_bound
+    )
+
+    module.register_constraint(
+        param_name=parameter_name,
+        constraint=constraint
+    )
+
+
+def change_greater_than_constraint(
+        lower_bound: float,
+        parameter_name: str,
+        module: gpytorch.Module,
+) -> None:
+
+    constraint = GreaterThan(
+        lower_bound=lower_bound
+    )
+
+    module.register_constraint(
+        param_name=parameter_name,
+        constraint=constraint
+    )
+
+
+def change_less_than_constraint(
+        upper_bound: float,
+        parameter_name: str,
+        module: gpytorch.Module
+) -> None:
+
+    constraint = LessThan(
+        upper_bound=upper_bound
+    )
+
+    module.register_constraint(
+        param_name=parameter_name,
+        constraint=constraint
+    )
+
+
+class MaternParametersInputDict(TypedDict, total=False):
+    lengthscale_lower_bound: float
+    lengthscale_upper_bound: float
+    noise: float
+    noise_lower_bound: float
+    train_noise: bool
+
+
+@dataclass
+class MaternParameters(SavableDataClass):
+    lengthscale_lower_bound: float = 0.1
+    lengthscale_upper_bound: float = 2.0
+    noise: float = 1e-8
+    noise_lower_bound: float = 1e-8
+    train_noise: bool = False
+
+
+class DoubleMaternParametersInputDict(TypedDict, total=False):
+    lengthscale_long_lower_bound: float
+    lengthscale_long_upper_bound: float
+    lengthscale_short_lower_bound: float
+    lengthscale_short_upper_bound: float
+    noise: float
+    noise_lower_bound: float
+    train_noise: bool
+
+
+@dataclass
+class DoubleMaternParameters(SavableDataClass):
+    lengthscale_long_lower_bound: float = 0.1
+    lengthscale_long_upper_bound: float = 2.0
+    lengthscale_short_lower_bound: float = 0.001
+    lengthscale_short_upper_bound: float = 0.1
+    noise: float = 1e-8
+    noise_lower_bound: float = 1e-8
+    train_noise: bool = False
+
+
+class MaternSingleModel(GPyTorchSingleModel):
+
+    name = 'matern'
+
+    def __init__(
             self,
-            constraint: Union[Interval, GreaterThan, LessThan],
-            parameter_name: str,
-            module: str,
-            second_module: Optional[str] = None,
-            kernel_number: Optional[int] = None
+            n_variables: int,
+            **settings: Unpack[MaternParametersInputDict]
     ):
-        if kernel_number is not None:
 
-            assert second_module is None
-            assert module == 'covar_module'
+        likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        mean_module = gpytorch.means.ConstantMean()
+        kernel = gpytorch.kernels.MaternKernel(
+            ard_num_dims=n_variables,
+            batch_shape=torch.Size([])
+        )
 
-            self.set_constraint_multiple_kernels(
-                constraint=constraint,
-                parameter_name=parameter_name,
-                module=module,
-                kernel_number=kernel_number
+        self.settings = MaternParameters(
+            **settings
+        )
+
+        super().__init__(
+            likelihood=likelihood,
+            mean_module=mean_module,
+            kernel=kernel,
+            n_variables=n_variables
+        )
+
+    @classmethod
+    def from_n_variables_and_settings(
+            cls,
+            n_variables: int,
+            settings: Mapping[str, Any]
+    ) -> 'MaternSingleModel':
+
+        _validate_typed_dict(
+            typed_dict=settings,
+            expected_typed_dict_class=MaternParametersInputDict,
+            object_name=cls.name,
+        )
+
+        return cls(
+            n_variables=n_variables,
+            **settings
+        )
+
+    def _set_up_trained_parameters(self) -> None:
+
+        parameter_group_list = []
+
+        assert self.model_with_data is not None, "Model must be initialised to use this function."
+
+        if self.settings.train_noise:
+
+            parameter_group_list.append(
+                {'params': self.model_with_data.parameters()}
             )
 
         else:
 
-            self.set_constraint_modules(
-                constraint=constraint,
-                parameter_name=parameter_name,
-                module=module,
-                second_module=second_module
+            parameter_group_list.append(
+                {'params': self.model_with_data.mean_module.parameters()}
             )
 
-    def set_constraint_modules(
-            self,
-            constraint: Union[Interval, GreaterThan, LessThan],
-            parameter_name: str,
-            module: str,
-            second_module: Optional[str] = None
-    ) -> None:
-        if self.model_with_data is not None:
-
-            if second_module is None:
-
-                self.model_with_data.__getattr__(module).register_constraint(
-                    param_name=parameter_name,
-                    constraint=constraint
-                )
-
-            else:
-
-                self.model_with_data.__getattr__(module).__getattr__(second_module).register_constraint(
-                    param_name=parameter_name,
-                    constraint=constraint
-                )
-
-        else:
-            # Might want to store these constraints and feed them to the trained model when it's made?
-            raise NotImplementedError("Currently don't support setting constraints before model is given data.")
-
-    def set_constraint_multiple_kernels(
-            self,
-            constraint: Union[Interval, GreaterThan, LessThan],
-            parameter_name: str,
-            module: str,
-            kernel_number: int
-    ):
-
-        assert self.model_with_data is not None, "Must have initialised with data before calling this"
-
-        kernel_to_alter = self.model_with_data.covar_module.kernels[kernel_number]
-
-        if isinstance(kernel_to_alter, gpytorch.kernels.ScaleKernel):
-
-            kernel_to_alter.base_kernel.register_constraint(
-                param_name=parameter_name,
-                constraint=constraint
+            parameter_group_list.append(
+                {'params': self.model_with_data.covar_module.parameters()}
             )
 
-        else:
+        self.trained_parameters = parameter_group_list
 
-            self.model_with_data.covar_module.kernels[kernel_number].register_constraint(
-                param_name=parameter_name,
-                constraint=constraint
-            )
+    def _set_up_model_constraints(self) -> None:
 
-    def change_interval_constraints(
-            self,
-            lower_bound: float,
-            upper_bound: float,
-            parameter_name: str,
-            module: str,
-            second_module: Optional[str] = None,
-            kernel_number: Optional[int] = None
-    ) -> None:
-
-        constraint = Interval(
-            lower_bound=lower_bound,
-            upper_bound=upper_bound
+        self.change_lengthscale_constraints(
+            lower_bound=self.settings.lengthscale_lower_bound,
+            upper_bound=self.settings.lengthscale_upper_bound
         )
 
-        self.set_constraint(
-            constraint=constraint,
-            parameter_name=parameter_name,
-            module=module,
-            second_module=second_module,
-            kernel_number=kernel_number
-        )
-
-    def change_greater_than_constraint(
-            self,
-            lower_bound: float,
-            parameter_name: str,
-            module: str,
-            second_module: Optional[str] = None,
-            kernel_number: Optional[int] = None
-    ) -> None:
-        constraint = GreaterThan(
-            lower_bound=lower_bound
-        )
-
-        self.set_constraint(
-            constraint=constraint,
-            parameter_name=parameter_name,
-            module=module,
-            second_module=second_module,
-            kernel_number=kernel_number
-        )
-
-    def change_less_than_constraint(
-            self,
-            upper_bound: float,
-            parameter_name: str,
-            module: str,
-            second_module: Optional[str] = None,
-            kernel_number: Optional[int] = None
-    ) -> None:
-        constraint = LessThan(
-            upper_bound=upper_bound
-        )
-
-        self.set_constraint(
-            constraint=constraint,
-            parameter_name=parameter_name,
-            module=module,
-            second_module=second_module,
-            kernel_number=kernel_number
+        self.set_noise(
+            noise=self.settings.noise
         )
 
     def set_noise_constraint(
@@ -416,11 +441,10 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
 
         assert self.model_with_data is not None, "Model must be initiated to change constraints"
 
-        self.change_greater_than_constraint(
+        change_greater_than_constraint(
             lower_bound=lower_bound,
             parameter_name='raw_noise',
-            module='likelihood',
-            second_module='noise_covar'
+            module=self.model_with_data.likelihood.noise_covar
         )
 
     def set_noise(
@@ -852,7 +876,10 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
                 self._model_optimiser.optimiser.zero_grad()
 
-                output = self._model(*self._model.train_inputs)
+                assert isinstance(self._model.train_inputs, list)
+                train_inputs: list = self._model.train_inputs
+
+                output = self._model(*train_inputs)
 
                 previous_loss = loss
                 loss = -self._marginal_log_likelihood(  # type: ignore  # gpytorch seems to be missing type-hints
