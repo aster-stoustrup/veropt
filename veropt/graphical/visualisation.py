@@ -432,17 +432,17 @@ def plot_pareto_front_grid_from_optimiser(
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
 
-    pareto_optimal_objectives = get_pareto_optimal_points(
+    pareto_optimal_indices = get_pareto_optimal_points(
         variable_values=variable_values,
         objective_values=objective_values,
-    )['objectives']
+    )['index']
 
     objective_names = optimiser.objective.objective_names
 
     figure_or_none = plot_pareto_front_grid(
         objective_values=objective_values,
         objective_names=objective_names,
-        dominating_objective_values=pareto_optimal_objectives,
+        pareto_optimal_indices=pareto_optimal_indices,
         suggested_points=optimiser.suggested_points,
         return_figure=return_figure
     )
@@ -453,7 +453,7 @@ def plot_pareto_front_grid_from_optimiser(
 def plot_pareto_front_grid(
         objective_values: torch.Tensor,
         objective_names: list[str],
-        dominating_objective_values: torch.Tensor,
+        pareto_optimal_indices: list[int],
         suggested_points: Optional[SuggestedPoints] = None,
         return_figure: bool = False
 ) -> Union[go.Figure, None]:
@@ -477,7 +477,7 @@ def plot_pareto_front_grid(
                     objective_values=objective_values,
                     objective_index_x=objective_index_x,
                     objective_index_y=objective_index_y,
-                    dominating_objective_values=dominating_objective_values,
+                    pareto_optimal_indices=pareto_optimal_indices,
                     suggested_points=suggested_points,
                     row=row,
                     col=col
@@ -503,11 +503,19 @@ def _add_pareto_traces_2d(
         objective_values: torch.Tensor,
         objective_index_x: int,
         objective_index_y: int,
-        dominating_objective_values: torch.Tensor,
+        pareto_optimal_indices: list[int],
         suggested_points: Optional[SuggestedPoints] = None,
         row: Optional[int] = None,
         col: Optional[int] = None
 ) -> go.Figure:
+
+    # Note: Must pass all points to this function or point numbers will be wrong
+
+    n_evaluated_points = objective_values.shape[DataShape.index_points]
+    point_numbers = np.arange(n_evaluated_points).reshape(n_evaluated_points, 1)
+
+    pareto_point_numbers = point_numbers[pareto_optimal_indices]
+    dominating_objective_values = objective_values[pareto_optimal_indices]
 
     if row is None and col is None:
         row_col_info = {}
@@ -528,6 +536,10 @@ def _add_pareto_traces_2d(
             mode='markers',
             name='Evaluated points',
             marker={'color': color_evaluated_points},
+            customdata=point_numbers,
+            hovertemplate="Point number: %{customdata[0]:.0f} <br>"
+                          "%{xaxis.title.text}: %{x:.3f} <br>"
+                          "%{yaxis.title.text}: %{y:.3f} <br>"
         ),
         **row_col_info
     )
@@ -538,7 +550,11 @@ def _add_pareto_traces_2d(
             y=dominating_objective_values[:, objective_index_y],
             mode='markers',
             marker={'color': 'black'},
-            name='Dominating evaluated points'
+            name='Dominating evaluated points',
+            customdata=pareto_point_numbers,
+            hovertemplate="Point number: %{customdata[0]:.0f} <br>"
+                          "%{xaxis.title.text}: %{x:.3f} <br>"
+                          "%{yaxis.title.text}: %{y:.3f} <br>"
         ),
         **row_col_info
     )
@@ -579,7 +595,18 @@ def _add_pareto_traces_2d(
                     },
                     mode='markers',
                     marker={'color': suggested_point_color},
-                    name='Suggested point',
+                    name='Suggested points',
+                    legendgroup="Suggested points",
+                    showlegend=True if suggested_point_no == 0 else False,
+                    customdata=np.dstack([
+                                [prediction['lower'][objective_index_x].detach().numpy()],
+                                [prediction['upper'][objective_index_x].detach().numpy()],
+                                [prediction['lower'][objective_index_y].detach().numpy()],
+                                [prediction['upper'][objective_index_y].detach().numpy()],
+                    ])[0],
+                    hovertemplate=f"Suggested point number: {suggested_point_no} <br>"
+                                  "%{xaxis.title.text}: %{x:.3f} (%{customdata[0]:.3f} to %{customdata[1]:.3f}) <br>"
+                                  "%{yaxis.title.text}: %{y:.3f} (%{customdata[2]:.3f} to %{customdata[3]:.3f}) <br>"
                 ),
                 **row_col_info
             )
@@ -589,7 +616,7 @@ def _add_pareto_traces_2d(
 
 def plot_pareto_front(
         objective_values: torch.Tensor,
-        dominating_objective_values: torch.Tensor,
+        pareto_optimal_indices: list[int],
         plotted_objective_indices: list[int],
         objective_names: list[str],
         suggested_points: Optional[SuggestedPoints] = None,
@@ -608,7 +635,7 @@ def plot_pareto_front(
             objective_values=objective_values,
             objective_index_x=obj_ind_x,
             objective_index_y=obj_ind_y,
-            dominating_objective_values=dominating_objective_values,
+            pareto_optimal_indices=pareto_optimal_indices,
             suggested_points=suggested_points
         )
 
@@ -662,14 +689,14 @@ def plot_pareto_front_from_optimiser(
         objective_values = optimiser.evaluated_objective_values.tensor
         suggested_points = optimiser.suggested_points
 
-    pareto_optimal_objectives = get_pareto_optimal_points(
+    pareto_optimal_indices = get_pareto_optimal_points(
         variable_values=variable_values,
         objective_values=objective_values,
-    )['objectives']
+    )['index']
 
     figure_or_none = plot_pareto_front(
         objective_values=objective_values,
-        dominating_objective_values=pareto_optimal_objectives,
+        pareto_optimal_indices=pareto_optimal_indices,
         plotted_objective_indices=plotted_objective_indices,
         objective_names=optimiser.objective.objective_names,
         suggested_points=suggested_points,
