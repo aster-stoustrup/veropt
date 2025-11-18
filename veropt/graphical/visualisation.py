@@ -799,9 +799,9 @@ def _fill_model_prediction_from_optimiser(
 
         samples = []
         for sample_no in range(len(samples_normalised)):
-            samples[sample_no] = optimiser._normaliser_objectives.inverse_transform(
+            samples.append(optimiser._normaliser_objectives.inverse_transform(
                 tensor=samples_normalised[sample_no]
-            )
+            ))
 
         variable_array_is_normalised = False
 
@@ -1021,7 +1021,7 @@ def _add_model_traces(
         row=row_no, col=col_no
     )
 
-    for sample_no in range(model_prediction.samples.shape[0]):
+    for sample_no in range(len(model_prediction.samples)):
 
         show_legend_sample = True if (row_no == 1 and col_no == 1) else False
         show_legend_sample = show_legend_sample and (sample_no == 0)
