@@ -712,7 +712,8 @@ def _calculate_proximity_punished_acquisition_values(
         evaluated_point: torch.Tensor,
         variable_index: int,
         variable_array: torch.Tensor,
-        suggested_points_variables: torch.Tensor
+        suggested_points_variables: torch.Tensor,
+        normalised: bool
 ) -> list[torch.Tensor]:
 
     n_suggested_points = suggested_points_variables.shape[DataShape.index_points]
@@ -727,6 +728,10 @@ def _calculate_proximity_punished_acquisition_values(
     full_variable_array[:, variable_index] = variable_array
 
     suggested_points_variables_list = [suggested_points_variables[i, :] for i in range(n_suggested_points)]
+
+    if normalised is False:
+        normaliser_function = optimiser.get_normaliser_function_variables()
+        full_variable_array = normaliser_function(full_variable_array)
 
     modified_acquisition_values = acquisition_optimiser.get_modified_acquisition_values(
         acquisition_function=optimiser.predictor.acquisition_function,
@@ -744,7 +749,7 @@ def choose_plot_point(
 
     if optimiser.suggested_points is None:
 
-        if normalised is False and optimiser.return_normalised_data:
+        if normalised is False:
             variable_values = optimiser.evaluated_variables_real_units
         else:
             variable_values = optimiser.evaluated_variable_values.tensor
@@ -754,10 +759,11 @@ def choose_plot_point(
         point_description = f"at the point with the highest known value (point no. {max_ind})"
     else:
 
-        if normalised is False and optimiser.return_normalised_data:
+        if normalised is False:
+            assert optimiser.suggested_points_real_units is not None, "Internal error"
             suggested_variable_values = optimiser.suggested_points_real_units.variable_values
         else:
-            suggested_variable_values = optimiser.suggested_variable_values.tensor
+            suggested_variable_values = optimiser.suggested_points.variable_values
 
         suggested_point_ind = 0  # In the future, might want the best one
         eval_point = deepcopy(suggested_variable_values[suggested_point_ind:suggested_point_ind + 1])
@@ -770,14 +776,10 @@ def _fill_model_prediction_from_optimiser(
         optimiser: BayesianOptimiser,
         variable_index: int,
         evaluated_point: Optional[torch.Tensor],
-        fill_with_normalised_data: bool,
+        normalised: bool,
         n_calculated_points: Optional[int] = None,
         calculate_acquisition: bool = False,
 ) -> ModelPrediction:
-
-    # TODO: CLEAN THIS UP (Fix ugly norm. stuff >:))
-    #   - Normalisation should be handled more smoothly and just be a flag somewhere
-    #   - i.e. this method shouldn't really be doing anything about that on its own
 
     if n_calculated_points is None:
         if calculate_acquisition is False:
@@ -787,22 +789,23 @@ def _fill_model_prediction_from_optimiser(
 
     if evaluated_point is None:
 
+        # TODO: Probably move out of this method?
         evaluated_point, title = choose_plot_point(
             optimiser=optimiser,
-            normalised=fill_with_normalised_data
+            normalised=normalised
         )
 
     else:
         title = ''
 
-    # Assume that evaluated_point will then be unnormalised
-    #   - Need to fix this assumption (but need to just re-do this whole thing because it's messy rn)
-    if fill_with_normalised_data is False and optimiser.return_normalised_data:
-        evaluated_point = optimiser._normaliser_variables.transform(evaluated_point)
+    if normalised is False:
+        bounds = optimiser.bounds_real_units
+    else:
+        bounds = optimiser.bounds.tensor
 
     variable_array = torch.linspace(
-        start=optimiser.bounds[0, variable_index].tensor,
-        end=optimiser.bounds[1, variable_index].tensor,
+        start=bounds[0, variable_index],
+        end=bounds[1, variable_index],
         steps=n_calculated_points
     )
 
@@ -811,55 +814,21 @@ def _fill_model_prediction_from_optimiser(
 
     if calculate_acquisition:
         acquisition_values = optimiser.predictor.get_acquisition_values(
-            variable_values=all_variables_array
+            variable_values=all_variables_array,
+            allow_normalisation=normalised
         )
     else:
         acquisition_values = None
 
-    # TODO: Figure out nicer way to handle norm.
-    if fill_with_normalised_data is False and optimiser.return_normalised_data:
-
-        samples_normalised = optimiser.predictor.get_samples_from_model(
-            variable_values=all_variables_array,
-            n_samples=5
-        )
-
-        samples = []
-        for sample_no in range(len(samples_normalised)):
-            samples.append(optimiser._normaliser_objectives.inverse_transform(
-                tensor=samples_normalised[sample_no]
-            ))
-
-        variable_array_is_normalised = False
-
-        # This is messy >:)) ( TODO: FIX )
-        #   - This is just unnormalised after this I guess >:) (oops, very confusing)
-        all_variables_array = optimiser._normaliser_variables.inverse_transform(
-            tensor=all_variables_array
-        )
-
-        variable_array = all_variables_array[:, variable_index]
-
-        evaluated_point = optimiser._normaliser_variables.inverse_transform(
-            tensor=evaluated_point
-        )
-
-    else:
-
-        if optimiser.return_normalised_data:
-            variable_array_is_normalised = True
-        else:
-            variable_array_is_normalised = False
-
-        samples = optimiser.predictor.get_samples_from_model(
-            variable_values=all_variables_array,
-            n_samples=5
-        )
-
-    predicted_objective_values = optimiser.predict_values(
+    samples = optimiser.predictor.get_samples_from_model(
         variable_values=all_variables_array,
-        variables_normalised=variable_array_is_normalised,
-        return_normalised_objectives=fill_with_normalised_data
+        n_samples=5,
+        allow_normalisation=normalised
+    )
+
+    predicted_objective_values = optimiser.predictor.predict_values(
+        variable_values=all_variables_array,
+        allow_normalisation=normalised
     )
 
     return ModelPrediction(
@@ -943,7 +912,7 @@ def plot_prediction_grid_from_optimiser(
                 evaluated_point=evaluated_point,
                 calculate_acquisition=plot_acquisition,
                 n_calculated_points=n_calculated_points,
-                fill_with_normalised_data=normalised
+                normalised=normalised
             )
 
             if optimiser.suggested_points and plot_acquisition:
@@ -952,9 +921,6 @@ def plot_prediction_grid_from_optimiser(
 
                     if type(optimiser.predictor.acquisition_optimiser) is ProximityPunishmentSequentialOptimiser:
 
-                        # TODO: Fix norm. in variable array :3
-                        if normalised is False:
-                            raise NotImplementedError()
                         punished_acquisition_values = _calculate_proximity_punished_acquisition_values(
                             optimiser=optimiser,
                             evaluated_point=calculated_prediction.point,

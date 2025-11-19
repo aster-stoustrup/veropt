@@ -8,6 +8,9 @@ from veropt.optimiser.optimiser_utility import OptimiserSettings
 from veropt.optimiser.saver_loader_utility import SavableClass, TensorsAsListsEncoder
 from veropt.optimiser.utility import get_arguments_of_function
 
+# Loaded so it is known by load_optimiser_from_state
+from veropt.interfaces.experiment import ExperimentObjective
+
 
 def save_to_json(
         object_to_save: SavableClass,

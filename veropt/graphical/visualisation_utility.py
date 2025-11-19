@@ -123,7 +123,7 @@ class ModelPrediction:
             variable_array: torch.Tensor,
             predicted_objective_values: PredictionDict,
             acquisition_values: Optional[torch.Tensor],
-            samples: Optional[torch.Tensor] = None
+            samples: list[torch.Tensor]
     ) -> None:
 
         self.variable_index = variable_index
@@ -139,7 +139,7 @@ class ModelPrediction:
             self.acquisition_values = acquisition_values
         else:
             self.acquisition_values = acquisition_values.detach().numpy()
-        self.samples: Optional[torch.Tensor] = samples
+        self.samples = samples
 
         self.modified_acquisition_values: Optional[list[torch.Tensor]] = None
 

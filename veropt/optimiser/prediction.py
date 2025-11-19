@@ -1,6 +1,6 @@
 import abc
 import functools
-from typing import Callable, Self
+from typing import Callable, Self, Optional
 
 import torch
 
@@ -17,29 +17,99 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
 
     name: str = 'meta'
 
-    @abc.abstractmethod
+    def __init__(
+            self,
+            normaliser_variables: Optional[Callable] = None,
+            unnormaliser_objectives: Optional[Callable] = None
+    ):
+        self._normaliser_variables = normaliser_variables
+        self._unnormaliser_objectives = unnormaliser_objectives
+
     def predict_values(
             self,
             *,
             variable_values: torch.Tensor,
+            allow_normalisation: bool
     ) -> PredictionDict:
-        pass
+
+        if allow_normalisation is False:
+            assert self._normaliser_variables is not None, "This predictor has not been given a normaliser method"
+            variable_values = self._normaliser_variables(variable_values)
+
+        prediction_dict = self._predict_values(
+            variable_values=variable_values
+        )
+
+        if allow_normalisation is False:
+            assert self._unnormaliser_objectives is not None, "This predictor has not been given a normaliser method"
+            prediction_dict['mean'] = self._unnormaliser_objectives(prediction_dict['mean'])
+            prediction_dict['lower'] = self._unnormaliser_objectives(prediction_dict['lower'])
+            prediction_dict['upper'] = self._unnormaliser_objectives(prediction_dict['upper'])
+
+        return prediction_dict
 
     @abc.abstractmethod
+    def _predict_values(
+            self,
+            *,
+            variable_values: torch.Tensor,
+    ) -> PredictionDict:
+        ...
+
     def get_acquisition_values(
             self,
             *,
             variable_values: torch.Tensor,
+            allow_normalisation: bool
     ) -> torch.Tensor:
-        pass
+
+        if allow_normalisation is False:
+            assert self._normaliser_variables is not None, "This predictor has not been given a normaliser method"
+            variable_values = self._normaliser_variables(variable_values)
+
+        return self._get_acquisition_values(
+            variable_values=variable_values
+        )
 
     @abc.abstractmethod
+    def _get_acquisition_values(
+            self,
+            *,
+            variable_values: torch.Tensor,
+    ) -> torch.Tensor:
+        ...
+
     def get_samples_from_model(
             self,
             *,
             variable_values: torch.Tensor,
+            n_samples: int,
+            allow_normalisation: bool
+    ) -> list[torch.Tensor]:
+
+        if allow_normalisation is False:
+            assert self._normaliser_variables is not None, "This predictor has not been given a normaliser method"
+            variable_values = self._normaliser_variables(variable_values)
+
+        samples = self._get_samples_from_model(
+            variable_values=variable_values,
+            n_samples=n_samples
+        )
+
+        if allow_normalisation is False:
+            assert self._unnormaliser_objectives is not None, "This predictor has not been given a normaliser method"
+            for sample_no, sample in enumerate(samples):
+                samples[sample_no] = self._unnormaliser_objectives(sample)
+
+        return samples
+
+    @abc.abstractmethod
+    def _get_samples_from_model(
+            self,
+            *,
+            variable_values: torch.Tensor,
             n_samples: int
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         ...
 
     @abc.abstractmethod
@@ -70,9 +140,13 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
     def check_if_model_is_trained(self) -> bool:
         pass
 
-# TODO: Figure out interface between predictor and optimiser
-#   - Note: One awkward thing about this might be when we want to display acq func values?
-#       - Do we then check if we're using a botorchPredictor or...?
+    def update_normalisers(
+            self,
+            normaliser_variables: Callable[[torch.Tensor], torch.Tensor],
+            unnormaliser_objectives: Callable[[torch.Tensor], torch.Tensor]
+    ) -> None:
+        self._normaliser_variables = normaliser_variables
+        self._unnormaliser_objectives = unnormaliser_objectives
 
 
 # TODO: Make sure we refresh acq func before suggesting points
@@ -87,14 +161,19 @@ class BotorchPredictor(Predictor):
             self,
             model: GPyTorchFullModel,
             acquisition_function: BotorchAcquisitionFunction,
-            acquisition_optimiser: AcquisitionOptimiser
+            acquisition_optimiser: AcquisitionOptimiser,
+            normaliser_variables: Optional[Callable] = None,
+            unnormaliser_objectives: Optional[Callable] = None
     ) -> None:
 
         self.model = model
         self.acquisition_function = acquisition_function
         self.acquisition_optimiser = acquisition_optimiser
 
-        super().__init__()
+        super().__init__(
+            normaliser_variables=normaliser_variables,
+            unnormaliser_objectives=unnormaliser_objectives
+        )
 
     def __str__(self) -> str:
         return (
@@ -146,7 +225,7 @@ class BotorchPredictor(Predictor):
         return check_dimensions
 
     @_check_input_dimensions
-    def predict_values(
+    def _predict_values(
             self,
             *,
             variable_values: torch.Tensor
@@ -175,7 +254,7 @@ class BotorchPredictor(Predictor):
         }
 
     @_check_input_dimensions
-    def get_samples_from_model(
+    def _get_samples_from_model(
             self,
             *,
             variable_values: torch.Tensor,
@@ -198,7 +277,7 @@ class BotorchPredictor(Predictor):
         return samples
 
     @_check_input_dimensions
-    def get_acquisition_values(
+    def _get_acquisition_values(
             self,
             *,
             variable_values: torch.Tensor,

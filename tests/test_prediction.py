@@ -40,7 +40,8 @@ def test_botorch_predict_values_1_objective() -> None:
     )
 
     prediction = predictor.predict_values(
-        variable_values=variable_1_array
+        variable_values=variable_1_array,
+        allow_normalisation=True
     )
 
     assert bool((prediction['mean'] > prediction['lower']).min()) is True
@@ -138,7 +139,8 @@ def test_botorch_predict_values_wrong_dimensions() -> None:
 
     with pytest.raises(ValueError):
         _ = predictor.predict_values(
-            variable_values=variable_1_array
+            variable_values=variable_1_array,
+            allow_normalisation=True
         )
 
 

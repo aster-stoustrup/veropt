@@ -285,7 +285,7 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
         assert self.model_with_data is not None, "Model must be initiated to call this function"
 
         if noise < self.likelihood.noise_covar.raw_noise_constraint.lower_bound:
-            noise = self.likelihood.noise_covar.raw_noise_constraint.lower_bound
+            noise = float(self.likelihood.noise_covar.raw_noise_constraint.lower_bound)
 
         self.model_with_data.likelihood.noise = torch.tensor(noise)
 

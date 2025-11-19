@@ -5,6 +5,7 @@ from typing import Callable, Optional, Self, Union, Unpack
 
 import torch
 
+# TODO: Should we do more/something else to ensure compatibility between numpy and torch?
 torch.set_default_dtype(torch.float64)
 
 from veropt.optimiser.initial_points import generate_initial_points
@@ -28,8 +29,6 @@ from veropt.optimiser.utility import (
 from veropt.optimiser.saver_loader_utility import SavableClass, rehydrate_object
 
 
-# TODO: Fix torch/np conflict over float size
-#   - Put the torch default setting into this file, should we have it more places?
 class BayesianOptimiser(SavableClass):
 
     def __init__(
@@ -426,7 +425,8 @@ class BayesianOptimiser(SavableClass):
         if self.model_has_been_trained:
 
             prediction = self.predictor.predict_values(
-                variable_values=suggested_variables_tensor
+                variable_values=suggested_variables_tensor,
+                allow_normalisation=True
             )
 
         else:
@@ -486,66 +486,35 @@ class BayesianOptimiser(SavableClass):
 
         return pareto_optimal_points
 
-    def predict_values(
-            self,
-            *,
-            variable_values: torch.Tensor,
-            variables_normalised: bool,
-            return_normalised_objectives: bool
-    ) -> PredictionDict:
+    def get_normaliser_function_variables(self) -> Callable[[torch.Tensor], torch.Tensor]:
 
-        # TODO: Consider if we can do a nicer/more general overall solution for interacting with the model through norm.
-        #   - Maybe we could make some wrapper/decorator/context?
+        assert self._normaliser_variables is not None, "Must have made normalisers to call this"
 
-        if self.return_normalised_data and (variables_normalised is False):
+        def normalise_variables(
+                variable_values: torch.Tensor,
+        ) -> torch.Tensor:
 
-            assert self._normaliser_variables is not None, "Normalisers must have been initialised at this point"
+            if self.return_normalised_data:
+                variable_values = self._normaliser_variables.transform(variable_values)
 
-            variable_values = self._normaliser_variables.transform(
-                tensor=variable_values
-            )
+            return variable_values
 
-        prediction = self.predictor.predict_values(
-            variable_values=variable_values
-        )
+        return normalise_variables
 
-        if self.return_normalised_data and (return_normalised_objectives is False):
+    def get_unnormaliser_function_objectives(self) -> Callable[[torch.Tensor], torch.Tensor]:
 
-            assert self._normaliser_objectives is not None, "Normalisers must have been initialised at this point"
+        assert self._normaliser_objectives is not None, "Must have made normalisers to call this"
 
-            for prediction_type in ['mean', 'lower', 'upper']:
-                prediction[prediction_type] = self._normaliser_objectives.inverse_transform(
-                    tensor=prediction[prediction_type]
-                )
+        def unnormalise_objectives(
+                objective_values: torch.Tensor,
+        ) -> torch.Tensor:
 
-        return prediction
+            if self.return_normalised_data:
+                objective_values = self._normaliser_objectives.inverse_transform(objective_values)
 
-    # TODO: Finish or delete
-    def unnormalise_function[T, **P](
-            self,
-            function: Callable[P, T]
-    ) -> Callable[P, T]:
+            return objective_values
 
-        @functools.wraps(function)
-        def unnormalise_variables_and_objectives(
-                *args: P.args,
-                **kwargs: P.kwargs,
-        ) -> T:
-
-            variable_values, _ = unpack_variables_objectives_from_kwargs(kwargs)
-
-            if variable_values is not None:
-                unnormalised_variables = self._normaliser_variables.inverse_transform(variable_values)
-
-            output = function(
-                *args,
-                **kwargs
-            )
-
-            raise NotImplementedError()
-
-
-        return unnormalise_variables_and_objectives
+        return unnormalise_objectives
 
     def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:
 
@@ -724,6 +693,11 @@ class BayesianOptimiser(SavableClass):
             variable_values=self.evaluated_variable_values.tensor,
             objective_values=self.evaluated_objective_values.tensor,
             train=train
+        )
+
+        self.predictor.update_normalisers(
+            normaliser_variables=self.get_normaliser_function_variables(),
+            unnormaliser_objectives=self.get_unnormaliser_function_objectives()
         )
 
         self.suggested_points_real_units = None
