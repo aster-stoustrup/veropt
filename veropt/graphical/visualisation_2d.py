@@ -16,16 +16,19 @@ def plot_prediction_surface_from_optimiser(
         variable_x: Union[int, str],
         variable_y: Union[int, str],
         objective: Union[int, str],
-        evaluated_point: TensorWithNormalisationFlag,
+        evaluated_point: torch.Tensor,
         normalised: bool = False,
         n_points_per_dimension: int = 200
 ) -> go.Figure:
 
-    if optimiser.return_normalised_data:
-        if evaluated_point.normalised is False:
-            raise ValueError("Evaluated point must be in normalised coordinates when model is normalised")
+    if normalised is False:
+        bounds = optimiser.bounds_real_units
 
-    evaluated_point_tensor = evaluated_point.tensor
+    else:
+        bounds = optimiser.bounds.tensor
+
+    # TODO: Allow evaluated_point to be int or None
+    #   - Re-use from 2d version
 
     if isinstance(variable_x, str):
         variable_x = optimiser.objective.variable_names.index(variable_x)
@@ -37,22 +40,21 @@ def plot_prediction_surface_from_optimiser(
         objective = optimiser.objective.objective_names.index(objective)
 
     variable_tensor_x = torch.linspace(
-        start=optimiser.bounds[0, variable_x].tensor,
-        end=optimiser.bounds[1, variable_x].tensor,
+        start=bounds[0, variable_x],
+        end=bounds[1, variable_x],
         steps=n_points_per_dimension
     )
 
     # variable_tensor_x = torch.tensor(variable_array_x)
 
     variable_tensor_y = torch.linspace(
-        start=optimiser.bounds[0, variable_y].tensor,
-        end=optimiser.bounds[1, variable_y].tensor,
+        start=bounds[0, variable_y],
+        end=bounds[1, variable_y],
         steps=n_points_per_dimension
     )
 
     # variable_tensor_y = torch.tensor(variable_array_y)
 
-    # TODO: Make unnormalised versions of these (but model must take normalised)
     grid_x, grid_y = torch.meshgrid(
     variable_tensor_x,
         variable_tensor_y,
@@ -64,40 +66,37 @@ def plot_prediction_surface_from_optimiser(
 
     warnings.warn("Surface plot might be turning the wrong way atm")
 
-    if not normalised:
-        raise NotImplementedError()  # See TODO above
-
-    all_variables_tensor = evaluated_point_tensor.repeat(
+    all_variables_tensor = evaluated_point.repeat(
         n_points_per_dimension * n_points_per_dimension,
         1
     )
 
     for i in range(n_points_per_dimension):
-        all_variables_tensor[i*n_points_per_dimension:i*n_points_per_dimension + n_points_per_dimension, variable_x] = grid_x[:, i]
-        all_variables_tensor[i*n_points_per_dimension:i*n_points_per_dimension + n_points_per_dimension, variable_y] = grid_y[:, i]
+        all_variables_tensor[
+        i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
+        variable_x
+        ] = grid_x[:, i]
 
-    prediction_dict = optimiser.predictor.predict_values(
-        variable_values=all_variables_tensor
+        all_variables_tensor[
+        i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
+        variable_y
+        ] = grid_y[:, i]
+
+    prediction = optimiser.predictor.predict_values(
+        variable_values=all_variables_tensor,
+        allow_normalisation=normalised
     )
 
-    if not normalised and optimiser.return_normalised_data:
-        # TODO: Make public method to do this or remove _ on normaliser classes
-        prediction_mean = optimiser._normaliser_objectives.inverse_transform(
-            prediction_dict['mean']
-        )
-    else:
-        prediction_mean = prediction_dict['mean']
-
-    prediction_objective_tensor = prediction_mean[:, objective]
+    prediction_objective_tensor = prediction['mean'][:, objective]
 
     prediction_objective_matrix = prediction_objective_tensor.reshape(n_points_per_dimension, n_points_per_dimension)
 
-    if normalised:
-        point_variable_values = optimiser.evaluated_variables_normalised
-        point_objective_values = optimiser.evaluated_objectives_normalised[:, objective]
-    else:
+    if normalised is False:
         point_variable_values = optimiser.evaluated_variables_real_units
         point_objective_values = optimiser.evaluated_objectives_real_units[:, objective]
+    else:
+        point_variable_values = optimiser.evaluated_variable_values.tensor
+        point_objective_values = optimiser.evaluated_objective_values[:, objective].tensor
 
     x_axis_title = optimiser.objective.variable_names[variable_x]
     y_axis_title = optimiser.objective.variable_names[variable_y]
@@ -114,7 +113,7 @@ def plot_prediction_surface_from_optimiser(
         prediction_grid_y=grid_y,
         point_variable_values=point_variable_values,
         point_objective_values=point_objective_values,
-        evaluated_point=evaluated_point.tensor,
+        evaluated_point=evaluated_point,
         variable_x_index=variable_x,
         variable_y_index=variable_y,
         x_axis_title=x_axis_title,
