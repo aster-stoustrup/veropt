@@ -7,7 +7,9 @@ from veropt.graphical.visualisation import (
 from veropt.optimiser.practice_objectives import VehicleSafety
 
 
-def make_figures():
+def make_figures(
+        save: bool
+):
 
     progression_figure = plot_progression_from_optimiser(
         optimiser=optimiser,
@@ -24,6 +26,18 @@ def make_figures():
         return_figure=True
     )
 
+    # TODO: Add more?
+
+    progression_figure.show()
+    pareto_front_grid.show()
+    prediction_figure.show()
+
+    if save:
+
+        # TODO: Save figures
+
+        pass
+
 
 objective = VehicleSafety()
 
@@ -39,7 +53,10 @@ for i in range(4):
 
 optimiser.suggest_candidates()
 
-make_figures()
+make_figures(
+    save=False
+)
 
 
 # TODO: Finish this example
+#   - Maybe prevent acq func optimiser from taking too long
