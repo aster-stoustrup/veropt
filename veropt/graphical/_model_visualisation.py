@@ -31,6 +31,7 @@ def choose_plot_point(
         max_ind = optimiser.get_best_points()['index']
         eval_point = deepcopy(variable_values[max_ind:max_ind + 1])
         point_description = f"at the point with the highest known value (point no. {max_ind})"
+
     else:
 
         if normalised is False:
@@ -49,7 +50,8 @@ def choose_plot_point(
 def _fill_model_prediction_from_optimiser(
         optimiser: BayesianOptimiser,
         variable_index: int,
-        evaluated_point: Optional[torch.Tensor],
+        evaluated_point: torch.Tensor,
+        title: str,
         normalised: bool,
         n_calculated_points: Optional[int] = None,
         calculate_acquisition: bool = False,
@@ -60,17 +62,6 @@ def _fill_model_prediction_from_optimiser(
             n_calculated_points = 10_000
         else:
             n_calculated_points = 200
-
-    if evaluated_point is None:
-
-        # TODO: Probably move out of this method?
-        evaluated_point, title = choose_plot_point(
-            optimiser=optimiser,
-            normalised=normalised
-        )
-
-    else:
-        title = ''
 
     if normalised is False:
         bounds = optimiser.bounds_real_units

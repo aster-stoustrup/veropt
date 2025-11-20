@@ -10,14 +10,17 @@ from dash.exceptions import PreventUpdate
 from plotly import graph_objects as go
 
 from veropt.graphical._overview import plot_point_overview, plot_point_overview_separate_subplots, plot_progression
-from veropt.graphical._model_visualisation import _fill_model_prediction_from_optimiser, plot_prediction_grid, \
-    plot_prediction_surface
+from veropt.graphical._model_visualisation import (
+    _fill_model_prediction_from_optimiser, plot_prediction_grid, plot_prediction_surface,
+    choose_plot_point
+)
 from veropt.graphical._pareto_front import plot_pareto_front_grid, plot_pareto_front
 from veropt.graphical._visualisation_utility import (
-    ModelPredictionContainer
+    ModelPredictionContainer, get_point_from_number
 )
-from veropt.optimiser.acquisition_optimiser import ProximityPunishmentSequentialOptimiser, \
-    _calculate_proximity_punished_acquisition_values
+from veropt.optimiser.acquisition_optimiser import (
+    ProximityPunishmentSequentialOptimiser, _calculate_proximity_punished_acquisition_values
+)
 from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.optimiser_utility import get_best_points, get_pareto_optimal_points
 from veropt.optimiser.prediction import BotorchPredictor
@@ -27,7 +30,7 @@ from veropt.optimiser.utility import DataShape
 def plot_point_overview_from_optimiser(
         optimiser: BayesianOptimiser,
         points: Literal['all', 'pareto-optimal', 'bayes', 'suggested', 'best'] = 'all',
-        normalised: bool = True,
+        normalised: bool = False,
         return_figure: bool = False
 ) -> Optional[go.Figure]:
 
@@ -145,21 +148,15 @@ def plot_point_overview_from_optimiser(
 
 def plot_progression_from_optimiser(
         optimiser: BayesianOptimiser,
-        normalised: Optional[bool] = None,
+        normalised: bool = False,
         return_figure: bool = False
 ) -> Union[None, go.Figure]:
 
-    if normalised is None:
-        if optimiser.settings.normalise and optimiser.normalisers_have_been_initialised:
-            normalised = True
-        else:
-            normalised = False
-
-    if normalised:
-        objective_values = optimiser.evaluated_objectives_normalised
-        assert objective_values is not None
-    else:
+    if normalised is False:
         objective_values = optimiser.evaluated_objectives_real_units
+
+    else:
+        objective_values = optimiser.evaluated_objective_values.tensor
 
     figure = plot_progression(
         objective_values=objective_values,
@@ -177,7 +174,7 @@ def plot_progression_from_optimiser(
 def plot_pareto_front_grid_from_optimiser(
         optimiser: BayesianOptimiser,
         return_figure: bool = False,
-        normalised: bool = True
+        normalised: bool = False
 ) -> None | go.Figure:
 
     if optimiser.return_normalised_data and normalised is False:
@@ -210,7 +207,7 @@ def plot_pareto_front_from_optimiser(
         optimiser: BayesianOptimiser,
         plotted_objective_indices: list[int],
         return_figure: bool = False,
-        normalised: bool = True
+        normalised: bool = False
 ) -> None | go.Figure:
 
     if optimiser.return_normalised_data and normalised is False:
@@ -247,7 +244,7 @@ def plot_prediction_grid_from_optimiser(
         evaluated_point: Optional[Union[torch.Tensor, int]] = None,
         plot_acquisition: bool = False,
         n_calculated_points: Optional[int] = None,
-        normalised: bool = True
+        normalised: bool = False
 ) -> Union[go.Figure, None]:
 
     if normalised is False and optimiser.return_normalised_data:
@@ -265,6 +262,9 @@ def plot_prediction_grid_from_optimiser(
 
     n_variables = variable_values.shape[DataShape.index_dimensions]
 
+    # Only used if calculating new point (make cleaner)
+    title_extension = ''
+
     if model_prediction_container is None:
         model_prediction_container = ModelPredictionContainer(
             normalised=normalised
@@ -276,19 +276,22 @@ def plot_prediction_grid_from_optimiser(
 
     if isinstance(evaluated_point, int):
 
-        if suggested_points is not None:
-            concatenated_variable_values = torch.concat([
-                variable_values,
-                suggested_points.variable_values
-            ])
-        else:
-            concatenated_variable_values = variable_values
+        title_extension = f' at point {evaluated_point}'
 
-        evaluated_point = concatenated_variable_values[evaluated_point:evaluated_point + 1]
-
+        evaluated_point = get_point_from_number(
+            point_number=evaluated_point,
+            variable_values=variable_values,
+            suggested_points=suggested_points
+        )
+        
     if evaluated_point is None:
         # I guess there's a non-caught case where no point was chosen but the auto-selected point is already calculated
         calculate_new_predictions = True
+
+        evaluated_point, title_extension = choose_plot_point(
+            optimiser=optimiser,
+            normalised=normalised
+        )
 
     elif evaluated_point in model_prediction_container:
         calculate_new_predictions = False
@@ -307,6 +310,7 @@ def plot_prediction_grid_from_optimiser(
                 optimiser=optimiser,
                 variable_index=var_ind,
                 evaluated_point=evaluated_point,
+                title=title_extension,
                 calculate_acquisition=plot_acquisition,
                 n_calculated_points=n_calculated_points,
                 normalised=normalised
@@ -363,7 +367,7 @@ def plot_prediction_grid_from_optimiser(
 
 def run_prediction_grid_app(
         optimiser: BayesianOptimiser,
-        normalised: bool = True
+        normalised: bool = False
 ) -> None:
 
     @callback(
@@ -459,10 +463,30 @@ def plot_prediction_surface_from_optimiser(
         variable_x: Union[int, str],
         variable_y: Union[int, str],
         objective: Union[int, str],
-        evaluated_point: torch.Tensor,
+        evaluated_point: Optional[Union[torch.Tensor, int]],
         normalised: bool = False,
         n_points_per_dimension: int = 200
 ) -> go.Figure:
+
+    if normalised is False:
+        variable_values = optimiser.evaluated_variables_real_units
+
+    else:
+        variable_values = optimiser.evaluated_variable_values.tensor
+    
+    if evaluated_point is None:
+
+        evaluated_point, title = choose_plot_point(
+            optimiser=optimiser,
+            normalised=normalised
+        )
+
+    elif isinstance(evaluated_point, int):
+        evaluated_point = get_point_from_number(
+            point_number=evaluated_point,
+            variable_values=variable_values,
+            suggested_points=None
+        )
 
     if normalised is False:
         bounds = optimiser.bounds_real_units

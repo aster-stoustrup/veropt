@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from plotly.express import colors
 
+from veropt.optimiser.optimiser_utility import SuggestedPoints
 from veropt.optimiser.utility import DataShape, PredictionDict
 
 
@@ -51,37 +52,6 @@ def get_continuous_colour(
     return relabeled_colour
 
 
-# def opacity_for_multidimensional_points(
-#         variable_index: int,
-#         n_variables: int,
-#         variable_values: torch.Tensor,
-#         evaluated_point: torch.Tensor,
-#         alpha_min: float = 0.1,
-#         alpha_max: float = 0.8
-# ) -> tuple[torch.Tensor, torch.Tensor]:
-#
-#     distances_list = []
-#     index_wo_var_ind = torch.arange(n_variables) != variable_index
-#     for point_no in range(variable_values.shape[DataShape.index_points]):
-#         distances_list.append(np.linalg.norm(
-#             evaluated_point[0, index_wo_var_ind] - variable_values[point_no, index_wo_var_ind]
-#         ))
-#
-#     distances = torch.tensor(distances_list)
-#
-#     normalised_distances = (
-#         ((distances - distances.min()) / distances.max()) / ((distances - distances.min()) / distances.max()).max()
-#     )
-#
-#     normalised_proximity = 1 - normalised_distances
-#
-#     alpha_values = (alpha_max - alpha_min) * normalised_proximity + alpha_min
-#
-#     alpha_values[alpha_values.argmax()] = 1.0
-#
-#     return alpha_values, normalised_distances
-
-
 def opacity_for_multidimensional_points(
         variable_indices: list[int],
         variable_values: torch.Tensor,
@@ -117,6 +87,25 @@ def opacity_for_multidimensional_points(
     alpha_values[alpha_values.argmax()] = 1.0
 
     return alpha_values, normalised_distances
+
+
+def get_point_from_number(
+        point_number: int,
+        variable_values: torch.Tensor,
+        suggested_points: Optional[SuggestedPoints]
+) -> torch.Tensor:
+
+    if suggested_points is not None:
+        concatenated_variable_values = torch.concat([
+            variable_values,
+            suggested_points.variable_values
+        ])
+    else:
+        concatenated_variable_values = variable_values
+
+    point = concatenated_variable_values[point_number:point_number + 1]
+
+    return point
 
 
 class ModelPrediction:
