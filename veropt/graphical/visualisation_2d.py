@@ -8,7 +8,7 @@ from plotly.express import colors
 
 from veropt.graphical.visualisation_utility import opacity_for_multidimensional_points, get_continuous_colour
 from veropt.optimiser.optimiser import BayesianOptimiser
-from veropt.optimiser.utility import TensorWithNormalisationFlag
+from veropt.optimiser.utility import TensorWithNormalisationFlag, DataShape
 
 
 def plot_prediction_surface_from_optimiser(
@@ -127,8 +127,6 @@ def plot_prediction_surface(
         z_axis_title: str,
 ) -> go.Figure:
 
-    # TODO: Add some colour/opacity things to show distance to plane
-
     colour_scale = colors.get_colorscale('matter')
 
     opacity_list, distance_list = opacity_for_multidimensional_points(
@@ -151,12 +149,18 @@ def plot_prediction_surface(
         for point_no in range(len(opacity_list))
     ]
 
+    n_evaluated_points = point_objective_values.shape[DataShape.index_points]
+
     figure = go.Figure()
 
     figure.add_trace(go.Surface(
         x=prediction_grid_x.detach().numpy(),
         y=prediction_grid_y.detach().numpy(),
         z=prediction_objective_matrix.detach().numpy(),
+        name="Mean model prediction",
+        hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
+                      f"{y_axis_title}: " + "%{y:.3f} <br>"
+                      f"{z_axis_title}: " + "%{z:.3f} <br>"
     ))
 
     figure.add_trace(go.Scatter3d(
@@ -168,6 +172,13 @@ def plot_prediction_surface(
             'color': colour_list_w_opacity,
             'opacity': 1.0
         },
+        name="Evaluated points",
+        customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
+        hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
+                      f"{y_axis_title}: " + "%{y:.3f} <br>"
+                      f"{z_axis_title}: " + "%{z:.3f} <br>"
+                      "Point number: %{customdata[0]:.0f} <br>"
+                      "Distance to current plane: %{customdata[1]:.3f}"
     ))
 
     figure.update_layout(
