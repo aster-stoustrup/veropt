@@ -487,11 +487,11 @@ class BayesianOptimiser(SavableClass):
 
     def get_normaliser_function_variables(self) -> Callable[[torch.Tensor], torch.Tensor]:
 
-        assert self._normaliser_variables is not None, "Must have made normalisers to call this"
-
         def normalise_variables(
                 variable_values: torch.Tensor,
         ) -> torch.Tensor:
+
+            assert self._normaliser_variables is not None, "Must have made normalisers to call this"
 
             if self.return_normalised_data:
                 variable_values = self._normaliser_variables.transform(variable_values)
@@ -502,11 +502,11 @@ class BayesianOptimiser(SavableClass):
 
     def get_unnormaliser_function_objectives(self) -> Callable[[torch.Tensor], torch.Tensor]:
 
-        assert self._normaliser_objectives is not None, "Must have made normalisers to call this"
-
         def unnormalise_objectives(
                 objective_values: torch.Tensor,
         ) -> torch.Tensor:
+
+            assert self._normaliser_objectives is not None, "Must have made normalisers to call this"
 
             if self.return_normalised_data:
                 objective_values = self._normaliser_objectives.inverse_transform(objective_values)

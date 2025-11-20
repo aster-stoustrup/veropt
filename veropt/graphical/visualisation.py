@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, Union, Callable
 
 import numpy as np
 import plotly.graph_objs as go
@@ -15,10 +15,9 @@ from veropt.graphical.visualisation_utility import (
     ModelPrediction, ModelPredictionContainer,
     opacity_for_multidimensional_points, get_continuous_colour
 )
+from veropt.optimiser.acquisition import AcquisitionFunction
 from veropt.optimiser.acquisition_optimiser import ProximityPunishmentSequentialOptimiser
 from veropt.optimiser.optimiser import BayesianOptimiser
-# from veropt.utility import opacity_for_multidimensional_points
-# ModelPrediction, ModelPredictionContainer
 from veropt.optimiser.optimiser_utility import SuggestedPoints, get_best_points, get_pareto_optimal_points
 from veropt.optimiser.prediction import BotorchPredictor
 from veropt.optimiser.utility import DataShape
@@ -124,8 +123,7 @@ def plot_point_overview_from_optimiser(
             objective_values=objective_values,
             objective_names=objective_names,
             variable_names=variable_names,
-            shown_indices=shown_inds,
-            return_figure=return_figure
+            shown_indices=shown_inds
         )
 
     else:
@@ -134,8 +132,7 @@ def plot_point_overview_from_optimiser(
             objective_values=objective_values,
             objective_names=objective_names,
             variable_names=variable_names,
-            shown_indices=shown_inds,
-            return_figure=return_figure
+            shown_indices=shown_inds
         )
 
     if return_figure:
@@ -150,9 +147,8 @@ def plot_point_overview(
         objective_values: torch.Tensor,
         objective_names: list[str],
         variable_names: list[str],
-        shown_indices: Optional[list[int]] = None,
-        return_figure: bool = False
-) -> Optional[go.Figure]:
+        shown_indices: Optional[list[int]] = None
+) -> go.Figure:
     # TODO: Maybe want a longer colour scale to avoid duplicate colours...?
     color_scale = colors.qualitative.T10
     color_scale = colors.convert_colors_to_same_type(color_scale, colortype="rgb")[0]
@@ -220,11 +216,7 @@ def plot_point_overview(
     if n_points < 7:
         figure.update_layout(hovermode="x")
 
-    if return_figure:
-        return figure
-    else:
-        figure.show()
-        return None
+    return figure
 
 
 def plot_point_overview_separate_subplots(
@@ -232,9 +224,8 @@ def plot_point_overview_separate_subplots(
         objective_values: torch.Tensor,
         objective_names: list[str],
         variable_names: list[str],
-        shown_indices: Optional[list[int]] = None,
-        return_figure: bool = False
-) -> Optional[go.Figure]:
+        shown_indices: Optional[list[int]] = None
+) -> go.Figure:
 
     # TODO: Maybe want a longer colour scale to avoid duplicate colours...?
     color_scale = colors.qualitative.T10
@@ -316,11 +307,7 @@ def plot_point_overview_separate_subplots(
     #     hovermode='y unified',
     # )
 
-    if return_figure:
-        return figure
-    else:
-        figure.show()
-        return None
+    return figure
 
 
 def plot_progression(
@@ -702,7 +689,9 @@ def plot_pareto_front_from_optimiser(
 
 # TODO: Move somewhere nice
 def _calculate_proximity_punished_acquisition_values(
-        optimiser: BayesianOptimiser,
+        proximity_punish_optimiser: ProximityPunishmentSequentialOptimiser,
+        acquisition_function: AcquisitionFunction,
+        normaliser_variables: Callable[[torch.Tensor], torch.Tensor],
         evaluated_point: torch.Tensor,
         variable_index: int,
         variable_array: torch.Tensor,
@@ -712,23 +701,16 @@ def _calculate_proximity_punished_acquisition_values(
 
     n_suggested_points = suggested_points_variables.shape[DataShape.index_points]
 
-    assert type(optimiser.predictor) is BotorchPredictor
-    predictor: BotorchPredictor = optimiser.predictor
-
-    assert type(predictor.acquisition_optimiser) is ProximityPunishmentSequentialOptimiser
-    acquisition_optimiser: ProximityPunishmentSequentialOptimiser = predictor.acquisition_optimiser
-
     full_variable_array = evaluated_point.repeat(len(variable_array), 1)
     full_variable_array[:, variable_index] = variable_array
 
     suggested_points_variables_list = [suggested_points_variables[i, :] for i in range(n_suggested_points)]
 
     if normalised is False:
-        normaliser_function = optimiser.get_normaliser_function_variables()
-        full_variable_array = normaliser_function(full_variable_array)
+        full_variable_array = normaliser_variables(full_variable_array)
 
-    modified_acquisition_values = acquisition_optimiser.get_modified_acquisition_values(
-        acquisition_function=optimiser.predictor.acquisition_function,
+    modified_acquisition_values = proximity_punish_optimiser.get_modified_acquisition_values(
+        acquisition_function=acquisition_function,
         variable_values=full_variable_array,
         points_to_punish=suggested_points_variables_list
     )
@@ -915,12 +897,14 @@ def plot_prediction_grid_from_optimiser(
                     if type(optimiser.predictor.acquisition_optimiser) is ProximityPunishmentSequentialOptimiser:
 
                         punished_acquisition_values = _calculate_proximity_punished_acquisition_values(
-                            optimiser=optimiser,
+                            proximity_punish_optimiser=optimiser.predictor.acquisition_optimiser,
+                            acquisition_function=optimiser.predictor.acquisition_function,
+                            normaliser_variables=optimiser.get_normaliser_function_variables(),
                             evaluated_point=calculated_prediction.point,
                             variable_index=var_ind,
                             variable_array=calculated_prediction.variable_array,
-                            acquisition_function=optimiser.predictor.acquisition_function,
-                            suggested_points_variables=optimiser.suggested_points.variable_values
+                            suggested_points_variables=optimiser.suggested_points.variable_values,
+                            normalised=normalised
                         )
 
                         calculated_prediction.add_modified_acquisition_values(
@@ -1150,6 +1134,9 @@ def plot_prediction_grid(
             )
 
             if plot_acquisition:
+
+                assert model_prediction.acquisition_values is not None, "Acquisition values not found"
+
                 # TODO: Make acq func colours nicer
                 acquisition_function_colour = 'grey'
 

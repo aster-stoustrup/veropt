@@ -166,13 +166,14 @@ class SuggestedPoints(SavableDataClass):
     ) -> Self:
 
         if saved_state["predicted_objective_values"] is None:
-            prediction = None
+            prediction: Optional[PredictionDict] = None
 
         else:
-            prediction = {}
 
-            for prediction_type in ('mean', 'lower', 'upper'):
-                prediction[prediction_type] = torch.tensor(saved_state['predicted_objective_values'][prediction_type])
+            prediction = {  # type: ignore[assignment]  # mypy is silly
+                prediction_type: torch.tensor(saved_state['predicted_objective_values'][prediction_type])
+                for prediction_type in ('mean', 'lower', 'upper')
+            }
 
         return cls(
             variable_values=torch.tensor(saved_state['variable_values']),
@@ -196,12 +197,13 @@ def normalise_suggested_points(
     )
 
     if suggested_points.predicted_objective_values is not None:
-        normalised_prediction = {}
 
-        for prediction_type in ('mean', 'lower', 'upper'):
-            normalised_prediction[prediction_type] = normaliser_objectives.transform(
-                suggested_points.predicted_objective_values[prediction_type]
+        normalised_prediction: Optional[PredictionDict] = {  # type: ignore[assignment]  # mypy silliness
+            prediction_type: normaliser_objectives.transform(
+                suggested_points.predicted_objective_values[prediction_type]  # type: ignore[literal-required]
             )
+            for prediction_type in ('mean', 'lower', 'upper')
+        }
 
     else:
         normalised_prediction = None
@@ -228,12 +230,14 @@ def unnormalise_suggested_points(
     )
 
     if suggested_points.predicted_objective_values is not None:
-        normalised_prediction = {}
 
-        for prediction_type in ('mean', 'lower', 'upper'):
-            normalised_prediction[prediction_type] = normaliser_objectives.inverse_transform(
-                suggested_points.predicted_objective_values[prediction_type]
+        normalised_prediction: Optional[PredictionDict] = {  # type: ignore[assignment]  # mypy silliness
+            prediction_type: normaliser_objectives.inverse_transform(
+                suggested_points.predicted_objective_values[prediction_type]  # type: ignore[literal-required]
             )
+            for prediction_type in ('mean', 'lower', 'upper')
+        }
+
     else:
         normalised_prediction = None
 
