@@ -19,8 +19,8 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
 
     def __init__(
             self,
-            normaliser_variables: Optional[Callable] = None,
-            unnormaliser_objectives: Optional[Callable] = None
+            normaliser_variables: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+            unnormaliser_objectives: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
     ):
         self._normaliser_variables = normaliser_variables
         self._unnormaliser_objectives = unnormaliser_objectives
@@ -29,10 +29,10 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
             self,
             *,
             variable_values: torch.Tensor,
-            allow_normalisation: bool
+            normalised: bool
     ) -> PredictionDict:
 
-        if allow_normalisation is False:
+        if normalised is False:
             assert self._normaliser_variables is not None, "This predictor has not been given a normaliser method"
             variable_values = self._normaliser_variables(variable_values)
 
@@ -40,7 +40,7 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
             variable_values=variable_values
         )
 
-        if allow_normalisation is False:
+        if normalised is False:
             assert self._unnormaliser_objectives is not None, "This predictor has not been given a normaliser method"
             prediction_dict['mean'] = self._unnormaliser_objectives(prediction_dict['mean'])
             prediction_dict['lower'] = self._unnormaliser_objectives(prediction_dict['lower'])
@@ -60,10 +60,10 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
             self,
             *,
             variable_values: torch.Tensor,
-            allow_normalisation: bool
+            normalised: bool
     ) -> torch.Tensor:
 
-        if allow_normalisation is False:
+        if normalised is False:
             assert self._normaliser_variables is not None, "This predictor has not been given a normaliser method"
             variable_values = self._normaliser_variables(variable_values)
 
@@ -84,10 +84,10 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
             *,
             variable_values: torch.Tensor,
             n_samples: int,
-            allow_normalisation: bool
+            normalised: bool
     ) -> list[torch.Tensor]:
 
-        if allow_normalisation is False:
+        if normalised is False:
             assert self._normaliser_variables is not None, "This predictor has not been given a normaliser method"
             variable_values = self._normaliser_variables(variable_values)
 
@@ -96,7 +96,7 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
             n_samples=n_samples
         )
 
-        if allow_normalisation is False:
+        if normalised is False:
             assert self._unnormaliser_objectives is not None, "This predictor has not been given a normaliser method"
             for sample_no, sample in enumerate(samples):
                 samples[sample_no] = self._unnormaliser_objectives(sample)

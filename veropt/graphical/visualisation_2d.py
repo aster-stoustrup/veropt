@@ -45,26 +45,17 @@ def plot_prediction_surface_from_optimiser(
         steps=n_points_per_dimension
     )
 
-    # variable_tensor_x = torch.tensor(variable_array_x)
-
     variable_tensor_y = torch.linspace(
         start=bounds[0, variable_y],
         end=bounds[1, variable_y],
         steps=n_points_per_dimension
     )
 
-    # variable_tensor_y = torch.tensor(variable_array_y)
-
     grid_x, grid_y = torch.meshgrid(
     variable_tensor_x,
         variable_tensor_y,
         indexing='xy'
     )
-
-    # TODO: Check order of grid-things
-    #   - Probably not in the right order rn
-
-    warnings.warn("Surface plot might be turning the wrong way atm")
 
     all_variables_tensor = evaluated_point.repeat(
         n_points_per_dimension * n_points_per_dimension,
@@ -75,16 +66,16 @@ def plot_prediction_surface_from_optimiser(
         all_variables_tensor[
         i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
         variable_x
-        ] = grid_x[:, i]
+        ] = grid_x[i, :]
 
         all_variables_tensor[
         i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
         variable_y
-        ] = grid_y[:, i]
+        ] = grid_y[i, :]
 
     prediction = optimiser.predictor.predict_values(
         variable_values=all_variables_tensor,
-        allow_normalisation=normalised
+        normalised=normalised
     )
 
     prediction_objective_tensor = prediction['mean'][:, objective]

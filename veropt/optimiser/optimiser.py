@@ -426,7 +426,7 @@ class BayesianOptimiser(SavableClass):
 
             prediction = self.predictor.predict_values(
                 variable_values=suggested_variables_tensor,
-                allow_normalisation=True
+                normalised=True
             )
 
         else:

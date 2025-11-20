@@ -815,7 +815,7 @@ def _fill_model_prediction_from_optimiser(
     if calculate_acquisition:
         acquisition_values = optimiser.predictor.get_acquisition_values(
             variable_values=all_variables_array,
-            allow_normalisation=normalised
+            normalised=normalised
         )
     else:
         acquisition_values = None
@@ -823,12 +823,12 @@ def _fill_model_prediction_from_optimiser(
     samples = optimiser.predictor.get_samples_from_model(
         variable_values=all_variables_array,
         n_samples=5,
-        allow_normalisation=normalised
+        normalised=normalised
     )
 
     predicted_objective_values = optimiser.predictor.predict_values(
         variable_values=all_variables_array,
-        allow_normalisation=normalised
+        normalised=normalised
     )
 
     return ModelPrediction(
