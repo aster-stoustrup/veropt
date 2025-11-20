@@ -9,8 +9,10 @@ from plotly import graph_objs as go, colors, graph_objects as go
 from plotly.express import colors
 from plotly.subplots import make_subplots
 
-from veropt.graphical._visualisation_utility import ModelPrediction, ModelPredictionContainer, \
+from veropt.graphical._visualisation_utility import (
+    ModelPrediction, ModelPredictionContainer,
     opacity_for_multidimensional_points, get_continuous_colour
+)
 from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.optimiser_utility import SuggestedPoints
 from veropt.optimiser.utility import DataShape

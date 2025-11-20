@@ -66,13 +66,14 @@ def opacity_for_multidimensional_points(
     for variable_index in variable_indices:
         indices_except_plane[variable_index] = False
 
-    distances_each_variable = evaluated_point[0, indices_except_plane] - variable_values[:, indices_except_plane]
+    means = variable_values.mean(dim=0)
+    standard_deviations = torch.sqrt(variable_values.var(dim=0))
 
-    offset_distances = distances_each_variable - distances_each_variable.mean(dim=0)
-    individually_normalised_distances = offset_distances / torch.sqrt(offset_distances.var(dim=0))
+    normalised_variable_values = (variable_values - means) / standard_deviations
+    normalised_point = (evaluated_point - means) / standard_deviations
 
     distances = torch.linalg.vector_norm(
-        individually_normalised_distances,
+        normalised_point[0, indices_except_plane] - normalised_variable_values[:, indices_except_plane],
         dim=1
     )
 
