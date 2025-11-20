@@ -1,0 +1,233 @@
+from __future__ import annotations
+
+from typing import Optional, Union
+
+import numpy as np
+import torch
+from plotly import graph_objects as go, colors, graph_objs as go
+from plotly.subplots import make_subplots
+
+from veropt.optimiser.optimiser_utility import SuggestedPoints
+from veropt.optimiser.utility import DataShape
+
+
+def plot_pareto_front_grid(
+        objective_values: torch.Tensor,
+        objective_names: list[str],
+        pareto_optimal_indices: list[int],
+        suggested_points: Optional[SuggestedPoints] = None,
+        return_figure: bool = False
+) -> Union[go.Figure, None]:
+
+    n_objectives = len(objective_names)
+
+    figure = make_subplots(
+        rows=n_objectives - 1,
+        cols=n_objectives - 1
+    )
+
+    for objective_index_x in range(n_objectives - 1):
+        for objective_index_y in range(1, n_objectives):
+
+            row = objective_index_y
+            col = objective_index_x + 1
+
+            if not objective_index_x == objective_index_y:
+                figure = _add_pareto_traces_2d(
+                    figure=figure,
+                    objective_values=objective_values,
+                    objective_index_x=objective_index_x,
+                    objective_index_y=objective_index_y,
+                    pareto_optimal_indices=pareto_optimal_indices,
+                    suggested_points=suggested_points,
+                    row=row,
+                    col=col
+                )
+
+            if col == 1:
+                figure.update_yaxes(title_text=objective_names[objective_index_y], row=row, col=col)
+
+            if row == n_objectives - 1:
+                figure.update_xaxes(title_text=objective_names[objective_index_x], row=row, col=col)
+
+    if return_figure:
+
+        return figure
+    else:
+
+        figure.show()
+        return None
+
+
+def _add_pareto_traces_2d(
+        figure: go.Figure,
+        objective_values: torch.Tensor,
+        objective_index_x: int,
+        objective_index_y: int,
+        pareto_optimal_indices: list[int],
+        suggested_points: Optional[SuggestedPoints] = None,
+        row: Optional[int] = None,
+        col: Optional[int] = None
+) -> go.Figure:
+
+    # Note: Must pass all points to this function or point numbers will be wrong
+
+    n_evaluated_points = objective_values.shape[DataShape.index_points]
+    point_numbers = np.arange(n_evaluated_points).reshape(n_evaluated_points, 1)
+
+    pareto_point_numbers = point_numbers[pareto_optimal_indices]
+    dominating_objective_values = objective_values[pareto_optimal_indices]
+
+    if row is None and col is None:
+        row_col_info = {}
+
+    else:
+        row_col_info = {
+            'row': row,
+            'col': col
+        }
+
+    color_scale = colors.qualitative.Plotly
+    color_evaluated_points = color_scale[0]
+
+    figure.add_trace(
+        go.Scatter(
+            x=objective_values[:, objective_index_x],
+            y=objective_values[:, objective_index_y],
+            mode='markers',
+            name='Evaluated points',
+            marker={'color': color_evaluated_points},
+            customdata=point_numbers,
+            hovertemplate="Point number: %{customdata[0]:.0f} <br>"
+                          "%{xaxis.title.text}: %{x:.3f} <br>"
+                          "%{yaxis.title.text}: %{y:.3f} <br>"
+        ),
+        **row_col_info
+    )
+
+    figure.add_trace(
+        go.Scatter(
+            x=dominating_objective_values[:, objective_index_x],
+            y=dominating_objective_values[:, objective_index_y],
+            mode='markers',
+            marker={'color': 'black'},
+            name='Dominating evaluated points',
+            customdata=pareto_point_numbers,
+            hovertemplate="Point number: %{customdata[0]:.0f} <br>"
+                          "%{xaxis.title.text}: %{x:.3f} <br>"
+                          "%{yaxis.title.text}: %{y:.3f} <br>"
+        ),
+        **row_col_info
+    )
+
+    if suggested_points is not None:
+
+        suggested_point_color = 'rgb(139, 0, 0)'
+
+        for suggested_point_no, point in enumerate(suggested_points):
+
+            prediction = point.predicted_objective_values
+
+            assert prediction is not None, (
+                "Must have calculated predictions for the suggested points before calling this function to plot them."
+                "(If the model is trained, the optimiser should do this automatically)."
+            )
+
+            upper_diff = prediction['upper'] - prediction['mean']
+            lower_diff = prediction['mean'] - prediction['lower']
+
+            figure.add_trace(
+                go.Scatter(
+                    x=prediction['mean'][objective_index_x].detach().numpy(),
+                    y=prediction['mean'][objective_index_y].detach().numpy(),
+                    error_x={
+                        'type': 'data',
+                        'symmetric': False,
+                        'array': upper_diff[objective_index_x].detach().numpy(),
+                        'arrayminus': lower_diff[objective_index_x].detach().numpy(),
+                        'color': suggested_point_color
+                    },
+                    error_y={
+                        'type': 'data',
+                        'symmetric': False,
+                        'array': upper_diff[objective_index_y].detach().numpy(),
+                        'arrayminus': lower_diff[objective_index_y].detach().numpy(),
+                        'color': suggested_point_color
+                    },
+                    mode='markers',
+                    marker={'color': suggested_point_color},
+                    name='Suggested points',
+                    legendgroup="Suggested points",
+                    showlegend=True if suggested_point_no == 0 else False,
+                    customdata=np.dstack([
+                                [prediction['lower'][objective_index_x].detach().numpy()],
+                                [prediction['upper'][objective_index_x].detach().numpy()],
+                                [prediction['lower'][objective_index_y].detach().numpy()],
+                                [prediction['upper'][objective_index_y].detach().numpy()],
+                    ])[0],
+                    hovertemplate=f"Suggested point number: {suggested_point_no} <br>"
+                                  "%{xaxis.title.text}: %{x:.3f} (%{customdata[0]:.3f} to %{customdata[1]:.3f}) <br>"
+                                  "%{yaxis.title.text}: %{y:.3f} (%{customdata[2]:.3f} to %{customdata[3]:.3f}) <br>"
+                ),
+                **row_col_info
+            )
+
+    return figure
+
+
+def plot_pareto_front(
+        objective_values: torch.Tensor,
+        pareto_optimal_indices: list[int],
+        plotted_objective_indices: list[int],
+        objective_names: list[str],
+        suggested_points: Optional[SuggestedPoints] = None,
+        return_figure: bool = False
+) -> Union[go.Figure, None]:
+
+    if len(plotted_objective_indices) == 2:
+
+        obj_ind_x = plotted_objective_indices[0]
+        obj_ind_y = plotted_objective_indices[1]
+
+        figure = go.Figure()
+
+        figure = _add_pareto_traces_2d(
+            figure=figure,
+            objective_values=objective_values,
+            objective_index_x=obj_ind_x,
+            objective_index_y=obj_ind_y,
+            pareto_optimal_indices=pareto_optimal_indices,
+            suggested_points=suggested_points
+        )
+
+        figure.update_xaxes(
+            title_text=objective_names[obj_ind_x]
+        )
+
+        figure.update_yaxes(
+            title_text=objective_names[obj_ind_y]
+        )
+
+    elif len(plotted_objective_indices) == 3:
+
+        # TODO: Add suggested points
+        # TODO: Add dominating points
+
+        plotted_obj_vals = objective_values[:, plotted_objective_indices]
+
+        figure = go.Figure(data=[go.Scatter3d(
+            x=plotted_obj_vals[:, plotted_objective_indices[0]],
+            y=plotted_obj_vals[:, plotted_objective_indices[1]],
+            z=plotted_obj_vals[:, plotted_objective_indices[2]],
+            mode='markers'
+        )])
+
+    else:
+        raise ValueError(f"Can plot pareto front of either 2 or 3 objectives, got {len(plotted_objective_indices)}")
+
+    if return_figure:
+        return figure
+
+    else:
+        figure.show()
+        return None

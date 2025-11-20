@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import abc
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping, Optional, Self, TypedDict, Unpack
+from typing import Any, Literal, Mapping, Optional, Self, TypedDict, Unpack, Callable
 
 import numpy as np
 import scipy
@@ -575,3 +577,33 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
 
     def get_settings(self) -> SavableDataClass:
         return self.settings
+
+
+def _calculate_proximity_punished_acquisition_values(
+        proximity_punish_optimiser: ProximityPunishmentSequentialOptimiser,
+        acquisition_function: AcquisitionFunction,
+        normaliser_variables: Callable[[torch.Tensor], torch.Tensor],
+        evaluated_point: torch.Tensor,
+        variable_index: int,
+        variable_array: torch.Tensor,
+        suggested_points_variables: torch.Tensor,
+        normalised: bool
+) -> list[torch.Tensor]:
+
+    n_suggested_points = suggested_points_variables.shape[DataShape.index_points]
+
+    full_variable_array = evaluated_point.repeat(len(variable_array), 1)
+    full_variable_array[:, variable_index] = variable_array
+
+    suggested_points_variables_list = [suggested_points_variables[i, :] for i in range(n_suggested_points)]
+
+    if normalised is False:
+        full_variable_array = normaliser_variables(full_variable_array)
+
+    modified_acquisition_values = proximity_punish_optimiser.get_modified_acquisition_values(
+        acquisition_function=acquisition_function,
+        variable_values=full_variable_array,
+        points_to_punish=suggested_points_variables_list
+    )
+
+    return modified_acquisition_values
