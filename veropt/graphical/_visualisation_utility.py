@@ -98,7 +98,8 @@ def opacity_for_multidimensional_points(
 
     distances_each_variable = evaluated_point[0, indices_except_plane] - variable_values[:, indices_except_plane]
 
-    individually_normalised_distances = distances_each_variable / distances_each_variable.max(dim=0)[0]
+    offset_distances = distances_each_variable - distances_each_variable.mean(dim=0)
+    individually_normalised_distances = offset_distances / torch.sqrt(offset_distances.var(dim=0))
 
     distances = torch.linalg.vector_norm(
         individually_normalised_distances,
