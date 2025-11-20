@@ -1,12 +1,16 @@
+import json
 from enum import StrEnum
 from typing import Optional, Self
 import os
+
+import torch
 
 from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
 from veropt.interfaces.utility import Config, create_directory
 
 from pydantic import BaseModel
 
+from veropt.optimiser.objective import InterfaceObjective
 
 ParametersDict = dict[int, dict[str, float]]
 
@@ -199,3 +203,81 @@ class PathManager:
             version_string = ""
 
         return f"point_{point_no}{version_string}"
+
+
+class ExperimentObjective(InterfaceObjective):
+
+    name = "experiment_objective"
+
+    def __init__(
+            self,
+            bounds_lower: list[float],
+            bounds_upper: list[float],
+            n_variables: int,
+            n_objectives: int,
+            variable_names: list[str],
+            objective_names: list[str],
+            suggested_parameters_json: str,
+            evaluated_objectives_json: str
+    ):
+
+        self.suggested_parameters_json = suggested_parameters_json
+        self.evaluated_objectives_json = evaluated_objectives_json
+
+        super().__init__(
+            bounds_lower=bounds_lower,
+            bounds_upper=bounds_upper,
+            n_variables=n_variables,
+            n_objectives=n_objectives,
+            variable_names=variable_names,
+            objective_names=objective_names
+        )
+
+    def save_candidates(
+            self,
+            suggested_variables: dict[str, torch.Tensor],
+    ) -> None:
+
+        suggested_variables_np = {name: value.tolist() for name, value in suggested_variables.items()}
+
+        with open(self.suggested_parameters_json, 'w') as f:
+            json.dump(suggested_variables_np, f)
+
+    def load_evaluated_points(self) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+
+        with open(self.suggested_parameters_json, 'r') as f:
+            suggested_variables_np = json.load(f)
+
+        with open(self.evaluated_objectives_json, 'r') as f:
+            evaluated_objectives_np = json.load(f)
+
+        suggested_variables = {name: torch.tensor(value) for name, value in suggested_variables_np.items()}
+        evaluated_objectives = {name: torch.tensor(value) for name, value in evaluated_objectives_np.items()}
+
+        return suggested_variables, evaluated_objectives
+
+    def gather_dicts_to_save(self) -> dict:
+        saved_state = super().gather_dicts_to_save()
+        saved_state['state']['suggested_parameters_json'] = self.suggested_parameters_json
+        saved_state['state']['evaluated_objectives_json'] = self.evaluated_objectives_json
+        return saved_state
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+
+        bounds_lower = saved_state["bounds"][0]
+        bounds_upper = saved_state["bounds"][1]
+
+        return cls(
+            bounds_lower=bounds_lower,
+            bounds_upper=bounds_upper,
+            n_variables=saved_state["n_variables"],
+            n_objectives=saved_state["n_objectives"],
+            variable_names=saved_state["variable_names"],
+            objective_names=saved_state["objective_names"],
+            suggested_parameters_json=saved_state["suggested_parameters_json"],
+            evaluated_objectives_json=saved_state["evaluated_objectives_json"]
+        )
