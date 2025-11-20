@@ -15,11 +15,7 @@ from veropt.graphical.visualisation_utility import (
     ModelPrediction, ModelPredictionContainer,
     opacity_for_multidimensional_points, get_continuous_colour
 )
-from veropt.optimiser.acquisition import AcquisitionFunction
-from veropt.optimiser.acquisition_optimiser import (
-    ProximityPunishAcquisitionFunction,
-    ProximityPunishmentSequentialOptimiser
-)
+from veropt.optimiser.acquisition_optimiser import ProximityPunishmentSequentialOptimiser
 from veropt.optimiser.optimiser import BayesianOptimiser
 # from veropt.utility import opacity_for_multidimensional_points
 # ModelPrediction, ModelPredictionContainer
@@ -250,8 +246,6 @@ def plot_point_overview_separate_subplots(
 
     n_points = variable_values.shape[0]
 
-    opacity_lines = 0.2
-
     n_variables = len(variable_names)
     n_objectives = len(objective_names)
 
@@ -274,7 +268,7 @@ def plot_point_overview_separate_subplots(
         for variable_index in range(n_variables):
 
             for objective_index in range(n_objectives):
-                
+
                 row_no = n_objectives - objective_index
                 col_no = variable_index + 1
 
@@ -298,7 +292,7 @@ def plot_point_overview_separate_subplots(
                     row=row_no,
                     col=col_no
                 )
-                
+
                 if col_no == 1:
                     figure.update_yaxes(
                         title_text=objective_names[objective_index],
@@ -862,7 +856,6 @@ def plot_prediction_grid_from_optimiser(
         objective_values = optimiser.evaluated_objective_values.tensor
         suggested_points = optimiser.suggested_points
 
-
     objective_names = optimiser.objective.objective_names
     variable_names = optimiser.objective.variable_names
 
@@ -887,7 +880,7 @@ def plot_prediction_grid_from_optimiser(
         else:
             concatenated_variable_values = variable_values
 
-        evaluated_point = concatenated_variable_values[evaluated_point:evaluated_point+1]
+        evaluated_point = concatenated_variable_values[evaluated_point:evaluated_point + 1]
 
     if evaluated_point is None:
         # I guess there's a non-caught case where no point was chosen but the auto-selected point is already calculated
@@ -1157,7 +1150,7 @@ def plot_prediction_grid(
             )
 
             if plot_acquisition:
-            # TODO: Make acq func colours nicer
+                # TODO: Make acq func colours nicer
                 acquisition_function_colour = 'grey'
 
                 figure.add_trace(

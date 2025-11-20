@@ -14,11 +14,10 @@ from gpytorch.distributions import MultivariateNormal
 
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass, rehydrate_object
 from veropt.optimiser.utility import (
-    _validate_typed_dict, check_variable_and_objective_shapes,
+    check_variable_and_objective_shapes,
     check_variable_objective_values_matching, enforce_amount_of_positional_arguments,
     unpack_variables_objectives_from_kwargs
 )
-from veropt.optimiser.optimiser_utility import list_with_floats_to_string
 
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
@@ -732,16 +731,9 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         assert self.settings.loss_change_to_stop < loss_difference
         iteration = 1
 
-        # TODO: Do something better with this
-        # scheduler = torch.optim.lr_scheduler.MultiStepLR(
-        #     optimizer=self._model_optimiser.optimiser,
-        #     milestones=[1_000, 3_000, 5_000, 8_000]
-        # )
-
-        # TODO: This stupid thing is breaking the structure :(
-        #       * But it might be a kernel we don't rly need, so probably shouldn't do too much about this
-        #   - This should be 0 when using spectral delta (I think :)) )
-        #   - Need to somehow set this if one of the models is spectral delta...?
+        # TODO: This should be 0 when using spectral delta (I think :)) )
+        #   - So that's a little awkward, but we might not rly need spectral delta?
+        #   - Maybe we can do a warning somewhere or just delete the kernel (and this setting?)
         if self.settings.max_cholesky_size is not None:
             training_context = gpytorch.settings.max_cholesky_size(self.settings.max_cholesky_size)
         else:
@@ -768,13 +760,11 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
                 loss_difference = torch.abs(previous_loss - loss)
 
                 self._model_optimiser.optimiser.step()
-                # scheduler.step()
 
                 if self.settings.verbose and (iteration % 10 == 0):
                     print(
                         f"Training model... Iteration {iteration} (of a maximum {self.settings.max_iter})"
                         f" - MLL: {loss.item():.3f}",
-                        # f", learning rate: {list_with_floats_to_string(scheduler.get_last_lr())}",
                         end="\r"
                     )
 

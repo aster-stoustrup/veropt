@@ -1,4 +1,3 @@
-import warnings
 from typing import Union
 
 import numpy as np
@@ -8,7 +7,7 @@ from plotly.express import colors
 
 from veropt.graphical.visualisation_utility import opacity_for_multidimensional_points, get_continuous_colour
 from veropt.optimiser.optimiser import BayesianOptimiser
-from veropt.optimiser.utility import TensorWithNormalisationFlag, DataShape
+from veropt.optimiser.utility import DataShape
 
 
 def plot_prediction_surface_from_optimiser(
@@ -52,7 +51,7 @@ def plot_prediction_surface_from_optimiser(
     )
 
     grid_x, grid_y = torch.meshgrid(
-    variable_tensor_x,
+        variable_tensor_x,
         variable_tensor_y,
         indexing='xy'
     )
@@ -64,13 +63,13 @@ def plot_prediction_surface_from_optimiser(
 
     for i in range(n_points_per_dimension):
         all_variables_tensor[
-        i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
-        variable_x
+            i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
+            variable_x
         ] = grid_x[i, :]
 
         all_variables_tensor[
-        i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
-        variable_y
+            i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
+            variable_y
         ] = grid_y[i, :]
 
     prediction = optimiser.predictor.predict_values(

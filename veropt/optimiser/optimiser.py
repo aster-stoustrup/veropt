@@ -23,8 +23,7 @@ from veropt.optimiser.optimiser_utility import (
 from veropt.optimiser.prediction import Predictor
 from veropt.optimiser.utility import (
     DataShape, TensorWithNormalisationFlag, check_variable_and_objective_shapes,
-    enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs, PredictionDict,
-    unpack_variables_objectives_from_kwargs
+    enforce_amount_of_positional_arguments, unpack_flagged_variables_objectives_from_kwargs
 )
 from veropt.optimiser.saver_loader_utility import SavableClass, rehydrate_object
 
