@@ -496,6 +496,7 @@ def plot_prediction_surface(
         x=prediction_grid_x.detach().numpy(),
         y=prediction_grid_y.detach().numpy(),
         z=prediction_objective_matrix.detach().numpy(),
+        colorscale='deep',
         name="Mean model prediction",
         hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
                       f"{y_axis_title}: " + "%{y:.3f} <br>"
