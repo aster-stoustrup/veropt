@@ -464,6 +464,8 @@ def plot_prediction_surface(
         x_axis_title: str,
         y_axis_title: str,
         z_axis_title: str,
+        figure: Optional[go.Figure] = None,
+        row_col: Optional[tuple] = None
 ) -> go.Figure:
 
     colour_scale = colors.get_colorscale('matter')
@@ -490,55 +492,87 @@ def plot_prediction_surface(
 
     n_evaluated_points = point_objective_values.shape[DataShape.index_points]
 
-    figure = go.Figure()
+    if figure is None:
+        figure = go.Figure()
 
-    figure.add_trace(go.Surface(
-        x=prediction_grid_x.detach().numpy(),
-        y=prediction_grid_y.detach().numpy(),
-        z=prediction_objective_matrix.detach().numpy(),
-        colorscale='deep',
-        name="Mean model prediction",
-        hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
-                      f"{y_axis_title}: " + "%{y:.3f} <br>"
-                      f"{z_axis_title}: " + "%{z:.3f} <br>"
-    ))
-
-    figure.add_trace(go.Scatter3d(
-        x=point_variable_values[:, variable_x_index].detach().numpy(),
-        y=point_variable_values[:, variable_y_index].detach().numpy(),
-        z=point_objective_values.detach().numpy(),
-        mode='markers',
-        marker={
-            'color': colour_list_w_opacity,
-            'opacity': 1.0
-        },
-        name="Evaluated points",
-        customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
-        hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
-                      f"{y_axis_title}: " + "%{y:.3f} <br>"
-                      f"{z_axis_title}: " + "%{z:.3f} <br>"
-                      "Point number: %{customdata[0]:.0f} <br>"
-                      "Distance to current plane: %{customdata[1]:.3f}"
-    ))
-
-    figure.update_layout(
-        scene={
-            'xaxis': {
-                'title': {
-                    'text': x_axis_title
-                }
-            },
-            'yaxis': {
-                'title': {
-                    'text': y_axis_title
-                }
-            },
+    if row_col is None:
+        row_col_args = {}
+        marker_args = {}
+        zaxis_arg = {
             'zaxis': {
                 'title': {
                     'text': z_axis_title
                 }
             }
         }
+
+    else:
+        row_col_args = {
+            'row': row_col[0],
+            'col': row_col[1]
+        }
+        marker_args = {
+            'size': 2
+        }
+        zaxis_arg = {
+            'zaxis': {
+                'title': {
+                    'text': ''
+                }
+            }
+        }
+
+    figure.add_trace(
+        go.Surface(
+            x=prediction_grid_x.detach().numpy(),
+            y=prediction_grid_y.detach().numpy(),
+            z=prediction_objective_matrix.detach().numpy(),
+            colorscale='deep',  # TODO: Consider just doing a blank colour and removing colorbar
+            name='',  # "Mean model prediction",
+            showscale=False,
+            hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
+                      f"{y_axis_title}: " + "%{y:.3f} <br>"
+                      f"{z_axis_title}: " + "%{z:.3f} <br>"
+        ),
+        **row_col_args
+    )
+
+    figure.add_trace(
+        go.Scatter3d(
+            x=point_variable_values[:, variable_x_index].detach().numpy(),
+            y=point_variable_values[:, variable_y_index].detach().numpy(),
+            z=point_objective_values.detach().numpy(),
+            mode='markers',
+            marker={
+                'color': colour_list_w_opacity,
+                'opacity': 1.0,
+                **marker_args
+            },
+            name='',  # "Evaluated points",
+            customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
+            hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
+                      f"{y_axis_title}: " + "%{y:.3f} <br>"
+                      f"{z_axis_title}: " + "%{z:.3f} <br>"
+                      "Point number: %{customdata[0]:.0f} <br>"
+                      "Distance to current plane: %{customdata[1]:.3f}"
+        ),
+        **row_col_args
+    )
+
+
+    figure.update_scenes(
+        xaxis = {
+            'title': {
+                'text': x_axis_title
+            }
+        },
+        yaxis = {
+            'title': {
+                'text': y_axis_title
+            }
+        },
+        **zaxis_arg,
+        **row_col_args
     )
 
     return figure

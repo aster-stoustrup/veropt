@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from itertools import islice
 from typing import Literal, Optional, Union
 
 import numpy as np
@@ -8,12 +9,12 @@ import torch
 from dash import Dash, Input, Output, State, callback, dcc, html
 from dash.exceptions import PreventUpdate
 from plotly import graph_objects as go
-
-from veropt.graphical._overview import plot_point_overview, plot_point_overview_separate_subplots, plot_progression
+from plotly.subplots import make_subplots
 from veropt.graphical._model_visualisation import (
     _fill_model_prediction_from_optimiser, plot_prediction_grid, plot_prediction_surface,
     choose_plot_point
 )
+from veropt.graphical._overview import plot_point_overview, plot_point_overview_separate_subplots, plot_progression
 from veropt.graphical._pareto_front import plot_pareto_front_grid, plot_pareto_front
 from veropt.graphical._visualisation_utility import (
     ModelPredictionContainer, get_point_from_number
@@ -465,7 +466,9 @@ def plot_prediction_surface_from_optimiser(
         objective: Union[int, str],
         evaluated_point: Optional[Union[torch.Tensor, int]],
         normalised: bool = False,
-        n_points_per_dimension: int = 200
+        n_points_per_dimension: int = 200,
+        figure: Optional[go.Figure] = None,
+        row_col: Optional[tuple] = None
 ) -> go.Figure:
 
     if normalised is False:
@@ -576,5 +579,99 @@ def plot_prediction_surface_from_optimiser(
         variable_y_index=variable_y,
         x_axis_title=x_axis_title,
         y_axis_title=y_axis_title,
-        z_axis_title=z_axis_title
+        z_axis_title=z_axis_title,
+        figure=figure,
+        row_col=row_col
     )
+
+
+def plot_prediction_surface_grid_from_optimiser(
+        optimiser: BayesianOptimiser,
+        objective: Union[int, str],
+        evaluated_point: Optional[Union[torch.Tensor, int]],
+        included_variables: Optional[Union[list[int], list[str]]] = None,
+        n_points_per_dimension: int = 200,
+        normalised: bool = False,
+        return_figure: bool = False
+) -> Optional[go.Figure]:
+
+    if included_variables is None:
+        if optimiser.objective.n_variables**2 > 50:
+            raise ValueError(
+                "Too many variables to plot for this graph. Please make a selection of variables and pass them through"
+                "'included_variables'."
+            )
+
+        n_plotted_variables = optimiser.objective.n_variables
+        included_variables = range(n_plotted_variables)
+
+    else:
+        n_plotted_variables = len(included_variables)
+
+    if evaluated_point is None:
+
+        evaluated_point, title_extension = choose_plot_point(
+            optimiser=optimiser,
+            normalised=normalised
+        )
+
+    elif isinstance(evaluated_point, int):
+        title_extension = f" at point {evaluated_point}"
+
+    else:
+        title_extension = ""
+
+    figure = make_subplots(
+        rows=n_plotted_variables - 1,
+        cols=n_plotted_variables - 1,
+        specs=[[{'type': 'surface'} for c in range(n_plotted_variables - 1)] for r in range(n_plotted_variables - 1)],
+        horizontal_spacing=0.01,
+        vertical_spacing=0.01,
+    )
+
+    plotted_combinations = []
+
+    for variable_no_x, variable_x in enumerate(included_variables[:-1]):
+        for variable_no_y, variable_y in islice(enumerate(included_variables), 1, len(included_variables)):
+
+            # TODO: Shuffle things around so we can get the figure + row_col out of the user API
+
+            if variable_x == variable_y:
+                pass
+
+            elif ((variable_x, variable_y) in plotted_combinations
+                  or (variable_no_y, variable_no_x) in plotted_combinations):
+                pass
+
+            else:
+                figure = plot_prediction_surface_from_optimiser(
+                    optimiser=optimiser,
+                    variable_x=variable_x,
+                    variable_y=variable_y,
+                    objective=objective,
+                    evaluated_point=evaluated_point,
+                    normalised=normalised,
+                    n_points_per_dimension=n_points_per_dimension,
+                    figure=figure,
+                    row_col=(variable_no_y, variable_no_x + 1)
+                )
+
+                plotted_combinations.append(
+                    (variable_x, variable_y)
+                )
+
+    if isinstance(objective, int):
+        title = optimiser.objective.objective_names[objective]
+
+    else:
+        title = objective
+
+    figure.update_layout(
+        title={'text': title + title_extension}
+    )
+
+    if return_figure:
+        return figure
+
+    else:
+        figure.show()
