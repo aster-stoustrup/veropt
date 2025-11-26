@@ -32,7 +32,7 @@ def choose_plot_point(
 
         max_ind = optimiser.get_best_points()['index']
         eval_point = deepcopy(variable_values[max_ind:max_ind + 1])
-        point_description = f"at the point with the highest known value (point no. {max_ind})"
+        point_description = f" at the point with the highest known value (point no. {max_ind})"
 
     else:
 
@@ -44,7 +44,7 @@ def choose_plot_point(
 
         suggested_point_ind = 0  # In the future, might want the best one
         eval_point = deepcopy(suggested_variable_values[suggested_point_ind:suggested_point_ind + 1])
-        point_description = "at the first suggested step"
+        point_description = " at the first suggested step"
 
     return eval_point, point_description
 
@@ -446,7 +446,7 @@ def plot_prediction_grid(
                 )
 
     figure.update_layout(
-        title={'text': f"Points and predictions {model_prediction.title}"}
+        title={'text': f"Points and predictions{model_prediction.title}"}
     )
 
     return figure
@@ -528,6 +528,7 @@ def plot_prediction_surface(
             y=prediction_grid_y.detach().numpy(),
             z=prediction_objective_matrix.detach().numpy(),
             colorscale='deep',  # TODO: Consider just doing a blank colour and removing colorbar
+            opacity=0.9,
             name='',  # "Mean model prediction",
             showscale=False,
             hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
