@@ -181,10 +181,12 @@ def plot_pareto_front_grid_from_optimiser(
     if optimiser.return_normalised_data and normalised is False:
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
+        suggested_points = optimiser.suggested_points_real_units
 
     else:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
+        suggested_points = optimiser.suggested_points
 
     pareto_optimal_indices = get_pareto_optimal_points(
         variable_values=variable_values,
@@ -197,7 +199,7 @@ def plot_pareto_front_grid_from_optimiser(
         objective_values=objective_values,
         objective_names=objective_names,
         pareto_optimal_indices=pareto_optimal_indices,
-        suggested_points=optimiser.suggested_points,
+        suggested_points=suggested_points,
         return_figure=return_figure
     )
 

@@ -196,11 +196,21 @@ def plot_progression(
     else:
         colour_list = [colour_scale[0]]
 
-    figure = go.Figure()
+    layout = dict(
+        hoversubplots="axis",
+        hovermode="x",
+        grid=dict(rows=n_objectives, columns=1),
+    )
+
+    data = []
+    yaxis_names = [f'y{objective_index + 1}' for objective_index in range(n_objectives)]
+    yaxis_names[0] = 'y'
+    yaxis_names_ver_2 = [f'yaxis{objective_index + 1}' for objective_index in range(n_objectives)]
+    yaxis_names_ver_2[0] = 'yaxis'
 
     for objective_index in range(n_objectives):
 
-        figure.add_trace(go.Scatter(
+        data.append(go.Scatter(
             x=np.arange(n_initial_points),
             y=objective_values.detach().numpy()[:n_initial_points, objective_index],
             name=f"Initial points, objective '{objective_names[objective_index]}'",
@@ -209,28 +219,33 @@ def plot_progression(
                 'symbol': 'diamond',
                 'color': colour_list[objective_index],
             },
+            xaxis='x',
+            yaxis=yaxis_names[objective_index]
         ))
 
-        figure.add_trace(go.Scatter(
+        data.append(go.Scatter(
             x=np.arange(n_initial_points, n_evaluated_points),
             y=objective_values.detach().numpy()[n_initial_points:, objective_index],
             name=f"Bayesian points, objective '{objective_names[objective_index]}'",
             mode='markers',
             marker={
                 'color': colour_list[objective_index],
-            }
+            },
+            xaxis='x',
+            yaxis=yaxis_names[objective_index]
         ))
 
+    figure = go.Figure(
+        data=data,
+        layout=layout
+    )
+
     figure.update_layout(
-        xaxis={
-            'title': {
-                'text': "Evaluated points",
-            }},
-        yaxis={
-            'title': {
-                'text': "Objective values",
-            }},
-        hovermode="x"
+        xaxis={'title': {'text': "Evaluated points"}},  # TODO: Add if they're normalised or not
+        **{
+            yaxis_names_ver_2[objective_index]: {'title':{'text': objective_names[objective_index]}}
+            for objective_index in range(n_objectives)
+        }
     )
 
     return figure

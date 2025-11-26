@@ -27,6 +27,7 @@ def make_figures(
         return_figure=True
     )
 
+    # TODO: Consider if this is too heavy for an example?
     prediction_surfaces = {}
     for objective_name in optimiser.objective.objective_names:
         prediction_surfaces[objective_name] = plot_prediction_surface_grid_from_optimiser(
