@@ -38,6 +38,7 @@ def plot_pareto_front_grid(
                     objective_values=objective_values,
                     objective_index_x=objective_index_x,
                     objective_index_y=objective_index_y,
+                    objective_names=objective_names,
                     pareto_optimal_indices=pareto_optimal_indices,
                     suggested_points=suggested_points,
                     row=row,
@@ -64,6 +65,7 @@ def _add_pareto_traces_2d(
         objective_values: torch.Tensor,
         objective_index_x: int,
         objective_index_y: int,
+        objective_names: list[str],
         pareto_optimal_indices: list[int],
         suggested_points: Optional[SuggestedPoints] = None,
         row: Optional[int] = None,
@@ -96,11 +98,13 @@ def _add_pareto_traces_2d(
             y=objective_values[:, objective_index_y],
             mode='markers',
             name='Evaluated points',
+            legendgroup='Evaluated points',
+            showlegend=True if (row == 1 and col == 1) else False,
             marker={'color': color_evaluated_points},
             customdata=point_numbers,
             hovertemplate="Point number: %{customdata[0]:.0f} <br>"
-                          "%{xaxis.title.text}: %{x:.3f} <br>"
-                          "%{yaxis.title.text}: %{y:.3f} <br>"
+                          f"{objective_names[objective_index_x]}: " + "%{x:.3f} <br>"
+                          f"{objective_names[objective_index_y]}: " + "%{y:.3f} <br>"
         ),
         **row_col_info
     )
@@ -112,10 +116,12 @@ def _add_pareto_traces_2d(
             mode='markers',
             marker={'color': 'black'},
             name='Dominating evaluated points',
+            legendgroup='Dominating evaluated points',
+            showlegend=True if (row == 1 and col == 1) else False,
             customdata=pareto_point_numbers,
             hovertemplate="Point number: %{customdata[0]:.0f} <br>"
-                          "%{xaxis.title.text}: %{x:.3f} <br>"
-                          "%{yaxis.title.text}: %{y:.3f} <br>"
+                          f"{objective_names[objective_index_x]}: " + "%{x:.3f} <br>"
+                          f"{objective_names[objective_index_y]}: " + "%{y:.3f} <br>"
         ),
         **row_col_info
     )
@@ -158,7 +164,7 @@ def _add_pareto_traces_2d(
                     marker={'color': suggested_point_color},
                     name='Suggested points',
                     legendgroup="Suggested points",
-                    showlegend=True if suggested_point_no == 0 else False,
+                    showlegend=True if (suggested_point_no == 0 and (row == 1 and col == 1)) else False,
                     customdata=np.dstack([
                                 [prediction['lower'][objective_index_x].detach().numpy()],
                                 [prediction['upper'][objective_index_x].detach().numpy()],
@@ -166,8 +172,10 @@ def _add_pareto_traces_2d(
                                 [prediction['upper'][objective_index_y].detach().numpy()],
                     ])[0],
                     hovertemplate=f"Suggested point number: {suggested_point_no} <br>"
-                                  "%{xaxis.title.text}: %{x:.3f} (%{customdata[0]:.3f} to %{customdata[1]:.3f}) <br>"
-                                  "%{yaxis.title.text}: %{y:.3f} (%{customdata[2]:.3f} to %{customdata[3]:.3f}) <br>"
+                                  f"{objective_names[objective_index_x]}: "
+                                  "%{x:.3f} (%{customdata[0]:.3f} to %{customdata[1]:.3f}) <br>"
+                                  f"{objective_names[objective_index_y]}: "
+                                  "%{y:.3f} (%{customdata[2]:.3f} to %{customdata[3]:.3f}) <br>"
                 ),
                 **row_col_info
             )
@@ -196,6 +204,7 @@ def plot_pareto_front(
             objective_values=objective_values,
             objective_index_x=obj_ind_x,
             objective_index_y=obj_ind_y,
+            objective_names=objective_names,
             pareto_optimal_indices=pareto_optimal_indices,
             suggested_points=suggested_points
         )
