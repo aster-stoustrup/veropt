@@ -588,7 +588,7 @@ def plot_prediction_surface_from_optimiser(
 def plot_prediction_surface_grid_from_optimiser(
         optimiser: BayesianOptimiser,
         objective: Union[int, str],
-        evaluated_point: Optional[Union[torch.Tensor, int]],
+        evaluated_point: Optional[Union[torch.Tensor, int]] = None,
         included_variables: Optional[Union[list[int], list[str]]] = None,
         n_points_per_dimension: int = 200,
         normalised: bool = False,

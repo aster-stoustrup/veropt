@@ -3,6 +3,7 @@ from veropt.graphical.visualisation import (
     plot_progression_from_optimiser,
     plot_pareto_front_grid_from_optimiser,
     plot_prediction_grid_from_optimiser,
+    plot_prediction_surface_grid_from_optimiser
 )
 from veropt.optimiser.practice_objectives import VehicleSafety
 
@@ -26,11 +27,20 @@ def make_figures(
         return_figure=True
     )
 
-    # TODO: Add more?
+    prediction_surfaces = {}
+    for objective_name in optimiser.objective.objective_names:
+        prediction_surfaces[objective_name] = plot_prediction_surface_grid_from_optimiser(
+            optimiser=optimiser,
+            objective=objective_name,
+            return_figure=True
+        )
 
     progression_figure.show()
     pareto_front_grid.show()
     prediction_figure.show()
+
+    for objective_name in optimiser.objective.objective_names:
+        prediction_surfaces[objective_name].show()
 
     if save:
 
@@ -45,7 +55,18 @@ optimiser = bayesian_optimiser(
     n_initial_points=16,
     n_bayesian_points=32,
     n_evaluations_per_step=4,
-    objective=objective
+    objective=objective,
+    model={
+        'training_settings': {  # Setting this restriction so the model trains faster (not recommended)
+            'max_iter': 50
+        }
+    },
+    acquisition_optimiser={
+        'optimiser': 'dual_annealing',
+        'optimiser_settings': {  # Setting this restriction so new points are found quickly (not recommended)
+            'max_iter': 50
+        }
+    }
 )
 
 for i in range(4):
