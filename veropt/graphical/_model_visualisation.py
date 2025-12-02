@@ -472,7 +472,7 @@ def _add_labels(
 
         figure.add_annotation(
             x=placements[label_no],
-            y=-0.9,
+            y=-0.09,
             text=label,
             xref="paper",
             yref="paper",
