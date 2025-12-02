@@ -27,7 +27,8 @@ def make_figures(
         return_figure=True
     )
 
-    # TODO: Consider if this is too heavy for an example?
+    # TODO: Maybe make a flag for this or move to another file?
+    #   - It's kind of heavy to run it seems
     prediction_surfaces = {}
     for objective_name in optimiser.objective.objective_names:
         prediction_surfaces[objective_name] = plot_prediction_surface_grid_from_optimiser(

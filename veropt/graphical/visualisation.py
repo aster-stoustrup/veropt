@@ -593,6 +593,7 @@ def plot_prediction_surface_grid_from_optimiser(
         evaluated_point: Optional[Union[torch.Tensor, int]] = None,
         included_variables: Optional[Union[list[int], list[str]]] = None,
         n_points_per_dimension: int = 200,
+        camera: Optional[dict[Literal['eye', 'center', 'up'], dict[Literal['x', 'y', 'z'], float]]] = None,
         normalised: bool = False,
         return_figure: bool = False
 ) -> Optional[go.Figure]:
@@ -684,8 +685,13 @@ def plot_prediction_surface_grid_from_optimiser(
     _add_labels(
         figure=figure,
         labels_x=labels_x,
-        labels_y=labels_y
+        labels_y=labels_y[::-1]
     )
+
+    if camera is not None:
+        figure.update_scenes(
+            camera=camera
+        )
 
     if return_figure:
         return figure
