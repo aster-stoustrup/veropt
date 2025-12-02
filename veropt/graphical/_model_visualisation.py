@@ -20,21 +20,11 @@ from veropt.optimiser.utility import DataShape
 
 def choose_plot_point(
         optimiser: BayesianOptimiser,
-        normalised: bool
+        normalised: bool,
+        include_suggested_points: bool = True
 ) -> tuple[torch.Tensor, str]:
 
-    if optimiser.suggested_points is None:
-
-        if normalised is False:
-            variable_values = optimiser.evaluated_variables_real_units
-        else:
-            variable_values = optimiser.evaluated_variable_values.tensor
-
-        max_ind = optimiser.get_best_points()['index']
-        eval_point = deepcopy(variable_values[max_ind:max_ind + 1])
-        point_description = f" at the point with the highest known value (point no. {max_ind})"
-
-    else:
+    if optimiser.suggested_points and include_suggested_points:
 
         if normalised is False:
             assert optimiser.suggested_points_real_units is not None, "Internal error"
@@ -45,6 +35,17 @@ def choose_plot_point(
         suggested_point_ind = 0  # In the future, might want the best one
         eval_point = deepcopy(suggested_variable_values[suggested_point_ind:suggested_point_ind + 1])
         point_description = " at the first suggested step"
+
+    else:
+
+        if normalised is False:
+            variable_values = optimiser.evaluated_variables_real_units
+        else:
+            variable_values = optimiser.evaluated_variable_values.tensor
+
+        max_ind = optimiser.get_best_points()['index']
+        eval_point = deepcopy(variable_values[max_ind:max_ind + 1])
+        point_description = f" at the point with the highest known value (point no. {max_ind})"
 
     return eval_point, point_description
 
@@ -452,6 +453,45 @@ def plot_prediction_grid(
     return figure
 
 
+def _add_labels(
+        figure: go.Figure,
+        labels_x: list[str],
+        labels_y: list[str]
+) -> None:
+
+    n_plots = len(labels_x)
+
+    plots_start_middle_end = np.linspace(
+        start=-0.05,
+        stop=1.05,
+        num=n_plots * 2 + 1
+    )
+    placements = plots_start_middle_end[1::2]
+
+    for label_no, label in enumerate(labels_x):
+
+        figure.add_annotation(
+            x=placements[label_no],
+            y=-0.9,
+            text=label,
+            xref="paper",
+            yref="paper",
+            showarrow=False
+        )
+
+    for label_no, label in enumerate(labels_y):
+
+        figure.add_annotation(
+            x=-0.04,
+            y=placements[label_no],
+            text=label,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            textangle=-90
+        )
+
+
 def plot_prediction_surface(
         prediction_objective_matrix: torch.Tensor,
         prediction_grid_x: torch.Tensor,
@@ -527,8 +567,8 @@ def plot_prediction_surface(
             x=prediction_grid_x.detach().numpy(),
             y=prediction_grid_y.detach().numpy(),
             z=prediction_objective_matrix.detach().numpy(),
-            colorscale='deep',  # TODO: Consider just doing a blank colour and removing colorbar
-            opacity=0.9,
+            colorscale='deep',
+            opacity=1.0,  # Would actually like this at 0.9 but points seem to become 100% visible through at the moment
             name='',  # "Mean model prediction",
             showscale=False,
             hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
@@ -549,7 +589,8 @@ def plot_prediction_surface(
                 'opacity': 1.0,
                 **marker_args
             },
-            name='',  # "Evaluated points",
+            name='',  # "Evaluated points",  # Removed name for the hover
+            showlegend=False,
             customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
             hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
                       f"{y_axis_title}: " + "%{y:.3f} <br>"

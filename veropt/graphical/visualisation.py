@@ -12,7 +12,7 @@ from plotly import graph_objects as go
 from plotly.subplots import make_subplots
 from veropt.graphical._model_visualisation import (
     _fill_model_prediction_from_optimiser, plot_prediction_grid, plot_prediction_surface,
-    choose_plot_point
+    choose_plot_point, _add_labels
 )
 from veropt.graphical._overview import plot_point_overview, plot_point_overview_separate_subplots, plot_progression
 from veropt.graphical._pareto_front import plot_pareto_front_grid, plot_pareto_front
@@ -605,7 +605,7 @@ def plot_prediction_surface_grid_from_optimiser(
             )
 
         n_plotted_variables = optimiser.objective.n_variables
-        included_variables = range(n_plotted_variables)
+        included_variables = list(range(n_plotted_variables))
 
     else:
         n_plotted_variables = len(included_variables)
@@ -614,7 +614,8 @@ def plot_prediction_surface_grid_from_optimiser(
 
         evaluated_point, title_extension = choose_plot_point(
             optimiser=optimiser,
-            normalised=normalised
+            normalised=normalised,
+            include_suggested_points=False
         )
 
     elif isinstance(evaluated_point, int):
@@ -670,6 +671,20 @@ def plot_prediction_surface_grid_from_optimiser(
 
     figure.update_layout(
         title={'text': title + title_extension}
+    )
+
+    if isinstance(included_variables[0], str):
+        labels_x = included_variables[:-1]
+        labels_y = included_variables[1:]
+
+    elif isinstance(included_variables[0], int):
+        labels_x = [optimiser.objective.variable_names[variable_index] for variable_index in included_variables[:-1]]
+        labels_y = [optimiser.objective.variable_names[variable_index] for variable_index in included_variables[1:]]
+
+    _add_labels(
+        figure=figure,
+        labels_x=labels_x,
+        labels_y=labels_y
     )
 
     if return_figure:

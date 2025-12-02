@@ -53,8 +53,8 @@ def make_figures(
 objective = VehicleSafety()
 
 optimiser = bayesian_optimiser(
-    n_initial_points=16,
-    n_bayesian_points=32,
+    n_initial_points=120,
+    n_bayesian_points=240,
     n_evaluations_per_step=4,
     objective=objective,
     model={
@@ -70,7 +70,7 @@ optimiser = bayesian_optimiser(
     }
 )
 
-for i in range(4):
+for i in range(31):
     optimiser.run_optimisation_step()
 
 optimiser.suggest_candidates()
