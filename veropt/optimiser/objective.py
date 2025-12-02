@@ -31,6 +31,20 @@ class Objective(SavableClass, metaclass=abc.ABCMeta):
         self.variable_names = variable_names
         self.objective_names = objective_names
 
+    def get_bounds(
+            self,
+            variable: Union[int, str]
+    ) -> list[float]:
+
+        if isinstance(variable, str):
+            variable_index = self.variable_names.index(variable)
+        else:
+            variable_index = variable
+
+        bounds = self.bounds[:, variable_index]
+
+        return bounds.tolist()
+
     def gather_dicts_to_save(self) -> dict:
         return {
             'name': self.name,

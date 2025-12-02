@@ -462,8 +462,8 @@ def _add_labels(
     n_plots = len(labels_x)
 
     plots_start_middle_end = np.linspace(
-        start=-0.05,
-        stop=1.05,
+        start=-0.07,
+        stop=1.07,
         num=n_plots * 2 + 1
     )
     placements = plots_start_middle_end[1::2]
@@ -479,10 +479,17 @@ def _add_labels(
             showarrow=False
         )
 
+    plots_start_middle_end = np.linspace(
+        start=-0.12,
+        stop=1.12,
+        num=n_plots * 2 + 1
+    )
+    placements = plots_start_middle_end[1::2]
+
     for label_no, label in enumerate(labels_y):
 
         figure.add_annotation(
-            x=-0.04,
+            x=-0.06,
             y=placements[label_no],
             text=label,
             xref="paper",
@@ -600,6 +607,31 @@ def plot_prediction_surface(
         ),
         **row_col_args
     )
+
+    # TODO: Finish
+    # figure.add_trace(
+    #     go.Scatter3d(
+    #         x=evaluated_point[0, variable_x_index].detach().numpy(),
+    #         y=evaluated_point[0, variable_y_index].detach().numpy(),
+    #         z=objective_value,
+    #         mode='markers',
+    #         marker={
+    #             'color': 'black',
+    #             'opacity': 1.0,
+    #             'size': 5,
+    #             'symbol': 'x'
+    #         },
+    #         name='',  # "Evaluated points",  # Removed name for the hover
+    #         showlegend=False,
+    #         customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
+    #         hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
+    #                   f"{y_axis_title}: " + "%{y:.3f} <br>"
+    #                   f"{z_axis_title}: " + "%{z:.3f} <br>"
+    #                   "Point number: %{customdata[0]:.0f} <br>"
+    #                   "This is the current point"
+    #     ),
+    #     **row_col_args
+    # )
 
 
     figure.update_scenes(

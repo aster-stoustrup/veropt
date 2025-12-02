@@ -23,7 +23,7 @@ from veropt.optimiser.acquisition_optimiser import (
     ProximityPunishmentSequentialOptimiser, _calculate_proximity_punished_acquisition_values
 )
 from veropt.optimiser.optimiser import BayesianOptimiser
-from veropt.optimiser.optimiser_utility import get_best_points, get_pareto_optimal_points
+from veropt.optimiser.optimiser_utility import get_best_points, get_pareto_optimal_points, list_with_floats_to_string
 from veropt.optimiser.prediction import BotorchPredictor
 from veropt.optimiser.utility import DataShape
 
@@ -681,6 +681,13 @@ def plot_prediction_surface_grid_from_optimiser(
     elif isinstance(included_variables[0], int):
         labels_x = [optimiser.objective.variable_names[variable_index] for variable_index in included_variables[:-1]]
         labels_y = [optimiser.objective.variable_names[variable_index] for variable_index in included_variables[1:]]
+
+    labels_x = [
+        label + '<br>' + list_with_floats_to_string(optimiser.objective.get_bounds(label)) for label in labels_x
+    ]
+    labels_y = [
+        label + '<br>' + list_with_floats_to_string(optimiser.objective.get_bounds(label)) for label in labels_y
+    ]
 
     _add_labels(
         figure=figure,
