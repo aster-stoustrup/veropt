@@ -1,4 +1,4 @@
-from veropt.graphical.visualisation import plot_prediction_grid_from_optimiser
+from veropt.graphical.visualisation import plot_prediction_grid
 from veropt import bayesian_optimiser
 from veropt.optimiser.practice_objectives import VehicleSafety
 
@@ -16,6 +16,6 @@ for i in range(4):
 
 optimiser.suggest_candidates()
 
-plot_prediction_grid_from_optimiser(
+plot_prediction_grid(
     optimiser=optimiser
 )

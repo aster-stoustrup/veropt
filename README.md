@@ -60,8 +60,9 @@ Once our optimisation has run for a few steps, we can visualise the surrogate mo
 For example, we can call,
 
 ```python
-from veropt.graphical.visualisation import plot_prediction_grid_from_optimiser
-plot_prediction_grid_from_optimiser(
+from veropt.graphical.visualisation import plot_prediction_grid
+
+plot_prediction_grid(
     optimiser=optimiser
 )
 ```

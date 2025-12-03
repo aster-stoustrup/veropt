@@ -181,7 +181,7 @@ def _add_model_traces(
         )
 
 
-def plot_prediction_grid(
+def _plot_prediction_grid(
         model_prediction_container: ModelPredictionContainer,
         evaluated_point: torch.Tensor,
         variable_values: torch.Tensor,
@@ -500,7 +500,7 @@ def _add_labels(
         )
 
 
-def plot_prediction_surface(
+def _plot_prediction_surface(
         prediction_objective_matrix: torch.Tensor,
         prediction_grid_x: torch.Tensor,
         prediction_grid_y: torch.Tensor,

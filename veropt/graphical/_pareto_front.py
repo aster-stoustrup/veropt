@@ -11,7 +11,7 @@ from veropt.optimiser.optimiser_utility import SuggestedPoints
 from veropt.optimiser.utility import DataShape
 
 
-def plot_pareto_front_grid(
+def _plot_pareto_front_grid(
         objective_values: torch.Tensor,
         objective_names: list[str],
         pareto_optimal_indices: list[int],
@@ -183,7 +183,7 @@ def _add_pareto_traces_2d(
     return figure
 
 
-def plot_pareto_front(
+def _plot_pareto_front(
         objective_values: torch.Tensor,
         pareto_optimal_indices: list[int],
         plotted_objective_indices: list[int],

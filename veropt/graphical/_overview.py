@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 from veropt.optimiser.utility import DataShape
 
 
-def plot_point_overview(
+def _plot_point_overview(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
         objective_names: list[str],
@@ -178,7 +178,7 @@ def plot_point_overview_separate_subplots(
     return figure
 
 
-def plot_progression(
+def _plot_progression(
         objective_values: torch.Tensor,
         objective_names: list[str],
         n_initial_points: int

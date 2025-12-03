@@ -11,11 +11,11 @@ from dash.exceptions import PreventUpdate
 from plotly import graph_objects as go
 from plotly.subplots import make_subplots
 from veropt.graphical._model_visualisation import (
-    _fill_model_prediction_from_optimiser, plot_prediction_grid, plot_prediction_surface,
+    _fill_model_prediction_from_optimiser, _plot_prediction_grid, _plot_prediction_surface,
     choose_plot_point, _add_labels
 )
-from veropt.graphical._overview import plot_point_overview, plot_point_overview_separate_subplots, plot_progression
-from veropt.graphical._pareto_front import plot_pareto_front_grid, plot_pareto_front
+from veropt.graphical._overview import _plot_point_overview, plot_point_overview_separate_subplots, _plot_progression
+from veropt.graphical._pareto_front import _plot_pareto_front_grid, _plot_pareto_front
 from veropt.graphical._visualisation_utility import (
     ModelPredictionContainer, get_point_from_number
 )
@@ -28,7 +28,7 @@ from veropt.optimiser.prediction import BotorchPredictor
 from veropt.optimiser.utility import DataShape
 
 
-def plot_point_overview_from_optimiser(
+def plot_point_overview(
         optimiser: BayesianOptimiser,
         points: Literal['all', 'pareto-optimal', 'bayes', 'suggested', 'best'] = 'all',
         normalised: bool = False,
@@ -123,7 +123,7 @@ def plot_point_overview_from_optimiser(
     variable_names = optimiser.objective.variable_names
 
     if normalised:
-        figure = plot_point_overview(
+        figure = _plot_point_overview(
             variable_values=variable_values,
             objective_values=objective_values,
             objective_names=objective_names,
@@ -147,7 +147,7 @@ def plot_point_overview_from_optimiser(
         return None
 
 
-def plot_progression_from_optimiser(
+def plot_progression(
         optimiser: BayesianOptimiser,
         normalised: bool = False,
         return_figure: bool = False
@@ -159,7 +159,7 @@ def plot_progression_from_optimiser(
     else:
         objective_values = optimiser.evaluated_objective_values.tensor
 
-    figure = plot_progression(
+    figure = _plot_progression(
         objective_values=objective_values,
         objective_names=optimiser.objective.objective_names,
         n_initial_points=optimiser.n_initial_points,
@@ -172,7 +172,7 @@ def plot_progression_from_optimiser(
         return None
 
 
-def plot_pareto_front_grid_from_optimiser(
+def plot_pareto_front_grid(
         optimiser: BayesianOptimiser,
         return_figure: bool = False,
         normalised: bool = False
@@ -195,7 +195,7 @@ def plot_pareto_front_grid_from_optimiser(
 
     objective_names = optimiser.objective.objective_names
 
-    figure_or_none = plot_pareto_front_grid(
+    figure_or_none = _plot_pareto_front_grid(
         objective_values=objective_values,
         objective_names=objective_names,
         pareto_optimal_indices=pareto_optimal_indices,
@@ -206,7 +206,7 @@ def plot_pareto_front_grid_from_optimiser(
     return figure_or_none
 
 
-def plot_pareto_front_from_optimiser(
+def plot_pareto_front(
         optimiser: BayesianOptimiser,
         plotted_objective_indices: list[int],
         return_figure: bool = False,
@@ -228,7 +228,7 @@ def plot_pareto_front_from_optimiser(
         objective_values=objective_values,
     )['index']
 
-    figure_or_none = plot_pareto_front(
+    figure_or_none = _plot_pareto_front(
         objective_values=objective_values,
         pareto_optimal_indices=pareto_optimal_indices,
         plotted_objective_indices=plotted_objective_indices,
@@ -240,7 +240,7 @@ def plot_pareto_front_from_optimiser(
     return figure_or_none
 
 
-def plot_prediction_grid_from_optimiser(
+def plot_prediction_grid(
         optimiser: BayesianOptimiser,
         return_figure: bool = False,
         model_prediction_container: Optional[ModelPredictionContainer] = None,
@@ -347,7 +347,7 @@ def plot_prediction_grid_from_optimiser(
     if evaluated_point is None:
         evaluated_point = calculated_prediction.point
 
-    figure = plot_prediction_grid(
+    figure = _plot_prediction_grid(
         model_prediction_container=model_prediction_container,
         evaluated_point=evaluated_point,
         variable_values=variable_values,
@@ -390,7 +390,7 @@ def run_prediction_grid_app(
 
             chosen_point = variable_values[point_index]
 
-            figure = plot_prediction_grid_from_optimiser(
+            figure = plot_prediction_grid(
                 optimiser=optimiser,
                 return_figure=True,
                 model_prediction_container=model_prediction_container,
@@ -427,7 +427,7 @@ def run_prediction_grid_app(
         normalised=normalised
     )
 
-    fig_1 = plot_prediction_grid_from_optimiser(
+    fig_1 = plot_prediction_grid(
         optimiser=optimiser,
         return_figure=True,
         model_prediction_container=model_prediction_container
@@ -461,7 +461,7 @@ def run_prediction_grid_app(
     app.run()
 
 
-def plot_prediction_surface_from_optimiser(
+def plot_prediction_surface(
         optimiser: BayesianOptimiser,
         variable_x: Union[int, str],
         variable_y: Union[int, str],
@@ -570,7 +570,7 @@ def plot_prediction_surface_from_optimiser(
         y_axis_title += '(normalised)'
         z_axis_title += '(normalised)'
 
-    return plot_prediction_surface(
+    return _plot_prediction_surface(
         prediction_objective_matrix=prediction_objective_matrix,
         prediction_grid_x=grid_x,
         prediction_grid_y=grid_y,
@@ -587,7 +587,7 @@ def plot_prediction_surface_from_optimiser(
     )
 
 
-def plot_prediction_surface_grid_from_optimiser(
+def plot_prediction_surface_grid(
         optimiser: BayesianOptimiser,
         objective: Union[int, str],
         evaluated_point: Optional[Union[torch.Tensor, int]] = None,
@@ -648,7 +648,7 @@ def plot_prediction_surface_grid_from_optimiser(
                 pass
 
             else:
-                figure = plot_prediction_surface_from_optimiser(
+                figure = plot_prediction_surface(
                     optimiser=optimiser,
                     variable_x=variable_x,
                     variable_y=variable_y,
