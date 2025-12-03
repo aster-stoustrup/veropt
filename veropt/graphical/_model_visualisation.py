@@ -174,7 +174,8 @@ def _add_model_traces(
                 line={'color': "rgba(0.5, 0.5, 0.5, 0.3)"},
                 name='Model samples',
                 legendgroup='Model samples',
-                showlegend=show_legend_sample
+                showlegend=show_legend_sample,
+                visible='legendonly'
             ),
             row=row_no, col=col_no
         )
