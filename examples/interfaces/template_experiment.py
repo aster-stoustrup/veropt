@@ -1,24 +1,75 @@
+from typing import Any
+
 from veropt.interfaces.constructors import experiment
-from veropt.interfaces.simulation import SimulationRunner
+from veropt.interfaces.result_processing import ResultProcessor
+from veropt.interfaces.simulation import SimulationResult, SimulationRunner
 
 
 class UserDefinedSimulationRunner(SimulationRunner):
-    pass
+    def set_up_and_run(
+            self,
+            simulation_id: str,
+            parameters: dict[str, float],
+            run_script_directory: str,
+            run_script_filename: str,
+            output_filename: str
+    ) -> SimulationResult:
+
+        # Write your own code here!
+        # - You need to get your simulations ready to run and either submit them to slurm or run them directly
+        # - If you set experiment_mode to 'local', veropt will expect you to run the simulations locally
+        # - If you set experiment_mode to 'local_slurm', veropt will expect you to submit your simulations to slurm
+        #   and automatically wait for them to finish
+
+        raise NotImplementedError()
 
 
-simulation_config = LocalVerosConfig.load("veropt/interfaces/configs/local_veros_config.json")
-simulation_runner = LocalVerosRunner(config=simulation_config)
+class UserDefinedResultProcessor(ResultProcessor):
 
-optimiser_config = "veropt/interfaces/configs/optimiser_config.json"
+    def calculate_objectives(
+            self,
+            result: SimulationResult
+    ) -> dict[str, float]:
+
+        # Write your own code here!
+        #   - You need to define how your objectives are calculated from each simulation result
+        #   - The 'SimulationResult' that is passed to this method contains the folder path for the current point
+        #   - You will need to return a dictionary with the objective names and values for the current point
+
+        raise NotImplementedError()
+
+    def open_output_file(
+            self,
+            result: SimulationResult
+    ) -> Any:
+
+        # Write your own code here!
+        #   - You need to define how your results are opened and return the resulting python object (e.g. an xr.Dataset)
+
+        raise NotImplementedError()
+
+
+# For an example of an implementation of this object, see 'SlurmVerosRunner' under veropt/interfaces/slurm_simulation
+simulation_runner = UserDefinedSimulationRunner()
+
+# Write your own json configuration files but check ours to see some examples
+optimiser_config = "veropt/examples/example_optimiser_settings.json"
 experiment_config = "veropt/interfaces/configs/veros_experiment_config.json"
 
-result_processor = TestVerosResultProcessor(objective_names=["amoc"])
+# For an example of an implementation of this object, see 'TestVerosResultProcessor'
+# under veropt/interfaces/result_processing
+result_processor = UserDefinedResultProcessor(
+    objective_names=[
+        'your_first_objective',
+        'your_second_objective',
+    ]
+)
 
-veros_experiment = experiment(
+user_experiment = experiment(
     simulation_runner=simulation_runner,
     result_processor=result_processor,
     experiment_config=experiment_config,
     optimiser_config=optimiser_config
 )
 
-veros_experiment.run_experiment()
+user_experiment.run_experiment()
