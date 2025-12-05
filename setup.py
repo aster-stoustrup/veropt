@@ -8,6 +8,7 @@ install_requires = [
     "dill",
     "scipy",
     "plotly",
+    "kaleido",
     "dash",
     "pydantic",
     "xarray",

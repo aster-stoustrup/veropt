@@ -3,17 +3,25 @@ from veropt.graphical.visualisation import (
     plot_progression,
     plot_pareto_front_grid,
     plot_prediction_grid,
-    plot_prediction_surface_grid
+    plot_point_overview
 )
 from veropt.optimiser.practice_objectives import VehicleSafety
 
 
 def make_figures(
-        save: bool
+        show: bool,
+        save_html: bool,
+        save_pdf: bool
 ):
 
     progression_figure = plot_progression(
         optimiser=optimiser,
+        return_figure=True
+    )
+
+    points_overview_figure = plot_point_overview(
+        optimiser=optimiser,
+        points='pareto-optimal',
         return_figure=True
     )
 
@@ -27,29 +35,29 @@ def make_figures(
         return_figure=True
     )
 
-    # TODO: Maybe make a flag for this or move to another file?
-    #   - It's kind of heavy to run it seems
-    prediction_surfaces = {}
-    for objective_name in optimiser.objective.objective_names:
-        prediction_surfaces[objective_name] = plot_prediction_surface_grid(
-            optimiser=optimiser,
-            objective=objective_name,
-            return_figure=True,
-            n_points_per_dimension=50
-        )
+    if show:
 
-    progression_figure.show()
-    pareto_front_grid.show()
-    prediction_figure.show()
+        progression_figure.show()
+        points_overview_figure.show()
+        pareto_front_grid.show()
+        prediction_figure.show()
 
-    for objective_name in optimiser.objective.objective_names:
-        prediction_surfaces[objective_name].show()
+    if save_html:
 
-    if save:
+        progression_figure.write_html('progression.html')
+        points_overview_figure.write_html('points_overview.html')
+        pareto_front_grid.write_html('pareto_front_grid.html')
+        prediction_figure.write_html('prediction_grid.html')
 
-        # TODO: Save figures
+    if save_pdf:
 
-        pass
+        # Note that other image formats can also be used here
+        #   - Simply change the file ending to save in a different format
+
+        progression_figure.write_image('progression.pdf')
+        points_overview_figure.write_image('points_overview.pdf')
+        pareto_front_grid.write_image('pareto_front_grid.pdf')
+        prediction_figure.write_image('prediction_grid.pdf')
 
 
 objective = VehicleSafety()
@@ -60,7 +68,7 @@ optimiser = bayesian_optimiser(
     n_evaluations_per_step=4,
     objective=objective,
     model={
-        'training_settings': {  # Setting this restriction so the model trains faster (not recommended)
+        'training_settings': {  # Setting this restriction so the model trains worse but faster (not recommended)
             'max_iter': 50
         }
     },
@@ -78,8 +86,7 @@ for i in range(31):
 optimiser.suggest_candidates()
 
 make_figures(
-    save=False
+    show=True,
+    save_html=False,
+    save_pdf=False
 )
-
-
-# TODO: Finish this example
