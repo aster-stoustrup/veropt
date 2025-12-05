@@ -30,9 +30,17 @@ def make_figures(
         return_figure=True
     )
 
+    # This figure shows the surrogate model predictions
+    #   - These predictions are shown at a specific point
+    #   - For each variable, the values are varied over the range of that variable, while all other variable values
+    #     are fixed at the evaluated point
+    #   - The colours of the evaluated point (and the hover) show how far away the other points are from the plane of
+    #     the evaluated point
+    #   - See the 3d visualisation example for a 3d version of this graph
     prediction_figure = plot_prediction_grid(
         optimiser=optimiser,
-        return_figure=True
+        return_figure=True,
+        # evaluated_point=23  # The evaluated point can be set here
     )
 
     if show:

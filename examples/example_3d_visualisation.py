@@ -20,7 +20,7 @@ def make_figures(
             optimiser=optimiser,
             objective=objective_name,
             return_figure=True,
-            # n_points_per_dimension=50  # This can be set to decrease computational demand (but lower resoution)
+            # n_points_per_dimension=200  # The resolution can be set here (computational expense is quadratic to this)
         )
 
     if show:
@@ -67,10 +67,8 @@ for i in range(31):
 
 optimiser.suggest_candidates()
 
-# Please note that making these 3d figures can be computationally expensive
-
 make_figures(
     show=True,
-    save_html=True,
+    save_html=False,
     save_pdf=False
 )

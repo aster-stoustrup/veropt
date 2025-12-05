@@ -63,7 +63,7 @@ def _fill_model_prediction_from_optimiser(
 
     if n_calculated_points is None:
         if calculate_acquisition is False:
-            n_calculated_points = 10_000
+            n_calculated_points = 1_000
         else:
             n_calculated_points = 200
 
