@@ -12,7 +12,7 @@ from plotly import graph_objects as go
 from plotly.subplots import make_subplots
 from veropt.graphical._model_visualisation import (
     _fill_model_prediction_from_optimiser, _plot_prediction_grid, _plot_prediction_surface,
-    choose_plot_point, _add_labels
+    choose_plot_point, _add_labels, _calculate_grid_model_matrix
 )
 from veropt.graphical._overview import _plot_point_overview, plot_point_overview_separate_subplots, _plot_progression
 from veropt.graphical._pareto_front import _plot_pareto_front_grid, _plot_pareto_front
@@ -499,9 +499,6 @@ def plot_prediction_surface(
     else:
         bounds = optimiser.bounds.tensor
 
-    # TODO: Allow evaluated_point to be int or None
-    #   - Re-use from 2d version
-
     if isinstance(variable_x, str):
         variable_x = optimiser.objective.variable_names.index(variable_x)
 
@@ -511,48 +508,21 @@ def plot_prediction_surface(
     if isinstance(objective, str):
         objective = optimiser.objective.objective_names.index(objective)
 
-    variable_tensor_x = torch.linspace(
-        start=bounds[0, variable_x],
-        end=bounds[1, variable_x],
-        steps=n_points_per_dimension
+    grid_x, grid_y, prediction_objective_matrix = _calculate_grid_model_matrix(
+        bounds=bounds,
+        variable_x_index=variable_x,
+        variable_y_index=variable_y,
+        objective_index=objective,
+        evaluated_point=evaluated_point,
+        predictor=optimiser.predictor,
+        normalised=normalised,
+        n_points_per_dimension=n_points_per_dimension
     )
 
-    variable_tensor_y = torch.linspace(
-        start=bounds[0, variable_y],
-        end=bounds[1, variable_y],
-        steps=n_points_per_dimension
-    )
-
-    grid_x, grid_y = torch.meshgrid(
-        variable_tensor_x,
-        variable_tensor_y,
-        indexing='xy'
-    )
-
-    all_variables_tensor = evaluated_point.repeat(
-        n_points_per_dimension * n_points_per_dimension,
-        1
-    )
-
-    for i in range(n_points_per_dimension):
-        all_variables_tensor[
-            i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
-            variable_x
-        ] = grid_x[i, :]
-
-        all_variables_tensor[
-            i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
-            variable_y
-        ] = grid_y[i, :]
-
-    prediction = optimiser.predictor.predict_values(
-        variable_values=all_variables_tensor,
+    evaluated_point_objective_value = optimiser.predictor.predict_values(
+        variable_values=evaluated_point,
         normalised=normalised
-    )
-
-    prediction_objective_tensor = prediction['mean'][:, objective]
-
-    prediction_objective_matrix = prediction_objective_tensor.reshape(n_points_per_dimension, n_points_per_dimension)
+    )['mean']
 
     if normalised is False:
         point_variable_values = optimiser.evaluated_variables_real_units
@@ -566,9 +536,9 @@ def plot_prediction_surface(
     z_axis_title = optimiser.objective.objective_names[objective]
 
     if normalised:
-        x_axis_title += '(normalised)'
-        y_axis_title += '(normalised)'
-        z_axis_title += '(normalised)'
+        x_axis_title += ' (normalised)'
+        y_axis_title += ' (normalised)'
+        z_axis_title += ' (normalised)'
 
     return _plot_prediction_surface(
         prediction_objective_matrix=prediction_objective_matrix,
@@ -577,6 +547,7 @@ def plot_prediction_surface(
         point_variable_values=point_variable_values,
         point_objective_values=point_objective_values,
         evaluated_point=evaluated_point,
+        evaluated_point_objective_value=float(evaluated_point_objective_value[0, objective].detach()),
         variable_x_index=variable_x,
         variable_y_index=variable_y,
         x_axis_title=x_axis_title,

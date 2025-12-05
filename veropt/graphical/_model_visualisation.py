@@ -15,6 +15,7 @@ from veropt.graphical._visualisation_utility import (
 )
 from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.optimiser_utility import SuggestedPoints
+from veropt.optimiser.prediction import Predictor
 from veropt.optimiser.utility import DataShape
 
 
@@ -500,6 +501,63 @@ def _add_labels(
         )
 
 
+def _calculate_grid_model_matrix(
+        bounds: torch.Tensor,
+        variable_x_index: int,
+        variable_y_index: int,
+        objective_index: int,
+        evaluated_point: torch.Tensor,
+        predictor: Predictor,
+        normalised: bool,
+        n_points_per_dimension: int
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+    variable_tensor_x = torch.linspace(
+        start=bounds[0, variable_x_index],
+        end=bounds[1, variable_x_index],
+        steps=n_points_per_dimension
+    )
+
+    variable_tensor_y = torch.linspace(
+        start=bounds[0, variable_y_index],
+        end=bounds[1, variable_y_index],
+        steps=n_points_per_dimension
+    )
+
+    grid_x, grid_y = torch.meshgrid(
+        variable_tensor_x,
+        variable_tensor_y,
+        indexing='xy'
+    )
+
+    all_variables_tensor = evaluated_point.repeat(
+        n_points_per_dimension * n_points_per_dimension,
+        1
+    )
+
+    for i in range(n_points_per_dimension):
+        all_variables_tensor[
+        i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
+        variable_x_index
+        ] = grid_x[i, :]
+
+        all_variables_tensor[
+        i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
+        variable_y_index
+        ] = grid_y[i, :]
+
+    prediction = predictor.predict_values(
+        variable_values=all_variables_tensor,
+        normalised=normalised
+    )
+
+    prediction_objective_tensor = prediction['mean'][:, objective_index]
+
+    prediction_objective_matrix = prediction_objective_tensor.reshape(n_points_per_dimension, n_points_per_dimension)
+
+    return grid_x, grid_y, prediction_objective_matrix
+
+
 def _plot_prediction_surface(
         prediction_objective_matrix: torch.Tensor,
         prediction_grid_x: torch.Tensor,
@@ -507,6 +565,7 @@ def _plot_prediction_surface(
         point_variable_values: torch.Tensor,
         point_objective_values: torch.Tensor,
         evaluated_point: torch.Tensor,
+        evaluated_point_objective_value: float,
         variable_x_index: int,
         variable_y_index: int,
         x_axis_title: str,
@@ -544,6 +603,8 @@ def _plot_prediction_surface(
         figure = go.Figure()
 
     if row_col is None:
+        current_point_marker_size = 20
+
         row_col_args = {}
         marker_args = {}
         zaxis_arg = {
@@ -555,6 +616,9 @@ def _plot_prediction_surface(
         }
 
     else:
+
+        current_point_marker_size = 4
+
         row_col_args = {
             'row': row_col[0],
             'col': row_col[1]
@@ -609,30 +673,27 @@ def _plot_prediction_surface(
         **row_col_args
     )
 
-    # TODO: Finish
-    # figure.add_trace(
-    #     go.Scatter3d(
-    #         x=evaluated_point[0, variable_x_index].detach().numpy(),
-    #         y=evaluated_point[0, variable_y_index].detach().numpy(),
-    #         z=objective_value,
-    #         mode='markers',
-    #         marker={
-    #             'color': 'black',
-    #             'opacity': 1.0,
-    #             'size': 5,
-    #             'symbol': 'x'
-    #         },
-    #         name='',  # "Evaluated points",  # Removed name for the hover
-    #         showlegend=False,
-    #         customdata=np.dstack([list(range(n_evaluated_points)), distance_list])[0],
-    #         hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
-    #                   f"{y_axis_title}: " + "%{y:.3f} <br>"
-    #                   f"{z_axis_title}: " + "%{z:.3f} <br>"
-    #                   "Point number: %{customdata[0]:.0f} <br>"
-    #                   "This is the current point"
-    #     ),
-    #     **row_col_args
-    # )
+    figure.add_trace(
+        go.Scatter3d(
+            x=[float(evaluated_point[0, variable_x_index])],
+            y=[float(evaluated_point[0, variable_y_index])],
+            z=[evaluated_point_objective_value],
+            mode='markers',
+            marker={
+                'color': 'black',
+                'opacity': 1.0,
+                'size': 5,
+                'symbol': 'x'
+            },
+            name='',  # "Current point",  # Removed name for the hover
+            showlegend=False,
+            hovertemplate=f"{x_axis_title}: " + "%{x:.3f} <br>"
+                      f"{y_axis_title}: " + "%{y:.3f} <br>"
+                      f"{z_axis_title}: " + "%{z:.3f} <br>"
+                      "This is the current point"
+        ),
+        **row_col_args
+    )
 
 
     figure.update_scenes(
