@@ -25,6 +25,9 @@ def make_figures(
         return_figure=True
     )
 
+    # This graph is for 3 objectives and up
+    #   - If you have 2 objectives, use 'plot_pareto_front'
+    #   - If you have one objective, you don't need this graph (just use 'plot_progression')
     pareto_front_grid = plot_pareto_front_grid(
         optimiser=optimiser,
         return_figure=True
@@ -60,7 +63,7 @@ def make_figures(
     if save_pdf:
 
         # Note that other image formats can also be used here
-        #   - Simply change the file ending to save in a different format
+        #   - Simply change the file ending to save in a different format, e.g. '.png'
 
         progression_figure.write_image('progression.pdf')
         points_overview_figure.write_image('points_overview.pdf')
@@ -88,9 +91,11 @@ optimiser = bayesian_optimiser(
     }
 )
 
+# Run all the inital steps and one bayesian step
 for i in range(31):
     optimiser.run_optimisation_step()
 
+# Make new suggestions so we can see them in the graphs
 optimiser.suggest_candidates()
 
 make_figures(
@@ -98,3 +103,5 @@ make_figures(
     save_html=False,
     save_pdf=False
 )
+
+# Check out the 3d visualisation example as well!

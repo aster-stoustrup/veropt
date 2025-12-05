@@ -50,7 +50,7 @@ optimiser = bayesian_optimiser(
     n_evaluations_per_step=4,
     objective=objective,
     model={
-        'training_settings': {  # Setting this restriction so the model trains faster (not recommended)
+        'training_settings': {  # Setting this restriction so the model trains worse but faster (not recommended)
             'max_iter': 50
         }
     },
@@ -62,9 +62,11 @@ optimiser = bayesian_optimiser(
     }
 )
 
+# Make new suggestions so we can see them in the graphs
 for i in range(31):
     optimiser.run_optimisation_step()
 
+# Make new suggestions so we can see them in the graphs
 optimiser.suggest_candidates()
 
 make_figures(
