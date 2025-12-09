@@ -39,7 +39,6 @@ class BayesianOptimiser(SavableClass):
             normaliser_objectives: Optional[Normaliser],
             settings: OptimiserSettings,
             initial_points_real_units: torch.Tensor,
-            # suggested_points: Optional[SuggestedPoints],
             suggested_points_real_units: Optional[SuggestedPoints],
             suggested_points_history: list[SuggestedPoints],
             evaluated_variables_real_units: torch.Tensor,
@@ -61,7 +60,6 @@ class BayesianOptimiser(SavableClass):
         self._evaluated_variables_real_units = evaluated_variables_real_units
         self._evaluated_objectives_real_units = evaluated_objectives_real_units
 
-        # self.suggested_points = suggested_points
         self._suggested_points_real_units = suggested_points_real_units
         self.suggested_points_history = suggested_points_history
 
@@ -419,7 +417,7 @@ class BayesianOptimiser(SavableClass):
             )
 
         else:
-            raise RuntimeError
+            raise RuntimeError()
 
         if self.model_has_been_trained:
 
@@ -626,6 +624,8 @@ class BayesianOptimiser(SavableClass):
             )
         )
 
+        self._reset_suggested_points()
+
     def _save_candidates(self) -> None:
 
         assert self.objective_type == ObjectiveKind.interface, (
@@ -646,8 +646,6 @@ class BayesianOptimiser(SavableClass):
         self.objective.save_candidates(  # type: ignore[union-attr]  # objective type is checked above
             suggested_variables=suggested_variables_dict
         )
-
-        self._reset_suggested_points()
 
     def _verify_set_up(self) -> None:
 
@@ -673,12 +671,16 @@ class BayesianOptimiser(SavableClass):
     def _reset_suggested_points(self) -> None:
 
         if self.suggested_points is None:
-            raise RuntimeError()
+            pass
 
-        assert self.suggested_points_real_units is not None, "Must have suggested points to reset and add to history"
+        else:
 
-        self.suggested_points_history.append(self.suggested_points_real_units.copy())
-        self.suggested_points_real_units = None
+            assert self.suggested_points_real_units is not None, (
+                "Must have suggested points to reset and add to history"
+            )
+
+            self.suggested_points_history.append(self.suggested_points_real_units.copy())
+            self.suggested_points_real_units = None
 
     def _update_predictor(
             self,

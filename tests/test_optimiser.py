@@ -343,5 +343,5 @@ def test_save_points_interface_objectives() -> None:
     for variable_no, variable in enumerate(objective.variable_names):
         assert torch.equal(
             objective.suggested_variables[variable],
-            optimiser.suggested_points_history[0].variable_values[:, variable_no]
+            optimiser.suggested_points.variable_values[:, variable_no]
         )

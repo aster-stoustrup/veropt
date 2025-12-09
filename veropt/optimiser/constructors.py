@@ -30,6 +30,7 @@ AcquisitionOptimiserSettings = DualAnnealingSettingsInputDict  # expand when add
 
 ModelOptimiserSettings = AdamInputDict
 
+
 class ProblemInformation(TypedDict):
     n_variables: int
     n_objectives: int
