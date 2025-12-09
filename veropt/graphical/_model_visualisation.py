@@ -5,7 +5,7 @@ from typing import Optional
 
 import numpy as np
 import torch
-from plotly import graph_objs as go, colors, graph_objects as go
+from plotly import graph_objs as go
 from plotly.express import colors
 from plotly.subplots import make_subplots
 
@@ -537,13 +537,13 @@ def _calculate_grid_model_matrix(
 
     for i in range(n_points_per_dimension):
         all_variables_tensor[
-        i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
-        variable_x_index
+            i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
+            variable_x_index
         ] = grid_x[i, :]
 
         all_variables_tensor[
-        i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
-        variable_y_index
+            i * n_points_per_dimension:i * n_points_per_dimension + n_points_per_dimension,
+            variable_y_index
         ] = grid_y[i, :]
 
     prediction = predictor.predict_values(
@@ -682,7 +682,7 @@ def _plot_prediction_surface(
             marker={
                 'color': 'black',
                 'opacity': 1.0,
-                'size': 5,
+                'size': current_point_marker_size,
                 'symbol': 'x'
             },
             name='',  # "Current point",  # Removed name for the hover
@@ -695,14 +695,13 @@ def _plot_prediction_surface(
         **row_col_args
     )
 
-
     figure.update_scenes(
-        xaxis = {
+        xaxis={
             'title': {
                 'text': x_axis_title
             }
         },
-        yaxis = {
+        yaxis={
             'title': {
                 'text': y_axis_title
             }

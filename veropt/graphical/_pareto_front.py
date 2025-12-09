@@ -4,7 +4,8 @@ from typing import Optional, Union
 
 import numpy as np
 import torch
-from plotly import graph_objects as go, colors, graph_objs as go
+from plotly import graph_objects as go
+from plotly.express import colors
 from plotly.subplots import make_subplots
 
 from veropt.optimiser.optimiser_utility import SuggestedPoints

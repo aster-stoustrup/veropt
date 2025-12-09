@@ -8,7 +8,6 @@ import plotly.graph_objs as go
 import torch
 from dash import Dash, Input, Output, State, callback, dcc, html
 from dash.exceptions import PreventUpdate
-from plotly import graph_objects as go
 from plotly.subplots import make_subplots
 from veropt.graphical._model_visualisation import (
     _fill_model_prediction_from_optimiser, _plot_prediction_grid, _plot_prediction_surface,
@@ -286,7 +285,7 @@ def plot_prediction_grid(
             variable_values=variable_values,
             suggested_points=suggested_points
         )
-        
+
     if evaluated_point is None:
         # I guess there's a non-caught case where no point was chosen but the auto-selected point is already calculated
         calculate_new_predictions = True
@@ -478,7 +477,7 @@ def plot_prediction_surface(
 
     else:
         variable_values = optimiser.evaluated_variable_values.tensor
-    
+
     if evaluated_point is None:
 
         evaluated_point, title = choose_plot_point(

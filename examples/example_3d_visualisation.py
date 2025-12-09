@@ -1,8 +1,5 @@
 from veropt import bayesian_optimiser
 from veropt.graphical.visualisation import (
-    plot_progression,
-    plot_pareto_front_grid,
-    plot_prediction_grid,
     plot_prediction_surface_grid
 )
 from veropt.optimiser.practice_objectives import VehicleSafety

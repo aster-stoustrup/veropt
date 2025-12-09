@@ -9,7 +9,7 @@ from veropt.optimiser.acquisition_optimiser import (
 )
 from veropt.optimiser.kernels import KernelInputDict, SingleKernelOptions
 from veropt.optimiser.model import (
-    AdamInputDict, AdamModelOptimiser, GPyTorchFullModel, GPyTorchSingleModel,
+    AdamInputDict, GPyTorchFullModel, GPyTorchSingleModel,
     GPyTorchTrainingParametersInputDict, TorchModelOptimiser
 )
 from veropt.optimiser.normalisation import Normaliser, NormaliserChoice, get_normaliser_class
