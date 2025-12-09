@@ -49,15 +49,14 @@ class UserDefinedResultProcessor(ResultProcessor):
         raise NotImplementedError()
 
 
-# For an example of an implementation of this object, see 'SlurmVerosRunner' under veropt/interfaces/slurm_simulation
+# For an example of a SimulationRunner, see 'SlurmVerosRunner' under veropt/interfaces/slurm_simulation
 simulation_runner = UserDefinedSimulationRunner()
 
-# Write your own json configuration files but check ours to see some examples
+# Write your own json configuration files but check out ours to see some examples
 optimiser_config = "veropt/examples/example_optimiser_settings.json"
 experiment_config = "veropt/interfaces/configs/veros_experiment_config.json"
 
-# For an example of an implementation of this object, see 'TestVerosResultProcessor'
-# under veropt/interfaces/result_processing
+# For an example of a ResultProcessor, see 'TestVerosResultProcessor' under veropt/interfaces/result_processing
 result_processor = UserDefinedResultProcessor(
     objective_names=[
         'your_first_objective',

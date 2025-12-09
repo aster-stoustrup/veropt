@@ -9,7 +9,7 @@ from veropt.optimiser.acquisition_optimiser import (
 )
 from veropt.optimiser.kernels import KernelInputDict, SingleKernelOptions
 from veropt.optimiser.model import (
-    AdamModelOptimiser, GPyTorchFullModel, GPyTorchSingleModel,
+    AdamInputDict, AdamModelOptimiser, GPyTorchFullModel, GPyTorchSingleModel,
     GPyTorchTrainingParametersInputDict, TorchModelOptimiser
 )
 from veropt.optimiser.normalisation import Normaliser, NormaliserChoice, get_normaliser_class
@@ -28,6 +28,7 @@ AcquisitionOptimiserOptions = Literal['dual_annealing']
 AcquisitionSettings = UpperConfidenceBoundOptionsInputDict  # expand with more options when adding acq_funcs
 AcquisitionOptimiserSettings = DualAnnealingSettingsInputDict  # expand when adding more options
 
+ModelOptimiserSettings = AdamInputDict
 
 class ProblemInformation(TypedDict):
     n_variables: int
@@ -40,6 +41,7 @@ class GPytorchModelChoice(TypedDict, total=False):
     kernels: Union[SingleKernelOptions, list[SingleKernelOptions], list[GPyTorchSingleModel], None]
     kernel_settings: Optional['KernelInputDict']
     kernel_optimiser: Optional[KernelOptimiserOptions]
+    kernel_optimiser_settings: Optional[ModelOptimiserSettings]
     training_settings: Optional[GPyTorchTrainingParametersInputDict]
 
 
@@ -171,6 +173,7 @@ def gpytorch_model(
         kernels: Union[SingleKernelOptions, list[SingleKernelOptions], list[GPyTorchSingleModel], None] = None,
         kernel_settings: Union['KernelInputDict', list['KernelInputDict'], None] = None,
         kernel_optimiser: Optional[KernelOptimiserOptions] = None,
+        kernel_optimiser_settings: Optional[ModelOptimiserSettings] = None,
         training_settings: Optional[GPyTorchTrainingParametersInputDict] = None,
 ) -> GPyTorchFullModel:
 
@@ -181,18 +184,9 @@ def gpytorch_model(
         kernel_settings=kernel_settings
     )
 
-    # TODO: FIX THIS >:)
-    if training_settings is not None:
-        if 'learning_rate' in training_settings:
-            learning_rate = training_settings['learning_rate']
-        else:
-            learning_rate = None
-    else:
-        learning_rate = None
-
     model_optimiser = torch_model_optimiser(
         kernel_optimiser=kernel_optimiser,
-        learning_rate=learning_rate
+        settings=kernel_optimiser_settings,
     )
 
     return GPyTorchFullModel.from_the_beginning(
@@ -216,14 +210,14 @@ def gpytorch_single_model_list(
         "a list of valid kernel choices"
     )
 
-    if type(kernels) is list:
+    if isinstance(kernels, list):
 
         assert len(kernels) == n_objectives, (
             f"Please specify a kernel choice for each objective. "
             f"Received {n_objectives} objectives but {len(kernels)} kernels."
         )
 
-        if type(kernels[0]) is str:
+        if isinstance(kernels[0], str):
 
             for kernel in kernels:
                 assert type(kernel) is str, wrong_kernel_input_message
@@ -257,10 +251,10 @@ def gpytorch_single_model_list(
         else:
             raise ValueError(wrong_kernel_input_message)
 
-    elif type(kernels) is str:
+    elif isinstance(kernels, str):
 
         if kernel_settings is not None:
-            assert type(kernel_settings) is dict, (
+            assert isinstance(kernel_settings, dict), (
                 "'kernel_settings' must be None or a single dict if 'kernels' is a single string."
             )
 
@@ -326,22 +320,12 @@ def gpytorch_single_model(
 
 def torch_model_optimiser(
         kernel_optimiser: Optional[KernelOptimiserOptions] = None,
-        learning_rate: Optional[float] = None
+        settings: Optional[ModelOptimiserSettings] = None
 ) -> TorchModelOptimiser:
 
-    # TODO: Should maybe add settings here as well
+    settings = settings or {}
 
-    # TODO: Fix this mess >:))
-
-    if learning_rate is None:
-        learning_rate = 0.1
-
-    if kernel_optimiser == 'adam':
-        return AdamModelOptimiser(
-            **{'lr': learning_rate}
-        )
-
-    elif kernel_optimiser is None:
+    if kernel_optimiser is None:
 
         defaults = _load_defaults()
 
@@ -349,8 +333,22 @@ def torch_model_optimiser(
             kernel_optimiser=defaults['model']['optimiser']
         )
 
-    else:
-        raise NotImplementedError(f"Kernel optimiser {kernel_optimiser} not implemented")
+    subclasses = get_all_subclasses(
+        cls=TorchModelOptimiser
+    )
+
+    for subclass in subclasses:
+
+        if kernel_optimiser == subclass.name:
+
+            return subclass.from_settings(
+                settings=settings
+            )
+
+    raise NotImplementedError(
+        f"Kernel optimiser '{kernel_optimiser}' not recognised. "
+        f"Implemented kernels are: {get_args(KernelOptimiserOptions)}"
+    )
 
 
 def botorch_acquisition_function(

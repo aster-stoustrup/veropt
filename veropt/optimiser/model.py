@@ -2,7 +2,7 @@ import abc
 import functools
 import warnings
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import Enum
 from typing import Any, Callable, Iterator, Mapping, Optional, Self, Sequence, TypedDict, Unpack
 
@@ -14,7 +14,7 @@ from gpytorch.distributions import MultivariateNormal
 
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass, rehydrate_object
 from veropt.optimiser.utility import (
-    check_variable_and_objective_shapes,
+    _validate_typed_dict, check_variable_and_objective_shapes,
     check_variable_objective_values_matching, enforce_amount_of_positional_arguments,
     unpack_variables_objectives_from_kwargs
 )
@@ -344,23 +344,17 @@ class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):
     name: str = 'meta'
 
     def __init__(
-            self,
-            optimiser_class: type[torch.optim.Optimizer],
-            optimiser_settings: Optional[dict] = None
+            self
     ) -> None:
 
         self.optimiser: Optional[torch.optim.Optimizer] = None
-        self.optimiser_class = optimiser_class
-
-        # TODO: Should probably do the dataclass thing here as well
-        self.optimiser_settings = optimiser_settings or {}
 
     def gather_dicts_to_save(self) -> dict:
 
         return {
             'name': self.name,
             'state': {
-                'settings': self.optimiser_settings
+                'settings': self.get_settings().gather_dicts_to_save()
             }
         }
 
@@ -370,21 +364,37 @@ class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):
             saved_state: dict
     ) -> Self:
 
-        # TODO: Make this nicer?
-        #   - This is essentially assuming an init like in the Adam implementation
-        return cls(
-            **saved_state['settings']
+        return cls.from_settings(
+            settings=saved_state['settings']
         )
 
-    def initiate_optimiser(
+    @classmethod
+    @abc.abstractmethod
+    def from_settings(
+            cls,
+            settings: Mapping[str, Any]
+    ) -> Self:
+        ...
+
+    @abc.abstractmethod
+    def get_settings(self) -> SavableDataClass:
+        ...
+
+    @abc.abstractmethod
+    def initialise_optimiser(
             self,
             parameters: Iterator[torch.nn.Parameter] | list[dict[str, Iterator[torch.nn.Parameter]]]
     ) -> None:
+        ...
 
-        self.optimiser = self.optimiser_class(
-            params=parameters,
-            **self.optimiser_settings
-        )
+
+class AdamInputDict(TypedDict, total=False):
+    learning_rate: float
+
+
+@dataclass
+class AdamParameters(SavableDataClass):
+    learning_rate: float = 0.1
 
 
 class AdamModelOptimiser(TorchModelOptimiser):
@@ -393,17 +403,42 @@ class AdamModelOptimiser(TorchModelOptimiser):
 
     def __init__(
             self,
-            **kwargs: dict
+            **settings: Unpack[AdamInputDict]
     ) -> None:
 
-        for key in kwargs.keys():
-            assert key in torch.optim.Adam.__init__.__code__.co_varnames, (
-                f"{key} is not an accepted argument for the torch optimiser 'Adam'."
-            )
+        self.settings = AdamParameters(
+            **settings
+        )
 
-        super().__init__(
-            optimiser_class=torch.optim.Adam,
-            optimiser_settings=kwargs
+        super().__init__()
+
+    def get_settings(self) -> SavableDataClass:
+        return self.settings
+
+    def initialise_optimiser(
+            self,
+            parameters: Iterator[torch.nn.Parameter] | list[dict[str, Iterator[torch.nn.Parameter]]]
+    ) -> None:
+
+        self.optimiser = torch.optim.Adam(
+            params=parameters,
+            lr=self.settings.learning_rate
+        )
+
+    @classmethod
+    def from_settings(
+            cls,
+            settings: Mapping[str, Any]
+    ) -> Self:
+
+        _validate_typed_dict(
+            typed_dict=settings,
+            expected_typed_dict_class=AdamInputDict,
+            object_name=cls.name,
+        )
+
+        return cls(
+            **settings
         )
 
 
@@ -413,7 +448,6 @@ class ModelMode(Enum):
 
 
 class GPyTorchTrainingParametersInputDict(TypedDict, total=False):
-    learning_rate: float
     loss_change_to_stop: float
     max_iter: int
     verbose: bool
@@ -422,7 +456,6 @@ class GPyTorchTrainingParametersInputDict(TypedDict, total=False):
 
 @dataclass
 class GPyTorchTrainingParameters(SavableDataClass):
-    learning_rate: float = 0.1
     loss_change_to_stop: float = 1e-6  # TODO: Find optimal value for this?
     max_iter: int = 10_000
     verbose: bool = True
@@ -782,7 +815,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         for model in self._model_list:
             parameters += model.trained_parameters
 
-        self._model_optimiser.initiate_optimiser(
+        self._model_optimiser.initialise_optimiser(
             parameters=parameters
         )
 
