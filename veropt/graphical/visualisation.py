@@ -597,10 +597,10 @@ def plot_prediction_surface_grid(
             if variable_x == variable_y:
                 pass
 
-            elif any(
+            elif any((
                     (variable_x, variable_y) in plotted_combinations,
                     (variable_no_y, variable_no_x) in plotted_combinations
-            ):
+            )):
                 pass
 
             else:
