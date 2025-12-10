@@ -701,8 +701,6 @@ class BayesianOptimiser(SavableClass):
             unnormaliser_objectives=self.get_unnormaliser_function_objectives()
         )
 
-        self.suggested_points_real_units = None
-
     def _fit_normaliser(self) -> None:
 
         self._normaliser_variables = self.normaliser_class.from_tensor(
@@ -740,6 +738,14 @@ class BayesianOptimiser(SavableClass):
         self.evaluated_objectives_normalised = self._normaliser_objectives.transform(
             tensor=self.evaluated_objectives_real_units
         )
+
+        if self.suggested_points_real_units is not None:
+
+            self.suggested_points_normalised = normalise_suggested_points(
+                suggested_points=self.suggested_points_real_units,
+                normaliser_variables=self._normaliser_variables,
+                normaliser_objectives=self._normaliser_objectives
+            )
 
         self.predictor.update_bounds(
             new_bounds=self.bounds.tensor
@@ -974,7 +980,7 @@ class BayesianOptimiser(SavableClass):
         if self.return_normalised_data:
 
             assert self.suggested_points_normalised is not None, (
-                "Normalised object 'suggested_points_normalised' has not been initiated"
+                "Normalised object 'suggested_points_normalised' has not been initialised"
             )
 
             return self.suggested_points_normalised

@@ -339,6 +339,7 @@ def test_save_points_interface_objectives() -> None:
     optimiser.run_optimisation_step()
 
     assert objective.suggested_variables is not None
+    assert optimiser.suggested_points is not None
 
     for variable_no, variable in enumerate(objective.variable_names):
         assert torch.equal(

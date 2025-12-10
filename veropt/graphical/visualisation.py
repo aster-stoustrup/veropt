@@ -30,9 +30,8 @@ from veropt.optimiser.utility import DataShape
 def plot_point_overview(
         optimiser: BayesianOptimiser,
         points: Literal['all', 'pareto-optimal', 'bayes', 'suggested', 'best'] = 'all',
-        normalised: bool = False,
-        return_figure: bool = False
-) -> Optional[go.Figure]:
+        normalised: bool = False
+) -> go.Figure:
 
     n_objectives = optimiser.n_objectives
 
@@ -139,18 +138,13 @@ def plot_point_overview(
             shown_indices=shown_inds
         )
 
-    if return_figure:
-        return figure
-    else:
-        figure.show()
-        return None
+    return figure
 
 
 def plot_progression(
         optimiser: BayesianOptimiser,
-        normalised: bool = False,
-        return_figure: bool = False
-) -> Union[None, go.Figure]:
+        normalised: bool = False
+) -> go.Figure:
 
     if normalised is False:
         objective_values = optimiser.evaluated_objectives_real_units
@@ -164,18 +158,13 @@ def plot_progression(
         n_initial_points=optimiser.n_initial_points,
     )
 
-    if return_figure:
-        return figure
-    else:
-        figure.show()
-        return None
+    return figure
 
 
 def plot_pareto_front_grid(
         optimiser: BayesianOptimiser,
-        return_figure: bool = False,
         normalised: bool = False
-) -> None | go.Figure:
+) -> go.Figure:
 
     if optimiser.return_normalised_data and normalised is False:
         variable_values = optimiser.evaluated_variables_real_units
@@ -194,23 +183,22 @@ def plot_pareto_front_grid(
 
     objective_names = optimiser.objective.objective_names
 
-    figure_or_none = _plot_pareto_front_grid(
+    figure = _plot_pareto_front_grid(
         objective_values=objective_values,
         objective_names=objective_names,
         pareto_optimal_indices=pareto_optimal_indices,
         suggested_points=suggested_points,
-        return_figure=return_figure
+        return_figure=True
     )
 
-    return figure_or_none
+    return figure
 
 
 def plot_pareto_front(
         optimiser: BayesianOptimiser,
         plotted_objective_indices: list[int],
-        return_figure: bool = False,
         normalised: bool = False
-) -> None | go.Figure:
+) -> go.Figure:
 
     if optimiser.return_normalised_data and normalised is False:
         variable_values = optimiser.evaluated_variables_real_units
@@ -227,27 +215,26 @@ def plot_pareto_front(
         objective_values=objective_values,
     )['index']
 
-    figure_or_none = _plot_pareto_front(
+    figure = _plot_pareto_front(
         objective_values=objective_values,
         pareto_optimal_indices=pareto_optimal_indices,
         plotted_objective_indices=plotted_objective_indices,
         objective_names=optimiser.objective.objective_names,
         suggested_points=suggested_points,
-        return_figure=return_figure,
+        return_figure=True,
     )
 
-    return figure_or_none
+    return figure
 
 
 def plot_prediction_grid(
         optimiser: BayesianOptimiser,
-        return_figure: bool = False,
         model_prediction_container: Optional[ModelPredictionContainer] = None,
         evaluated_point: Optional[Union[torch.Tensor, int]] = None,
         plot_acquisition: bool = False,
         n_calculated_points: Optional[int] = None,
         normalised: bool = False
-) -> Union[go.Figure, None]:
+) -> go.Figure:
 
     if normalised is False and optimiser.return_normalised_data:
         variable_values = optimiser.evaluated_variables_real_units
@@ -357,14 +344,7 @@ def plot_prediction_grid(
         plot_acquisition=plot_acquisition
     )
 
-    if return_figure:
-
-        return figure
-
-    else:
-
-        figure.show()
-        return None
+    return figure
 
 
 def run_prediction_grid_app(
@@ -391,7 +371,6 @@ def run_prediction_grid_app(
 
             figure = plot_prediction_grid(
                 optimiser=optimiser,
-                return_figure=True,
                 model_prediction_container=model_prediction_container,
                 evaluated_point=chosen_point
             )
@@ -428,7 +407,6 @@ def run_prediction_grid_app(
 
     fig_1 = plot_prediction_grid(
         optimiser=optimiser,
-        return_figure=True,
         model_prediction_container=model_prediction_container
     )
 
@@ -564,9 +542,8 @@ def plot_prediction_surface_grid(
         included_variables: Optional[Union[list[int], list[str]]] = None,
         n_points_per_dimension: int = 200,
         camera: Optional[dict[Literal['eye', 'center', 'up'], dict[Literal['x', 'y', 'z'], float]]] = None,
-        normalised: bool = False,
-        return_figure: bool = False
-) -> Optional[go.Figure]:
+        normalised: bool = False
+) -> go.Figure:
 
     if included_variables is None:
         if optimiser.objective.n_variables**2 > 50:
@@ -578,8 +555,15 @@ def plot_prediction_surface_grid(
         n_plotted_variables = optimiser.objective.n_variables
         included_variables = list(range(n_plotted_variables))
 
+    if isinstance(included_variables[0], int):
+        _included_variables: list[str] = [
+            optimiser.objective.variable_names[variable_index]  # type: ignore[index]  # included_variables is list[int]
+            for variable_index in included_variables[:-1]
+        ]
+
     else:
-        n_plotted_variables = len(included_variables)
+        _included_variables = included_variables  # type: ignore[assignment]  # Checked for other two options
+        n_plotted_variables = len(_included_variables)
 
     if evaluated_point is None:
 
@@ -605,8 +589,8 @@ def plot_prediction_surface_grid(
 
     plotted_combinations = []
 
-    for variable_no_x, variable_x in enumerate(included_variables[:-1]):
-        for variable_no_y, variable_y in islice(enumerate(included_variables), 1, len(included_variables)):
+    for variable_no_x, variable_x in enumerate(_included_variables[:-1]):
+        for variable_no_y, variable_y in islice(enumerate(_included_variables), 1, len(_included_variables)):
 
             # TODO: Shuffle things around so we can get the figure + row_col out of the user API
 
@@ -644,13 +628,8 @@ def plot_prediction_surface_grid(
         title={'text': title + title_extension}
     )
 
-    if isinstance(included_variables[0], str):
-        labels_x = included_variables[:-1]
-        labels_y = included_variables[1:]
-
-    elif isinstance(included_variables[0], int):
-        labels_x = [optimiser.objective.variable_names[variable_index] for variable_index in included_variables[:-1]]
-        labels_y = [optimiser.objective.variable_names[variable_index] for variable_index in included_variables[1:]]
+    labels_x = _included_variables[:-1]
+    labels_y = _included_variables[1:]
 
     labels_x = [
         label + '<br>' + list_with_floats_to_string(optimiser.objective.get_bounds(label)) for label in labels_x
@@ -670,8 +649,4 @@ def plot_prediction_surface_grid(
             camera=camera
         )
 
-    if return_figure:
-        return figure
-
-    else:
-        figure.show()
+    return figure

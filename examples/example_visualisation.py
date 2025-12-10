@@ -12,25 +12,22 @@ def make_figures(
         show: bool,
         save_html: bool,
         save_pdf: bool
-):
+) -> None:
 
     progression_figure = plot_progression(
-        optimiser=optimiser,
-        return_figure=True
+        optimiser=optimiser
     )
 
     points_overview_figure = plot_point_overview(
         optimiser=optimiser,
-        points='pareto-optimal',
-        return_figure=True
+        points='pareto-optimal'
     )
 
     # This graph is for 3 objectives and up
     #   - If you have 2 objectives, use 'plot_pareto_front'
     #   - If you have one objective, you don't need this graph (just use 'plot_progression')
     pareto_front_grid = plot_pareto_front_grid(
-        optimiser=optimiser,
-        return_figure=True
+        optimiser=optimiser
     )
 
     # This figure shows the surrogate model predictions
@@ -42,7 +39,6 @@ def make_figures(
     #   - See the 3d visualisation example for a 3d version of this graph
     prediction_figure = plot_prediction_grid(
         optimiser=optimiser,
-        return_figure=True,
         # evaluated_point=23  # The evaluated point can be set here
     )
 

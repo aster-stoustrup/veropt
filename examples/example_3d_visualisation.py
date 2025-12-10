@@ -9,14 +9,13 @@ def make_figures(
         show: bool,
         save_html: bool,
         save_pdf: bool
-):
+) -> None:
 
     prediction_surfaces = {}
     for objective_name in optimiser.objective.objective_names:
         prediction_surfaces[objective_name] = plot_prediction_surface_grid(
             optimiser=optimiser,
             objective=objective_name,
-            return_figure=True,
             # n_points_per_dimension=200  # The resolution can be set here (computational expense is quadratic to this)
         )
 
