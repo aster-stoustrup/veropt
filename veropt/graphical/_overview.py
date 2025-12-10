@@ -244,7 +244,7 @@ def _plot_progression(
     figure.update_layout(
         xaxis={'title': {'text': "Evaluated points"}},  # TODO: Add if they're normalised or not
         **{
-            yaxis_names_ver_2[objective_index]: {'title':{'text': objective_names[objective_index]}}
+            yaxis_names_ver_2[objective_index]: {'title': {'text': objective_names[objective_index]}}
             for objective_index in range(n_objectives)
         }
     )
