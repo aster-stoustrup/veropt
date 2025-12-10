@@ -319,6 +319,7 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             bounds: torch.Tensor,
             n_evaluations_per_step: int,
             single_step_optimiser: AcquisitionOptimiser,
+            scaling: Optional[float] = None,
             **settings: Unpack[ProximityPunishSettingsInputDict]
     ):
 
@@ -328,7 +329,7 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             **settings
         )
 
-        self.scaling: Optional[float] = None
+        self.scaling: Optional[float] = scaling
 
         super().__init__(
             bounds=bounds,
@@ -543,6 +544,7 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
     def gather_dicts_to_save(self) -> dict:
         save_dict = super().gather_dicts_to_save()
         save_dict['state']['single_step_optimiser'] = self.single_step_optimiser.gather_dicts_to_save()
+        save_dict['state']['scaling'] = self.scaling
 
         return save_dict
 
@@ -561,7 +563,8 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
         return cls(
             bounds=saved_state['bounds'],
             n_evaluations_per_step=saved_state['n_evaluations_per_step'],
-            single_step_optimiser=single_step_optimiser
+            single_step_optimiser=single_step_optimiser,
+            scaling=saved_state['scaling']
         )
 
     @classmethod
