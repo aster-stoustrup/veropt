@@ -26,7 +26,12 @@ def save_to_json(
         file_path_with_json = file_path + '.json'
 
     with open(file_path_with_json, 'w') as json_file:
-        json.dump(save_dict, json_file, cls=TensorsAsListsEncoder)
+        json.dump(
+            save_dict,
+            json_file,
+            cls=TensorsAsListsEncoder,
+            indent=2
+        )
 
 
 def load_optimiser_from_state(

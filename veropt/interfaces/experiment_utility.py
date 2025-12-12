@@ -1,10 +1,11 @@
 import json
 from enum import StrEnum
-from typing import Optional, Self
+from typing import Optional, Self, Union
 import os
 
 import torch
 
+from veropt.interfaces.result_processing import ObjectivesDict
 from veropt.interfaces.simulation import SimulationResult, SimulationResultsDict
 from veropt.interfaces.utility import Config, create_directory
 
@@ -20,7 +21,7 @@ class Point(BaseModel):
     state: str
     job_id: Optional[int] = None
     result: Optional[SimulationResult] = None
-    objective_values: Optional[dict[str, Optional[float]]] = None
+    objective_values: Optional[dict[str, float]] = None
 
 
 class ExperimentMode(StrEnum):
@@ -70,6 +71,18 @@ class ExperimentalState(Config):
             assert result is not None, f"No result found for point {point_no}"
 
         return results_batch  # type: ignore[return-value] #  Type asserted just above
+
+    def get_objective_values(
+            self,
+            start_point: int,
+            end_point: int
+    ) -> Union[ObjectivesDict, dict[int, None]]:
+
+        points_batch = {point_no: self.points[point_no] for point_no in range(start_point, end_point + 1)}
+        objective_values_batch = {point_no: point.objective_values for point_no, point in points_batch.items()}
+
+        # mypy seems to think this will be ObjectivesDict or None. I don't see why =/
+        return objective_values_batch  # type: ignore [return-value]
 
     def get_parameters(
             self,

@@ -499,8 +499,14 @@ class Experiment:
             experimental_state=self.state
         )
 
+        objective_values = self.state.get_objective_values(
+            start_point=self.current_batch_indices['start'],
+            end_point=self.current_batch_indices['end']
+        )
+
         dict_of_objectives = self.result_processor.process(
-            results=results
+            results=results,
+            existing_objective_values=objective_values
         )
 
         self.save_objectives_to_state(
@@ -528,8 +534,14 @@ class Experiment:
                 end_point=self.current_batch_indices['end']
             )
 
+            objective_values = self.state.get_objective_values(
+                start_point=self.current_batch_indices['start'],
+                end_point=self.current_batch_indices['end']
+            )
+
             dict_of_objectives = self.result_processor.process(
-                results=results
+                results=results,
+                existing_objective_values=objective_values
             )
 
             self.save_objectives_to_state(
@@ -559,8 +571,10 @@ class Experiment:
         )
 
         dict_of_objectives = self.result_processor.process(
-            results=results
+            results=results,
+            existing_objective_values=None
         )
+
         dict_of_parameters = self.state.get_parameters(
             start_point=self.current_batch_indices['start'],
             end_point=self.current_batch_indices['end']

@@ -1,5 +1,5 @@
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import StrEnum, auto
 from typing import Iterator, Optional, Self, TypedDict, Union
 
@@ -182,6 +182,9 @@ class SuggestedPoints(SavableDataClass):
             generated_with_mode=saved_state['generated_with_mode'],
             normalised=saved_state['normalised'],
         )
+
+    def gather_dicts_to_save(self) -> dict:
+        return asdict(self.copy())
 
 
 def normalise_suggested_points(

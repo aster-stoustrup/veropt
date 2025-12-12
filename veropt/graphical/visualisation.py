@@ -558,7 +558,7 @@ def plot_prediction_surface_grid(
     if isinstance(included_variables[0], int):
         _included_variables: list[str] = [
             optimiser.objective.variable_names[variable_index]  # type: ignore[index]  # included_variables is list[int]
-            for variable_index in included_variables[:-1]
+            for variable_index in included_variables
         ]
 
     else:
@@ -599,7 +599,7 @@ def plot_prediction_surface_grid(
 
             elif any((
                     (variable_x, variable_y) in plotted_combinations,
-                    (variable_no_y, variable_no_x) in plotted_combinations
+                    (variable_y, variable_x) in plotted_combinations
             )):
                 pass
 
