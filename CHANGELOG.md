@@ -23,6 +23,10 @@ Major improvements of visual tools and added new kernels.
   - a) functional and
   - b) residing in the model optimiser where it belongs
 - Model optimiser has been cleaned up and now follows same system as similar objects
+- Fixed issue from pydantic with saving nan's to json
+- jsons are pretty-printed
+- Objective values will not be re-calculated if they're already in exp state
+- Fixed minor bug when saving suggested steps
 
 ## [1.1.2] - 17-11-2025
 Added the ability to use existing run with a new objective

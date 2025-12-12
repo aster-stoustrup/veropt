@@ -557,7 +557,7 @@ class Experiment:
 
         self._save_optimiser()
 
-        if not self.current_step == (self.n_total_steps - 1):
+        if not self.current_step == self.n_total_steps:
             self.batch_manager.submit_batch(  # type: ignore[union-attr]  # Checked above
                 dict_of_parameters=dict_of_parameters,
                 experimental_state=self.state
