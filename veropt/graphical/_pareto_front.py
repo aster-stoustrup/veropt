@@ -16,6 +16,7 @@ def _plot_pareto_front_grid(
         objective_values: torch.Tensor,
         objective_names: list[str],
         pareto_optimal_indices: list[int],
+        n_initial_points: int,
         suggested_points: Optional[SuggestedPoints] = None,
         return_figure: bool = False
 ) -> Union[go.Figure, None]:
@@ -41,6 +42,7 @@ def _plot_pareto_front_grid(
                     objective_index_y=objective_index_y,
                     objective_names=objective_names,
                     pareto_optimal_indices=pareto_optimal_indices,
+                    n_initial_points=n_initial_points,
                     suggested_points=suggested_points,
                     row=row,
                     col=col
@@ -68,6 +70,7 @@ def _add_pareto_traces_2d(
         objective_index_y: int,
         objective_names: list[str],
         pareto_optimal_indices: list[int],
+        n_initial_points: int,
         suggested_points: Optional[SuggestedPoints] = None,
         row: Optional[int] = None,
         col: Optional[int] = None
@@ -83,6 +86,7 @@ def _add_pareto_traces_2d(
 
     if row is None and col is None:
         row_col_info = {}
+        show_legend = True
 
     else:
         row_col_info = {
@@ -90,18 +94,26 @@ def _add_pareto_traces_2d(
             'col': col
         }
 
+        if row == 1 and col == 1:
+            show_legend = True
+        else:
+            show_legend = False
+
     color_scale = colors.qualitative.Plotly
     color_evaluated_points = color_scale[0]
 
     figure.add_trace(
         go.Scatter(
-            x=objective_values[:, objective_index_x],
-            y=objective_values[:, objective_index_y],
+            x=objective_values[:n_initial_points, objective_index_x],
+            y=objective_values[:n_initial_points, objective_index_y],
             mode='markers',
-            name='Evaluated points',
-            legendgroup='Evaluated points',
-            showlegend=True if (row == 1 and col == 1) else False,
-            marker={'color': color_evaluated_points},
+            name='Initial points',
+            legendgroup='Initial points',
+            showlegend=show_legend,
+            marker={
+                'symbol': 'diamond',
+                'color': color_scale[2]
+            },
             customdata=point_numbers,
             hovertemplate="Point number: %{customdata[0]:.0f} <br>"
                           f"{objective_names[objective_index_x]}: " + "%{x:.3f} <br>"
@@ -112,13 +124,41 @@ def _add_pareto_traces_2d(
 
     figure.add_trace(
         go.Scatter(
+            x=objective_values[n_initial_points:, objective_index_x],
+            y=objective_values[n_initial_points:, objective_index_y],
+            mode='markers',
+            name='Bayesian points',
+            legendgroup='Bayesian points',
+            showlegend=show_legend,
+            marker={'color': color_evaluated_points},
+            customdata=point_numbers,
+            hovertemplate="Point number: %{customdata[0]:.0f} <br>"
+                          f"{objective_names[objective_index_x]}: " + "%{x:.3f} <br>"
+                          f"{objective_names[objective_index_y]}: " + "%{y:.3f} <br>"
+        ),
+        **row_col_info
+    )
+
+    marker_type_dominating = np.array(['circle'] * len(pareto_optimal_indices)).astype('U20')
+    dominating_initials = n_initial_points > np.array(pareto_optimal_indices)
+    marker_type_dominating[dominating_initials] = 'diamond'
+    marker_type_dominating_list = marker_type_dominating.tolist()
+
+    # TODO: Change colour by mean of all objectives
+    #   - Will have to normalise them first or it will be scale-dependant
+
+    figure.add_trace(
+        go.Scatter(
             x=dominating_objective_values[:, objective_index_x],
             y=dominating_objective_values[:, objective_index_y],
             mode='markers',
-            marker={'color': 'black'},
-            name='Dominating evaluated points',
-            legendgroup='Dominating evaluated points',
-            showlegend=True if (row == 1 and col == 1) else False,
+            marker={
+                'color': 'black',
+                'symbol': marker_type_dominating_list
+            },
+            name='Dominating points',
+            legendgroup='Dominating points',
+            showlegend=show_legend,
             customdata=pareto_point_numbers,
             hovertemplate="Point number: %{customdata[0]:.0f} <br>"
                           f"{objective_names[objective_index_x]}: " + "%{x:.3f} <br>"
@@ -165,7 +205,7 @@ def _add_pareto_traces_2d(
                     marker={'color': suggested_point_color},
                     name='Suggested points',
                     legendgroup="Suggested points",
-                    showlegend=True if (suggested_point_no == 0 and (row == 1 and col == 1)) else False,
+                    showlegend=True if (suggested_point_no == 0 and show_legend) else False,
                     customdata=np.dstack([
                                 [prediction['lower'][objective_index_x].detach().numpy()],
                                 [prediction['upper'][objective_index_x].detach().numpy()],
@@ -189,6 +229,7 @@ def _plot_pareto_front(
         pareto_optimal_indices: list[int],
         plotted_objective_indices: list[int],
         objective_names: list[str],
+        n_initial_points: int,
         suggested_points: Optional[SuggestedPoints] = None,
         return_figure: bool = False
 ) -> Union[go.Figure, None]:
@@ -207,6 +248,7 @@ def _plot_pareto_front(
             objective_index_y=obj_ind_y,
             objective_names=objective_names,
             pareto_optimal_indices=pareto_optimal_indices,
+            n_initial_points=n_initial_points,
             suggested_points=suggested_points
         )
 
