@@ -114,7 +114,7 @@ def _add_pareto_traces_2d(
                 'symbol': 'diamond',
                 'color': color_scale[2]
             },
-            customdata=point_numbers,
+            customdata=point_numbers[:n_initial_points],
             hovertemplate="Point number: %{customdata[0]:.0f} <br>"
                           f"{objective_names[objective_index_x]}: " + "%{x:.3f} <br>"
                           f"{objective_names[objective_index_y]}: " + "%{y:.3f} <br>"
@@ -131,7 +131,7 @@ def _add_pareto_traces_2d(
             legendgroup='Bayesian points',
             showlegend=show_legend,
             marker={'color': color_evaluated_points},
-            customdata=point_numbers,
+            customdata=point_numbers[n_initial_points:],
             hovertemplate="Point number: %{customdata[0]:.0f} <br>"
                           f"{objective_names[objective_index_x]}: " + "%{x:.3f} <br>"
                           f"{objective_names[objective_index_y]}: " + "%{y:.3f} <br>"
