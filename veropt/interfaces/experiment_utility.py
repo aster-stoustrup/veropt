@@ -110,7 +110,7 @@ class ExperimentConfig(Config):
     path_to_experiment: str
     experiment_mode: ExperimentMode
     experiment_directory_name: Optional[str] = None
-    run_script_filename: str
+    run_script_filename: str  # TODO: Make this optional or remove!!
     run_script_root_directory: Optional[str] = None
     output_filename: str
 
@@ -124,6 +124,8 @@ class PathManager:
         self.experiment_config = experiment_config
 
         create_directory(self.experiment_directory)
+        # TODO: Make this optional or remove!!
+        #   - Currently forced to use this even when not meaningful to experiment
         assert os.path.isdir(self.run_script_root_directory), "Run script root directory not found."
         create_directory(self.results_directory)
 

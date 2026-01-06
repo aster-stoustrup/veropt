@@ -700,7 +700,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             model=self._model
         )
 
-        self._initiate_optimiser()
+        self._initialise_optimiser()
 
         self._train_backwards()
 
@@ -809,7 +809,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         if self.settings.verbose:
             print("\n")
 
-    def _initiate_optimiser(self) -> None:
+    def _initialise_optimiser(self) -> None:
 
         parameters: list[dict[str, Iterator[torch.nn.Parameter]]] = []
         for model in self._model_list:
