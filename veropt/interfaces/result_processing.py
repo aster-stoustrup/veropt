@@ -1,6 +1,6 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Union, Optional
 
 import xarray as xr
 
@@ -42,21 +42,38 @@ class ResultProcessor(ABC):
 
     def process(
             self,
-            results: SimulationResultsDict
+            results: SimulationResultsDict,
+            existing_objective_values: Optional[Union[ObjectivesDict, dict[int, None]]]
     ) -> ObjectivesDict:
 
         objectives_dict: ObjectivesDict = {}
 
-        for i, result in results.items():
+        for point_no, result in results.items():
 
-            if self._return_nan(result):
-                objectives_dict[i] = {name: float('nan') for name in self.objective_names}
-            else:
-                objectives = self.calculate_objectives(result=result)
-                assert [isinstance(objectives[name], float) for name in self.objective_names], (
-                    "Objective values must be floats."
-                )
-                objectives_dict[i] = objectives  # type: ignore[assignment]  # mypy silliness
+            calculate_new_values = True
+
+            if existing_objective_values:
+
+                existing_objective_values_point = existing_objective_values[point_no]
+
+                if existing_objective_values_point is not None:
+
+                    for value in existing_objective_values_point.values():
+                        assert isinstance(value, float)
+
+                    objectives_dict[point_no] = existing_objective_values_point
+                    calculate_new_values = False
+
+            if calculate_new_values:
+
+                if self._return_nan(result):
+                    objectives_dict[point_no] = {name: float('nan') for name in self.objective_names}
+                else:
+                    objectives = self.calculate_objectives(result=result)
+                    assert [isinstance(objectives[name], float) for name in self.objective_names], (
+                        "Objective values must be floats."
+                    )
+                    objectives_dict[point_no] = objectives  # type: ignore[assignment]  # mypy silliness
 
         return objectives_dict
 

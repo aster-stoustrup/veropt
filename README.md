@@ -1,5 +1,3 @@
-from veropt.interfaces.constructors import make_experiment
-
 # _veropt_ - the versatile optimiser
 
 _veropt_ is a Python package that aims to make Bayesian Optimisation easy to approach, inspect and adjust. It was developed for the Versatile Ocean Simulator ([VEROS](https://veros.readthedocs.io/en/latest/)) with the aim of providing a user-friendly optimisation tool to tune ocean simulations to real world data. 
@@ -60,7 +58,9 @@ Once our optimisation has run for a few steps, we can visualise the surrogate mo
 For example, we can call,
 
 ```python
-plot_prediction_grid_from_optimiser(
+from veropt.graphical.visualisation import plot_prediction_grid
+
+plot_prediction_grid(
     optimiser=optimiser
 )
 ```

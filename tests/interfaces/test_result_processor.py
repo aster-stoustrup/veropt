@@ -40,7 +40,10 @@ def test_process() -> None:
             objective_names=objective_names,
             fixed_objective=True)
 
-        objectives_dict = processor.process(results=simulation_results_dict)
+        objectives_dict = processor.process(
+            results=simulation_results_dict,
+            existing_objective_values=None
+        )
 
         for i in range(3):
             assert np.isnan(objectives_dict[i][objective_name])

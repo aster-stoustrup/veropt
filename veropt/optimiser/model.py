@@ -1,6 +1,7 @@
 import abc
 import functools
 import warnings
+from contextlib import nullcontext
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Iterator, Mapping, Optional, Self, Sequence, TypedDict, Unpack
@@ -12,10 +13,11 @@ from gpytorch.constraints import GreaterThan, Interval, LessThan
 from gpytorch.distributions import MultivariateNormal
 
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass, rehydrate_object
-from veropt.optimiser.utility import _validate_typed_dict, \
-    check_variable_and_objective_shapes, \
-    check_variable_objective_values_matching, \
-    enforce_amount_of_positional_arguments, unpack_variables_objectives_from_kwargs
+from veropt.optimiser.utility import (
+    _validate_typed_dict, check_variable_and_objective_shapes,
+    check_variable_objective_values_matching, enforce_amount_of_positional_arguments,
+    unpack_variables_objectives_from_kwargs
+)
 
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
@@ -107,6 +109,7 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             mean_module: gpytorch.means.Mean,
             kernel: gpytorch.kernels.Kernel,
             n_variables: int,
+            train_noise: bool = False
     ) -> None:
 
         self.likelihood = likelihood
@@ -118,6 +121,8 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
         self.model_with_data: Optional[GPyTorchDataModel] = None
 
         self.trained_parameters: list[dict[str, Iterator[torch.nn.Parameter]]] = [{}]
+
+        self.train_noise = train_noise
 
         assert 'name' in self.__class__.__dict__, (
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
@@ -169,9 +174,29 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
     def get_settings(self) -> SavableDataClass:
         pass
 
-    @abc.abstractmethod
     def _set_up_trained_parameters(self) -> None:
-        pass
+
+        parameter_group_list = []
+
+        assert self.model_with_data is not None, "Model must be initialised to use this function."
+
+        if self.train_noise:
+
+            parameter_group_list.append(
+                {'params': self.model_with_data.parameters()}
+            )
+
+        else:
+
+            parameter_group_list.append(
+                {'params': self.model_with_data.mean_module.parameters()}
+            )
+
+            parameter_group_list.append(
+                {'params': self.model_with_data.covar_module.parameters()}
+            )
+
+        self.trained_parameters = parameter_group_list
 
     @abc.abstractmethod
     def _set_up_model_constraints(self) -> None:
@@ -234,6 +259,35 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             }
         }
 
+    def set_noise_constraint(
+            self,
+            lower_bound: float
+    ) -> None:
+
+        # Default seems to be 1e-4
+        #   - Would like to make sure we don't have noise when we try to set it to zero
+        #   - Alternatively, setting it too low might risk numerical instability?
+
+        assert self.model_with_data is not None, "Model must be initiated to change constraints"
+
+        change_greater_than_constraint(
+            lower_bound=lower_bound,
+            parameter_name='raw_noise',
+            module=self.likelihood.noise_covar
+        )
+
+    def set_noise(
+            self,
+            noise: float
+    ) -> None:
+
+        assert self.model_with_data is not None, "Model must be initiated to call this function"
+
+        if noise < self.likelihood.noise_covar.raw_noise_constraint.lower_bound:
+            noise = float(self.likelihood.noise_covar.raw_noise_constraint.lower_bound)
+
+        self.model_with_data.likelihood.noise = torch.tensor(noise)
+
 
 def change_interval_constraints(
         lower_bound: float,
@@ -285,369 +339,22 @@ def change_less_than_constraint(
     )
 
 
-class MaternParametersInputDict(TypedDict, total=False):
-    lengthscale_lower_bound: float
-    lengthscale_upper_bound: float
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
-
-
-@dataclass
-class MaternParameters(SavableDataClass):
-    lengthscale_lower_bound: float = 0.1
-    lengthscale_upper_bound: float = 2.0
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
-
-
-class DoubleMaternParametersInputDict(TypedDict, total=False):
-    lengthscale_long_lower_bound: float
-    lengthscale_long_upper_bound: float
-    lengthscale_short_lower_bound: float
-    lengthscale_short_upper_bound: float
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
-
-
-@dataclass
-class DoubleMaternParameters(SavableDataClass):
-    lengthscale_long_lower_bound: float = 0.1
-    lengthscale_long_upper_bound: float = 2.0
-    lengthscale_short_lower_bound: float = 0.001
-    lengthscale_short_upper_bound: float = 0.1
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
-
-
-class MaternSingleModel(GPyTorchSingleModel):
-
-    name = 'matern'
-
-    def __init__(
-            self,
-            n_variables: int,
-            **settings: Unpack[MaternParametersInputDict]
-    ):
-
-        likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        mean_module = gpytorch.means.ConstantMean()
-        kernel = gpytorch.kernels.MaternKernel(
-            ard_num_dims=n_variables,
-            batch_shape=torch.Size([])
-        )
-
-        self.settings = MaternParameters(
-            **settings
-        )
-
-        super().__init__(
-            likelihood=likelihood,
-            mean_module=mean_module,
-            kernel=kernel,
-            n_variables=n_variables
-        )
-
-    @classmethod
-    def from_n_variables_and_settings(
-            cls,
-            n_variables: int,
-            settings: Mapping[str, Any]
-    ) -> 'MaternSingleModel':
-
-        _validate_typed_dict(
-            typed_dict=settings,
-            expected_typed_dict_class=MaternParametersInputDict,
-            object_name=cls.name,
-        )
-
-        return cls(
-            n_variables=n_variables,
-            **settings
-        )
-
-    def _set_up_trained_parameters(self) -> None:
-
-        parameter_group_list = []
-
-        assert self.model_with_data is not None, "Model must be initialised to use this function."
-
-        if self.settings.train_noise:
-
-            parameter_group_list.append(
-                {'params': self.model_with_data.parameters()}
-            )
-
-        else:
-
-            parameter_group_list.append(
-                {'params': self.model_with_data.mean_module.parameters()}
-            )
-
-            parameter_group_list.append(
-                {'params': self.model_with_data.covar_module.parameters()}
-            )
-
-        self.trained_parameters = parameter_group_list
-
-    def _set_up_model_constraints(self) -> None:
-
-        self.change_lengthscale_constraints(
-            lower_bound=self.settings.lengthscale_lower_bound,
-            upper_bound=self.settings.lengthscale_upper_bound
-        )
-
-        self.set_noise(
-            noise=self.settings.noise
-        )
-
-        self.set_noise_constraint(
-            lower_bound=self.settings.noise_lower_bound
-        )
-
-    def change_lengthscale_constraints(
-            self,
-            lower_bound: float,
-            upper_bound: float
-    ) -> None:
-
-        assert self.model_with_data is not None, "Model must be initialised to use this function."
-
-        change_interval_constraints(
-            lower_bound=lower_bound,
-            upper_bound=upper_bound,
-            module=self.model_with_data.covar_module,
-            parameter_name='raw_lengthscale'
-        )
-
-    def get_lengthscale(self) -> torch.Tensor:
-
-        assert self.model_with_data is not None, "Must have trained model before calling this"
-
-        return self.model_with_data.covar_module.lengthscale
-
-    def set_noise(
-            self,
-            noise: float
-    ) -> None:
-
-        if self.model_with_data is not None:
-
-            if noise < self.likelihood.noise_covar.raw_noise_constraint.lower_bound:
-                noise = self.likelihood.noise_covar.raw_noise_constraint.lower_bound
-
-            self.model_with_data.likelihood.noise = torch.tensor(float(noise))
-
-        else:
-            raise NotImplementedError("Currently don't support setting constraints before model is given data.")
-
-    def set_noise_constraint(
-            self,
-            lower_bound: float
-    ) -> None:
-
-        # Default seems to be 1e-4
-        #   - Would like to make sure we don't have noise when we try to set it to zero
-        #   - Alternatively, setting it too low might risk numerical instability?
-
-        assert self.model_with_data is not None, "Model must be initiated to change constraints"
-
-        change_greater_than_constraint(
-            lower_bound=lower_bound,
-            parameter_name='raw_noise',
-            module=self.model_with_data.likelihood.noise_covar
-        )
-
-    def get_settings(self) -> SavableDataClass:
-        return self.settings
-
-
-# TODO: Make prettier, this is a midnight draft :))
-#   - Might be more correct to just use spectralmixturekernel than this
-#       - Remember the diff between RBF and matern (SMK seems to be added RBF's)
-class DoubleMaternKernelSingleModel(GPyTorchSingleModel):
-
-    name = 'double_matern'
-
-    def __init__(
-            self,
-            n_variables: int,
-            **settings: Unpack[DoubleMaternParametersInputDict]
-    ):
-
-        likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        mean_module = gpytorch.means.ConstantMean()
-
-        kernel_0 = gpytorch.kernels.MaternKernel(
-            ard_num_dims=n_variables,
-            batch_shape=torch.Size([])
-        )
-
-        kernel_1 = gpytorch.kernels.MaternKernel(
-            ard_num_dims=n_variables,
-            batch_shape=torch.Size([])
-        )
-
-        kernel = kernel_0 + kernel_1
-
-        self.settings = DoubleMaternParameters(
-            **settings
-        )
-
-        super().__init__(
-            likelihood=likelihood,
-            mean_module=mean_module,
-            kernel=kernel,
-            n_variables=n_variables
-        )
-
-    @classmethod
-    def from_n_variables_and_settings(
-            cls,
-            n_variables: int,
-            settings: Mapping[str, Any]
-    ) -> 'DoubleMaternKernelSingleModel':
-
-        _validate_typed_dict(
-            typed_dict=settings,
-            expected_typed_dict_class=DoubleMaternParametersInputDict,
-            object_name=cls.name,
-        )
-
-        return cls(
-            n_variables=n_variables,
-            **settings
-        )
-
-    def _set_up_trained_parameters(self) -> None:
-
-        parameter_group_list = []
-
-        assert self.model_with_data is not None, "Model must be initialised to use this function."
-
-        if self.settings.train_noise:
-
-            parameter_group_list.append(
-                {'params': self.model_with_data.parameters()}
-            )
-
-        else:
-
-            parameter_group_list.append(
-                {'params': self.model_with_data.mean_module.parameters()}
-            )
-
-            parameter_group_list.append(
-                {'params': self.model_with_data.covar_module.parameters()}
-            )
-
-        self.trained_parameters = parameter_group_list
-
-    def _set_up_model_constraints(self) -> None:
-
-        self.change_lengthscale_constraints(
-            kernel_number=0,
-            lower_bound=self.settings.lengthscale_long_lower_bound,
-            upper_bound=self.settings.lengthscale_long_upper_bound
-        )
-
-        self.change_lengthscale_constraints(
-            kernel_number=1,
-            lower_bound=self.settings.lengthscale_short_lower_bound,
-            upper_bound=self.settings.lengthscale_short_upper_bound
-        )
-
-        self.set_noise(
-            noise=self.settings.noise
-        )
-
-        self.set_noise_constraint(
-            lower_bound=self.settings.noise_lower_bound
-        )
-
-    def change_lengthscale_constraints(
-            self,
-            kernel_number: int,
-            lower_bound: float,
-            upper_bound: float
-    ) -> None:
-
-        assert self.model_with_data is not None, "Model must be initialised to use this method"
-
-        change_interval_constraints(
-            lower_bound=lower_bound,
-            upper_bound=upper_bound,
-            parameter_name='raw_lengthscale',
-            module=self.model_with_data.covar_module.kernels[kernel_number]
-        )
-
-    def get_lengthscale(self) -> torch.Tensor:
-
-        assert self.model_with_data is not None, "Must have trained model before calling this"
-
-        raise NotImplementedError()
-
-    def set_noise(
-            self,
-            noise: float
-    ) -> None:
-
-        if self.model_with_data is not None:
-
-            if noise < self.likelihood.noise_covar.raw_noise_constraint.lower_bound:
-                noise = self.likelihood.noise_covar.raw_noise_constraint.lower_bound
-
-            self.model_with_data.likelihood.noise = torch.tensor(float(noise))
-
-        else:
-            raise NotImplementedError("Currently don't support setting constraints before model is given data.")
-
-    def set_noise_constraint(
-            self,
-            lower_bound: float
-    ) -> None:
-
-        # Default seems to be 1e-4
-        #   - Would like to make sure we don't have noise when we try to set it to zero
-        #   - Alternatively, setting it too low might risk numerical instability?
-
-        assert self.model_with_data is not None, "Model must be initiated to change constraints"
-
-        change_greater_than_constraint(
-            lower_bound=lower_bound,
-            parameter_name='raw_noise',
-            module=self.model_with_data.likelihood.noise_covar
-        )
-
-    def get_settings(self) -> SavableDataClass:
-        return self.settings
-
-
 class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):
 
     name: str = 'meta'
 
     def __init__(
-            self,
-            optimiser_class: type[torch.optim.Optimizer],
-            optimiser_settings: Optional[dict] = None
+            self
     ) -> None:
 
         self.optimiser: Optional[torch.optim.Optimizer] = None
-        self.optimiser_class = optimiser_class
-
-        # TODO: Should probably do the dataclass thing here as well
-        self.optimiser_settings = optimiser_settings or {}
 
     def gather_dicts_to_save(self) -> dict:
 
         return {
             'name': self.name,
             'state': {
-                'settings': self.optimiser_settings
+                'settings': self.get_settings().gather_dicts_to_save()
             }
         }
 
@@ -657,21 +364,37 @@ class TorchModelOptimiser(SavableClass, metaclass=abc.ABCMeta):
             saved_state: dict
     ) -> Self:
 
-        # TODO: Make this nicer?
-        #   - This is essentially assuming an init like in the Adam implementation
-        return cls(
-            **saved_state['settings']
+        return cls.from_settings(
+            settings=saved_state['settings']
         )
 
-    def initiate_optimiser(
+    @classmethod
+    @abc.abstractmethod
+    def from_settings(
+            cls,
+            settings: Mapping[str, Any]
+    ) -> Self:
+        ...
+
+    @abc.abstractmethod
+    def get_settings(self) -> SavableDataClass:
+        ...
+
+    @abc.abstractmethod
+    def initialise_optimiser(
             self,
             parameters: Iterator[torch.nn.Parameter] | list[dict[str, Iterator[torch.nn.Parameter]]]
     ) -> None:
+        ...
 
-        self.optimiser = self.optimiser_class(
-            params=parameters,
-            **self.optimiser_settings
-        )
+
+class AdamInputDict(TypedDict, total=False):
+    learning_rate: float
+
+
+@dataclass
+class AdamParameters(SavableDataClass):
+    learning_rate: float = 0.1
 
 
 class AdamModelOptimiser(TorchModelOptimiser):
@@ -680,17 +403,42 @@ class AdamModelOptimiser(TorchModelOptimiser):
 
     def __init__(
             self,
-            **kwargs: dict
+            **settings: Unpack[AdamInputDict]
     ) -> None:
 
-        for key in kwargs.keys():
-            assert key in torch.optim.Adam.__init__.__code__.co_varnames, (
-                f"{key} is not an accepted argument for the torch optimiser 'Adam'."
-            )
+        self.settings = AdamParameters(
+            **settings
+        )
 
-        super().__init__(
-            optimiser_class=torch.optim.Adam,
-            optimiser_settings=kwargs
+        super().__init__()
+
+    def get_settings(self) -> SavableDataClass:
+        return self.settings
+
+    def initialise_optimiser(
+            self,
+            parameters: Iterator[torch.nn.Parameter] | list[dict[str, Iterator[torch.nn.Parameter]]]
+    ) -> None:
+
+        self.optimiser = torch.optim.Adam(
+            params=parameters,
+            lr=self.settings.learning_rate
+        )
+
+    @classmethod
+    def from_settings(
+            cls,
+            settings: Mapping[str, Any]
+    ) -> Self:
+
+        _validate_typed_dict(
+            typed_dict=settings,
+            expected_typed_dict_class=AdamInputDict,
+            object_name=cls.name,
+        )
+
+        return cls(
+            **settings
         )
 
 
@@ -700,18 +448,18 @@ class ModelMode(Enum):
 
 
 class GPyTorchTrainingParametersInputDict(TypedDict, total=False):
-    learning_rate: float
     loss_change_to_stop: float
     max_iter: int
     verbose: bool
+    max_cholesky_size: Optional[int]
 
 
 @dataclass
 class GPyTorchTrainingParameters(SavableDataClass):
-    learning_rate: float = 0.1
     loss_change_to_stop: float = 1e-6  # TODO: Find optimal value for this?
     max_iter: int = 10_000
     verbose: bool = True
+    max_cholesky_size: Optional[int] = None
 
 
 class GPyTorchFullModel(SurrogateModel, SavableClass):
@@ -724,10 +472,10 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             n_objectives: int,
             single_model_list: Sequence[GPyTorchSingleModel],
             model_optimiser: TorchModelOptimiser,
-            training_settings: GPyTorchTrainingParameters
+            settings: GPyTorchTrainingParameters
     ) -> None:
 
-        self.training_settings = training_settings
+        self.settings = settings
 
         assert len(single_model_list) == n_objectives, "Number of objectives must match the length of the model list"
 
@@ -776,7 +524,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             n_objectives=n_objectives,
             single_model_list=single_model_list,
             model_optimiser=model_optimiser,
-            training_settings=training_settings
+            settings=training_settings
         )
 
     @classmethod
@@ -811,7 +559,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             n_objectives=saved_state['n_objectives'],
             single_model_list=model_list,
             model_optimiser=model_optimiser,
-            training_settings=settings
+            settings=settings
         )
 
     @staticmethod
@@ -865,11 +613,14 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         return (
             f"{self.__class__.__name__}("
             f"\n{''.join([f"{model} \n" for model in self._model_list])}"
-            f"settings: {self.training_settings}\n"
+            f"settings: {self.settings}\n"
             f")"
         )
 
-    def __getitem__(self, model_no: int) -> GPyTorchSingleModel:
+    def __getitem__(
+            self,
+            model_no: int
+    ) -> GPyTorchSingleModel:
 
         if model_no > len(self._model_list) - 1:
             raise IndexError()
@@ -893,11 +644,18 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
         assert self._likelihood is not None, "Model must be initiated to call it"
         assert self._model is not None, "Model must be initiated to call it"
 
-        estimated_objective_values = self._likelihood(
-            *self._model(
-                *([variable_values] * self.n_objectives)
+        if self.settings.max_cholesky_size is not None:
+            evaluate_context = gpytorch.settings.max_cholesky_size(self.settings.max_cholesky_size)
+        else:
+            evaluate_context = nullcontext()
+
+        with evaluate_context:
+
+            estimated_objective_values = self._likelihood(
+                *self._model(
+                    *([variable_values] * self.n_objectives)
+                )
             )
-        )
 
         self._set_mode(model_mode=previous_mode)
 
@@ -914,7 +672,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             'name': self.name,
             'state': {
                 'model_dicts': model_dicts,
-                'settings': self.training_settings.gather_dicts_to_save(),
+                'settings': self.settings.gather_dicts_to_save(),
                 'model_optimiser': self._model_optimiser.gather_dicts_to_save(),
                 'n_variables': self.n_variables,
                 'n_objectives': self.n_objectives,
@@ -942,7 +700,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             model=self._model
         )
 
-        self._initiate_optimiser()
+        self._initialise_optimiser()
 
         self._train_backwards()
 
@@ -1003,51 +761,61 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
         loss_difference = torch.tensor(1e5)  # initial values
         loss = torch.tensor(1e20)  # TODO: Find a way to make sure this number is always big enough
-        assert self.training_settings.loss_change_to_stop < loss_difference
+        assert self.settings.loss_change_to_stop < loss_difference
         iteration = 1
 
-        while bool(loss_difference > self.training_settings.loss_change_to_stop):
+        # TODO: This should be 0 when using spectral delta (I think :)) )
+        #   - So that's a little awkward, but we might not rly need spectral delta?
+        #   - Maybe we can do a warning somewhere or just delete the kernel (and this setting?)
+        if self.settings.max_cholesky_size is not None:
+            training_context = gpytorch.settings.max_cholesky_size(self.settings.max_cholesky_size)
+        else:
+            training_context = nullcontext()
 
-            self._model_optimiser.optimiser.zero_grad()
+        with training_context:
 
-            assert isinstance(self._model.train_inputs, list)
-            train_inputs: list = self._model.train_inputs
+            while bool(loss_difference > self.settings.loss_change_to_stop):
 
-            output = self._model(*train_inputs)
+                self._model_optimiser.optimiser.zero_grad()
 
-            previous_loss = loss
-            loss = -self._marginal_log_likelihood(  # type: ignore  # gpytorch seems to be missing type-hints
-                output,
-                self._model.train_targets
-            )
+                assert isinstance(self._model.train_inputs, list)
+                train_inputs: list = self._model.train_inputs
 
-            loss.backward()
-            loss_difference = torch.abs(previous_loss - loss)
+                output = self._model(*train_inputs)
 
-            self._model_optimiser.optimiser.step()
-
-            if self.training_settings.verbose:
-                print(
-                    f"Training model... Iteration {iteration} (of a maximum {self.training_settings.max_iter})"
-                    f" - MLL: {loss.item():.3f}",
-                    end="\r"
+                previous_loss = loss
+                loss = -self._marginal_log_likelihood(  # type: ignore  # gpytorch seems to be missing type-hints
+                    output,
+                    self._model.train_targets
                 )
 
-            iteration += 1
-            if iteration > self.training_settings.max_iter:
-                warnings.warn("Stopped training due to maximum iterations reached.")
-                break
+                loss.backward()
+                loss_difference = torch.abs(previous_loss - loss)
 
-        if self.training_settings.verbose:
+                self._model_optimiser.optimiser.step()
+
+                if self.settings.verbose and (iteration % 10 == 0):
+                    print(
+                        f"Training model... Iteration {iteration} (of a maximum {self.settings.max_iter})"
+                        f" - MLL: {loss.item():.3f}",
+                        end="\r"
+                    )
+
+                iteration += 1
+                if iteration > self.settings.max_iter:
+                    warnings.warn("Stopped training due to maximum iterations reached.")
+                    break
+
+        if self.settings.verbose:
             print("\n")
 
-    def _initiate_optimiser(self) -> None:
+    def _initialise_optimiser(self) -> None:
 
         parameters: list[dict[str, Iterator[torch.nn.Parameter]]] = []
         for model in self._model_list:
             parameters += model.trained_parameters
 
-        self._model_optimiser.initiate_optimiser(
+        self._model_optimiser.initialise_optimiser(
             parameters=parameters
         )
 

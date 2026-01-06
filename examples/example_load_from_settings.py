@@ -7,6 +7,6 @@ objective = Hartmann(
 )
 
 optimiser = load_optimiser_from_settings(
-    file_name='example_settings.json',
+    file_name='example_optimiser_settings.json',
     objective=objective,
 )

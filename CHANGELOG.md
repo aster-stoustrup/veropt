@@ -1,6 +1,54 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 10-12-2025
+Major improvements of visual tools and added new kernels.
+
+### Added
+- New built-in kernels
+- 3d prediction plot
+- Ability to run all graphs without normalisation (now default)
+- Template for writing a new experiment
+- Two visualisation examples
+- General improvement to most visual tools
+- 
+
+### Changed
+- Moved some internal visual methods to their own folders
+  - 'visualisation.py' is now where users should go to find visual methods
+- Changed naming of public visual methods
+- Suggested points are now reset after loading new data instead of 
+  after saving suggestions
+- Learning rate setting has been fixed and is now
+  - a) functional and
+  - b) residing in the model optimiser where it belongs
+- Model optimiser has been cleaned up and now follows same system as similar objects
+- Fixed issue from pydantic with saving nan's to json
+- jsons are pretty-printed
+- Objective values will not be re-calculated if they're already in exp state
+- Fixed minor bug when saving suggested steps
+
+## [1.1.2] - 17-11-2025
+Added the ability to use existing run with a new objective
+
+### Added
+- New experiment constructor that will use new ability to create 
+  new version of existing experiment.
+
+### Changed
+- Name and location of optimiser and experiment state jsons
+
+## [1.1.0] - 25-10-2025
+Updated interfaces to allow pausing and resuming runs.
+
+### Added
+- Ability to resume runs that have been stopped
+- Support for optimiser configuration
+- Experiment will save optimiser state and reload it
+
+### Changed
+- Some internal refactoring on the Experiment class
+
 ## [1.0.0] - 15-07-2025
 Refactor of the entire project! 
 

@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import abc
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping, Optional, Self, TypedDict, Unpack
+from typing import Any, Literal, Mapping, Optional, Self, TypedDict, Unpack, Callable
 
 import numpy as np
 import scipy
@@ -278,6 +280,7 @@ class ProximityPunishAcquisitionFunction(AcquisitionFunction):
             *,
             variable_values: torch.Tensor
     ) -> torch.Tensor:
+
         original_acquisition_value = self.original_acquisition_function(
             variable_values=variable_values
         )
@@ -316,6 +319,7 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             bounds: torch.Tensor,
             n_evaluations_per_step: int,
             single_step_optimiser: AcquisitionOptimiser,
+            scaling: Optional[float] = None,
             **settings: Unpack[ProximityPunishSettingsInputDict]
     ):
 
@@ -325,7 +329,7 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             **settings
         )
 
-        self.scaling: Optional[float] = None
+        self.scaling: Optional[float] = scaling
 
         super().__init__(
             bounds=bounds,
@@ -422,6 +426,38 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             new_bounds=new_bounds
         )
 
+    def get_modified_acquisition_values(
+            self,
+            *,
+            acquisition_function: AcquisitionFunction,
+            variable_values: torch.Tensor,
+            points_to_punish: list[torch.Tensor],
+    ) -> list[torch.Tensor]:
+
+        assert self.scaling is not None, "Must have found scaling to call this method"
+
+        punishing_acquisition_function = ProximityPunishAcquisitionFunction(
+            original_acquisition_function=acquisition_function,
+            other_points=[],
+            scaling=self.scaling,
+            alpha=self.settings.alpha,
+            omega=self.settings.omega
+        )
+
+        modified_acquisition_values: list[torch.Tensor] = []
+
+        for last_included_point_no in range(1, len(points_to_punish)):
+
+            punishing_acquisition_function.update_points(
+                new_points=points_to_punish[0:last_included_point_no]
+            )
+
+            modified_acquisition_values.append(punishing_acquisition_function(
+                variable_values=variable_values,
+            ))
+
+        return modified_acquisition_values
+
     def _sample_acq_func(
             self,
             acquisition_function: AcquisitionFunction
@@ -508,6 +544,7 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
     def gather_dicts_to_save(self) -> dict:
         save_dict = super().gather_dicts_to_save()
         save_dict['state']['single_step_optimiser'] = self.single_step_optimiser.gather_dicts_to_save()
+        save_dict['state']['scaling'] = self.scaling
 
         return save_dict
 
@@ -526,7 +563,8 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
         return cls(
             bounds=saved_state['bounds'],
             n_evaluations_per_step=saved_state['n_evaluations_per_step'],
-            single_step_optimiser=single_step_optimiser
+            single_step_optimiser=single_step_optimiser,
+            scaling=saved_state['scaling']
         )
 
     @classmethod
@@ -542,3 +580,33 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
 
     def get_settings(self) -> SavableDataClass:
         return self.settings
+
+
+def _calculate_proximity_punished_acquisition_values(
+        proximity_punish_optimiser: ProximityPunishmentSequentialOptimiser,
+        acquisition_function: AcquisitionFunction,
+        normaliser_variables: Callable[[torch.Tensor], torch.Tensor],
+        evaluated_point: torch.Tensor,
+        variable_index: int,
+        variable_array: torch.Tensor,
+        suggested_points_variables: torch.Tensor,
+        normalised: bool
+) -> list[torch.Tensor]:
+
+    n_suggested_points = suggested_points_variables.shape[DataShape.index_points]
+
+    full_variable_array = evaluated_point.repeat(len(variable_array), 1)
+    full_variable_array[:, variable_index] = variable_array
+
+    suggested_points_variables_list = [suggested_points_variables[i, :] for i in range(n_suggested_points)]
+
+    if normalised is False:
+        full_variable_array = normaliser_variables(full_variable_array)
+
+    modified_acquisition_values = proximity_punish_optimiser.get_modified_acquisition_values(
+        acquisition_function=acquisition_function,
+        variable_values=full_variable_array,
+        points_to_punish=suggested_points_variables_list
+    )
+
+    return modified_acquisition_values

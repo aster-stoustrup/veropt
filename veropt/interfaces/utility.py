@@ -1,9 +1,10 @@
+import math
 import os
 import shutil
 import sys
 from typing import Self, Union
-
-from pydantic import BaseModel
+import json
+from pydantic import BaseModel, ConfigDict
 
 
 def create_directory(path: str) -> None:
@@ -40,7 +41,27 @@ def copy_files(
             print(f"Skipping non-file: {source_file}")
 
 
+def _replace_nans_in_json_dict(
+        dict_: dict
+) -> dict:
+    for key, value in dict_.items():
+        if isinstance(value, dict):
+            dict_[key] = _replace_nans_in_json_dict(
+                dict_=value
+            )
+
+        elif isinstance(value, float):
+            if math.isnan(value):
+                dict_[key] = 'NaN'
+
+    return dict_
+
+
 class Config(BaseModel):
+
+    model_config = ConfigDict(
+        ser_json_inf_nan='strings'
+    )
 
     @classmethod
     def load(
@@ -60,8 +81,16 @@ class Config(BaseModel):
             config_file: str
     ) -> None:
 
-        with open(config_file, "w") as f:
-            f.write(self.model_dump_json())
+        with open(config_file, "w") as json_file:
+
+            json_dict = self.model_dump(mode='json')
+            json_dict = _replace_nans_in_json_dict(json_dict)  # Necessary because of pydantic bug >:)
+
+            json.dump(
+                json_dict,
+                json_file,
+                indent=2
+            )
 
     @classmethod
     def load_from_json(

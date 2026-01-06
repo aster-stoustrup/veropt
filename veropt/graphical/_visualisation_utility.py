@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from plotly.express import colors
 
+from veropt.optimiser.optimiser_utility import SuggestedPoints
 from veropt.optimiser.utility import DataShape, PredictionDict
 
 
@@ -43,26 +44,38 @@ def get_continuous_colour(
         colortype="rgb"
     )
 
-    return intermediate_colour
+    # Trying to fix a plotly bug >:(
+    #   - Might still make a small error, should test when some of the colours are very small
+    unlabeled_colour = colors.unlabel_rgb(intermediate_colour)
+    relabeled_colour = f"rgb({unlabeled_colour[0]:.2f}, {unlabeled_colour[1]:.2f}, {unlabeled_colour[2]:.2f})"
+
+    return relabeled_colour
 
 
 def opacity_for_multidimensional_points(
-        variable_index: int,
-        n_variables: int,
+        variable_indices: list[int],
         variable_values: torch.Tensor,
         evaluated_point: torch.Tensor,
         alpha_min: float = 0.1,
         alpha_max: float = 0.8
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
-    distances_list = []
-    index_wo_var_ind = torch.arange(n_variables) != variable_index
-    for point_no in range(variable_values.shape[DataShape.index_points]):
-        distances_list.append(np.linalg.norm(
-            evaluated_point[0, index_wo_var_ind] - variable_values[point_no, index_wo_var_ind]
-        ))
+    n_variables = variable_values.shape[DataShape.index_dimensions]
 
-    distances = torch.tensor(distances_list)
+    indices_except_plane = torch.ones(n_variables, dtype=torch.bool)
+    for variable_index in variable_indices:
+        indices_except_plane[variable_index] = False
+
+    means = variable_values.mean(dim=0)
+    standard_deviations = torch.sqrt(variable_values.var(dim=0))
+
+    normalised_variable_values = (variable_values - means) / standard_deviations
+    normalised_point = (evaluated_point - means) / standard_deviations
+
+    distances = torch.linalg.vector_norm(
+        normalised_point[0, indices_except_plane] - normalised_variable_values[:, indices_except_plane],
+        dim=1
+    )
 
     normalised_distances = (
         ((distances - distances.min()) / distances.max()) / ((distances - distances.min()) / distances.max()).max()
@@ -77,16 +90,35 @@ def opacity_for_multidimensional_points(
     return alpha_values, normalised_distances
 
 
+def get_point_from_number(
+        point_number: int,
+        variable_values: torch.Tensor,
+        suggested_points: Optional[SuggestedPoints]
+) -> torch.Tensor:
+
+    if suggested_points is not None:
+        concatenated_variable_values = torch.concat([
+            variable_values,
+            suggested_points.variable_values
+        ])
+    else:
+        concatenated_variable_values = variable_values
+
+    point = concatenated_variable_values[point_number:point_number + 1]
+
+    return point
+
+
 class ModelPrediction:
     def __init__(
             self,
             variable_index: int,
             point: torch.Tensor,
             title: str,
-            variable_array: np.ndarray,
+            variable_array: torch.Tensor,
             predicted_objective_values: PredictionDict,
-            acquisition_values: torch.Tensor,
-            samples: Optional[torch.Tensor] = None
+            acquisition_values: Optional[torch.Tensor],
+            samples: list[torch.Tensor]
     ) -> None:
 
         self.variable_index = variable_index
@@ -98,8 +130,11 @@ class ModelPrediction:
         self.predicted_values_mean = predicted_objective_values['mean']
         self.predicted_values_lower = predicted_objective_values['lower']
         self.predicted_values_upper = predicted_objective_values['upper']
-        self.acquisition_values: np.ndarray = acquisition_values.detach().numpy()
-        self.samples: Optional[torch.Tensor] = samples
+        if acquisition_values is None:
+            self.acquisition_values = acquisition_values
+        else:
+            self.acquisition_values = acquisition_values.detach().numpy()
+        self.samples = samples
 
         self.modified_acquisition_values: Optional[list[torch.Tensor]] = None
 
@@ -111,7 +146,13 @@ class ModelPrediction:
 
 
 class ModelPredictionContainer:
-    def __init__(self) -> None:
+    def __init__(
+            self,
+            normalised: bool
+    ) -> None:
+
+        self.normalised = normalised
+
         self.data: list[ModelPrediction] = []
         self.points: torch.Tensor = torch.tensor([])
         self.variable_indices: np.ndarray = np.array([])

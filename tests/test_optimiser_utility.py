@@ -119,7 +119,7 @@ def test_get_pareto_optimal_points() -> None:
     )
 
     pareto_variables, pareto_values, pareto_indices = (
-        pareto_optimal_points['variables'], pareto_optimal_points['objectives'], pareto_optimal_points['indices']
+        pareto_optimal_points['variables'], pareto_optimal_points['objectives'], pareto_optimal_points['index']
     )
 
     assert torch.equal(true_pareto_variables, pareto_variables)
@@ -167,7 +167,7 @@ def test_get_pareto_optimal_points_weights() -> None:
     )
 
     pareto_variables, pareto_values, pareto_indices = (
-        pareto_optimal_points['variables'], pareto_optimal_points['objectives'], pareto_optimal_points['indices']
+        pareto_optimal_points['variables'], pareto_optimal_points['objectives'], pareto_optimal_points['index']
     )
 
     assert torch.equal(true_pareto_variables, pareto_variables)

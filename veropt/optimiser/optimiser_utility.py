@@ -1,5 +1,5 @@
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import StrEnum, auto
 from typing import Iterator, Optional, Self, TypedDict, Union
 
@@ -7,6 +7,7 @@ import torch
 
 from veropt.optimiser.initial_points import InitialPointsChoice
 from veropt.optimiser.initial_points import InitialPointsGenerationMode
+from veropt.optimiser.normalisation import Normaliser
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
 from veropt.optimiser.utility import DataShape, PredictionDict, TensorWithNormalisationFlag
 
@@ -157,6 +158,99 @@ class SuggestedPoints(SavableDataClass):
             generated_with_mode=deepcopy(self.generated_with_mode),
             normalised=deepcopy(self.normalised),
         )
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+
+        if saved_state["predicted_objective_values"] is None:
+            prediction: Optional[PredictionDict] = None
+
+        else:
+
+            prediction = {  # type: ignore[assignment]  # mypy is silly
+                prediction_type: torch.tensor(saved_state['predicted_objective_values'][prediction_type])
+                for prediction_type in ('mean', 'lower', 'upper')
+            }
+
+        return cls(
+            variable_values=torch.tensor(saved_state['variable_values']),
+            predicted_objective_values=prediction,
+            generated_at_step=saved_state['generated_at_step'],
+            generated_with_mode=saved_state['generated_with_mode'],
+            normalised=saved_state['normalised'],
+        )
+
+    def gather_dicts_to_save(self) -> dict:
+        return asdict(self.copy())
+
+
+def normalise_suggested_points(
+        suggested_points: SuggestedPoints,
+        normaliser_variables: Normaliser,
+        normaliser_objectives: Normaliser
+) -> SuggestedPoints:
+
+    assert suggested_points.normalised is False
+
+    normalised_variable_values = normaliser_variables.transform(
+        suggested_points.variable_values
+    )
+
+    if suggested_points.predicted_objective_values is not None:
+
+        normalised_prediction: Optional[PredictionDict] = {  # type: ignore[assignment]  # mypy silliness
+            prediction_type: normaliser_objectives.transform(
+                suggested_points.predicted_objective_values[prediction_type]  # type: ignore[literal-required]
+            )
+            for prediction_type in ('mean', 'lower', 'upper')
+        }
+
+    else:
+        normalised_prediction = None
+
+    return SuggestedPoints(
+        variable_values=normalised_variable_values,
+        predicted_objective_values=normalised_prediction,
+        generated_at_step=suggested_points.generated_at_step,
+        generated_with_mode=suggested_points.generated_with_mode,
+        normalised=True
+    )
+
+
+def unnormalise_suggested_points(
+        suggested_points: SuggestedPoints,
+        normaliser_variables: Normaliser,
+        normaliser_objectives: Normaliser
+) -> SuggestedPoints:
+
+    assert suggested_points.normalised
+
+    normalised_variable_values = normaliser_variables.inverse_transform(
+        suggested_points.variable_values
+    )
+
+    if suggested_points.predicted_objective_values is not None:
+
+        normalised_prediction: Optional[PredictionDict] = {  # type: ignore[assignment]  # mypy silliness
+            prediction_type: normaliser_objectives.inverse_transform(
+                suggested_points.predicted_objective_values[prediction_type]  # type: ignore[literal-required]
+            )
+            for prediction_type in ('mean', 'lower', 'upper')
+        }
+
+    else:
+        normalised_prediction = None
+
+    return SuggestedPoints(
+        variable_values=normalised_variable_values,
+        predicted_objective_values=normalised_prediction,
+        generated_at_step=suggested_points.generated_at_step,
+        generated_with_mode=suggested_points.generated_with_mode,
+        normalised=False
+    )
 
 
 def _format_number(
@@ -313,7 +407,7 @@ def _get_points_greater_than(
 class ParetoOptimalPoints(TypedDict):
     variables: torch.Tensor
     objectives: torch.Tensor
-    indices: list[int]
+    index: list[int]
 
 
 def get_pareto_optimal_points(
@@ -352,7 +446,7 @@ def get_pareto_optimal_points(
     return {
         'variables': variable_values[pareto_optimal_indices_tensor],
         'objectives': objective_values[pareto_optimal_indices_tensor],
-        'indices': pareto_optimal_indices
+        'index': pareto_optimal_indices
     }
 
 

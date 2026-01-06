@@ -4,10 +4,10 @@ import pytest
 
 from veropt.optimiser.saver_loader_utility import rehydrate_object
 from veropt.optimiser.objective import Objective
-from veropt.interfaces.experiment import ExperimentObjective, Experiment, _mask_nans
+from veropt.interfaces.experiment import Experiment, _mask_nans
 from veropt.interfaces.local_simulation import MockSimulationRunner, MockSimulationConfig
 from veropt.interfaces.result_processing import MockResultProcessor
-from veropt.interfaces.experiment_utility import ExperimentConfig, ExperimentalState, Point
+from veropt.interfaces.experiment_utility import ExperimentConfig, ExperimentalState, Point, ExperimentObjective
 
 import numpy as np
 

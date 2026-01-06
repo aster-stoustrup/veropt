@@ -18,6 +18,8 @@ def _check_if_point_exists(
         experimental_state: ExperimentalState
 ) -> None:
 
+    # TODO: This is using try/except as logic which is generally not recommendable
+    #   - Need to re-write by e.g. checking length of 'points'
     try:
         _ = experimental_state.points[i].state
     except KeyError:
