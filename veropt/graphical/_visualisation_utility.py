@@ -101,8 +101,18 @@ def get_point_from_number(
             variable_values,
             suggested_points.variable_values
         ])
+        suggested_points_error_string = f" and {suggested_points.variable_values.shape[0]} suggested points"
     else:
         concatenated_variable_values = variable_values
+        suggested_points_error_string = ""
+
+    if point_number >= concatenated_variable_values.shape[0]:
+        raise ValueError(
+            f"The received point number '{point_number}' is out of range, since there are {variable_values.shape[0]} "
+            f"evaluated points"
+            + suggested_points_error_string
+            + f". The maximal point number is {concatenated_variable_values.shape[0] - 1}."
+        )
 
     point = concatenated_variable_values[point_number:point_number + 1]
 

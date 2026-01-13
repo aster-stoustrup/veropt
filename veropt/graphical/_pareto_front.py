@@ -206,6 +206,7 @@ def _add_pareto_traces_2d(
                     name='Suggested points',
                     legendgroup="Suggested points",
                     showlegend=True if (suggested_point_no == 0 and show_legend) else False,
+                    visible='legendonly',
                     customdata=np.dstack([
                                 [prediction['lower'][objective_index_x].detach().numpy()],
                                 [prediction['upper'][objective_index_x].detach().numpy()],
