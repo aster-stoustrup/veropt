@@ -603,7 +603,7 @@ def _plot_prediction_surface(
         figure = go.Figure()
 
     if row_col is None:
-        current_point_marker_size = 20
+        current_point_marker_size = 10
 
         row_col_args = {}
         marker_args = {}

@@ -449,7 +449,8 @@ def plot_prediction_surface(
         normalised: bool = False,
         n_points_per_dimension: int = 200,
         figure: Optional[go.Figure] = None,
-        row_col: Optional[tuple] = None
+        row_col: Optional[tuple] = None,
+        camera: Optional[dict[Literal['eye', 'center', 'up'], dict[Literal['x', 'y', 'z'], float]]] = None
 ) -> go.Figure:
 
     if normalised is False:
@@ -519,7 +520,7 @@ def plot_prediction_surface(
         y_axis_title += ' (normalised)'
         z_axis_title += ' (normalised)'
 
-    return _plot_prediction_surface(
+    figure = _plot_prediction_surface(
         prediction_objective_matrix=prediction_objective_matrix,
         prediction_grid_x=grid_x,
         prediction_grid_y=grid_y,
@@ -535,6 +536,12 @@ def plot_prediction_surface(
         figure=figure,
         row_col=row_col
     )
+
+    if camera is not None:
+        # Maybe move to underlying function
+        figure.update_layout(scene_camera=camera)
+
+    return figure
 
 
 def plot_prediction_surface_grid(
@@ -615,7 +622,8 @@ def plot_prediction_surface_grid(
                     normalised=normalised,
                     n_points_per_dimension=n_points_per_dimension,
                     figure=figure,
-                    row_col=(variable_no_y, variable_no_x + 1)
+                    row_col=(variable_no_y, variable_no_x + 1),
+                    camera=camera
                 )
 
                 plotted_combinations.append(
@@ -647,10 +655,5 @@ def plot_prediction_surface_grid(
         labels_x=labels_x,
         labels_y=labels_y[::-1]
     )
-
-    if camera is not None:
-        figure.update_scenes(
-            camera=camera
-        )
 
     return figure

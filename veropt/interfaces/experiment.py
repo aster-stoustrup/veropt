@@ -243,7 +243,7 @@ class Experiment:
         old_state_path = old_path_manager.experimental_state_json
 
         assert new_experiment_config.experiment_name == old_experiment_config.experiment_name, (
-            f"Attempted to make new version of experiment '{old_experiment_config.experiment_name}' but name doesn't"
+            f"Attempted to make new version of experiment '{old_experiment_config.experiment_name}' but name doesn't "
             f"match with the one in the new configuration file ('{new_experiment_config.experiment_name}')."
         )
 
