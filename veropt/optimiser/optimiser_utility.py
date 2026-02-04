@@ -253,6 +253,23 @@ def unnormalise_suggested_points(
     )
 
 
+class ReferencePointInputDict(TypedDict):
+    variable_values: torch.Tensor
+    objective_values: torch.Tensor
+
+
+@dataclass
+class ReferencePoint(SavableDataClass):
+    variable_values: torch.Tensor
+    objective_values: Optional[torch.Tensor]
+
+    def add_objective_values(
+            self,
+            objective_values: torch.Tensor
+    ) -> None:
+        self.objective_values = objective_values
+
+
 def _format_number(
         number: float
 ) -> str:

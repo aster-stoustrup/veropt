@@ -15,7 +15,8 @@ from veropt.optimiser.objective import (
 )
 from veropt.optimiser.optimiser_utility import (
     BestPoints, OptimisationMode,
-    OptimiserSettings, OptimiserSettingsInputDict, ParetoOptimalPoints, SuggestedPoints,
+    OptimiserSettings, OptimiserSettingsInputDict, ParetoOptimalPoints, ReferencePoint, ReferencePointInputDict,
+    SuggestedPoints,
     format_input_from_objective,
     format_output_for_objective, get_best_points, get_pareto_optimal_points,
     list_with_floats_to_string, normalise_suggested_points, unnormalise_suggested_points
@@ -42,7 +43,8 @@ class BayesianOptimiser(SavableClass):
             suggested_points_real_units: Optional[SuggestedPoints],
             suggested_points_history: list[SuggestedPoints],
             evaluated_variables_real_units: torch.Tensor,
-            evaluated_objectives_real_units: torch.Tensor
+            evaluated_objectives_real_units: torch.Tensor,
+            reference_point: Optional[ReferencePoint]
     ):
         self.objective = objective
         self.n_objectives = objective.n_objectives
@@ -62,6 +64,8 @@ class BayesianOptimiser(SavableClass):
 
         self._suggested_points_real_units = suggested_points_real_units
         self.suggested_points_history = suggested_points_history
+
+        self.reference_point = reference_point
 
         self.normaliser_class = normaliser_class
         self._normaliser_variables = normaliser_variables
@@ -111,6 +115,7 @@ class BayesianOptimiser(SavableClass):
             objective: Union[CallableObjective, InterfaceObjective],
             predictor: Predictor,
             normaliser_class: type[Normaliser],
+            reference_point: Optional[ReferencePointInputDict] = None,
             **kwargs: Unpack[OptimiserSettingsInputDict]
     ) -> 'BayesianOptimiser':
 
@@ -149,6 +154,15 @@ class BayesianOptimiser(SavableClass):
         suggested_points = None
         suggested_points_history: list[SuggestedPoints] = []
 
+        if reference_point is not None:
+            reference_point_in_class = ReferencePoint(
+                variable_values=reference_point['variable_values'],
+                objective_values=reference_point['objective_values'],
+            )
+
+        else:
+            reference_point_in_class = None
+
         return cls(
             objective=objective,
             predictor=predictor,
@@ -160,7 +174,8 @@ class BayesianOptimiser(SavableClass):
             normaliser_variables=normaliser_variables,
             normaliser_objectives=normaliser_objectives,
             evaluated_variables_real_units=evaluated_variables_real_units,
-            evaluated_objectives_real_units=evaluated_objectives_real_units
+            evaluated_objectives_real_units=evaluated_objectives_real_units,
+            reference_point=reference_point_in_class
         )
 
     @classmethod
@@ -246,6 +261,13 @@ class BayesianOptimiser(SavableClass):
 
         assert evaluated_objective_values.normalised is False
 
+        if saved_state['reference_point'] is None:
+            reference_point = None
+        else:
+            reference_point = ReferencePoint.from_saved_state(
+                saved_state=saved_state['reference_point']
+            )
+
         settings = OptimiserSettings.from_saved_state(
             saved_state['settings']
         )
@@ -261,7 +283,8 @@ class BayesianOptimiser(SavableClass):
             suggested_points_real_units=suggested_points_real_units,
             suggested_points_history=suggested_points_history,
             evaluated_variables_real_units=evaluated_variable_values.tensor,
-            evaluated_objectives_real_units=evaluated_objective_values.tensor
+            evaluated_objectives_real_units=evaluated_objective_values.tensor,
+            reference_point=reference_point
         )
 
         if optimiser.model_has_been_trained:
@@ -326,6 +349,12 @@ class BayesianOptimiser(SavableClass):
         else:
             suggested_points = {}
 
+        if self.reference_point is None:
+            reference_point = None
+
+        else:
+            reference_point = self.reference_point.gather_dicts_to_save()
+
         return {
             'optimiser': {
                 'objective': self.objective.gather_dicts_to_save(),
@@ -349,6 +378,7 @@ class BayesianOptimiser(SavableClass):
                 'suggested_points_history': [
                     suggested_point.gather_dicts_to_save() for suggested_point in self.suggested_points_history
                 ],
+                'reference_point': reference_point,
                 'settings': self.settings.gather_dicts_to_save()
             }
         }
