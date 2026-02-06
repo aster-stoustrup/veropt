@@ -260,6 +260,7 @@ ReferencePointInputDict = [dict[str, float], dict[str, float]]
 class ReferencePoint(SavableDataClass):
     variable_values: torch.Tensor
     objective_values: torch.Tensor
+    normalised: bool
 
 
 def _format_number(

@@ -36,7 +36,7 @@ reference_point_data = {
         'DTLZ1 1': -50.0, 'DTLZ1 2': -50.0
     }
 }
-optimiser.add_reference_point(reference_point_data)
+optimiser.add_reference_point_real_units(reference_point_data)
 
 for iteration in range(5):
     optimiser.run_optimisation_step()
@@ -48,11 +48,11 @@ figure_pareto = plot_pareto_front(
 )
 figure_pareto.show()
 
-# figure_prediction = plot_prediction_grid(optimiser=optimiser)
-# figure_prediction.show()
-#
-# figure_overview = plot_point_overview(optimiser=optimiser)
-# figure_overview.show()
-#
-# figure_progression = plot_progression(optimiser=optimiser)
-# figure_progression.show()
+figure_prediction = plot_prediction_grid(optimiser=optimiser)
+figure_prediction.show()
+
+figure_overview = plot_point_overview(optimiser=optimiser)
+figure_overview.show()
+
+figure_progression = plot_progression(optimiser=optimiser)
+figure_progression.show()

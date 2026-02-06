@@ -235,7 +235,7 @@ def _add_pareto_traces_2d(
                 legendgroup='Reference point',
                 showlegend=show_legend,
                 marker={
-                    'symbol': 'star',
+                    'symbol': 'square',
                     'color': 'purple'
                 },
                 hovertemplate="Reference Point <br>"

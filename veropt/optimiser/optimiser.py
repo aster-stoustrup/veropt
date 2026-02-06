@@ -164,9 +164,12 @@ class BayesianOptimiser(SavableClass):
                 expected_amount_points=1
             )
 
+            assert reference_point['normalised'] is False
+
             reference_point_in_class = ReferencePoint(
                 variable_values=reference_variable_values,
                 objective_values=reference_objective_values,
+                normalised=False
             )
 
         else:
@@ -552,7 +555,7 @@ class BayesianOptimiser(SavableClass):
 
         return unnormalise_objectives
 
-    def add_reference_point(
+    def add_reference_point_real_units(
             self,
             reference_point: ReferencePointInputDict,
     ):
@@ -568,6 +571,7 @@ class BayesianOptimiser(SavableClass):
         self.reference_point = ReferencePoint(
             variable_values=reference_variable_values,
             objective_values=reference_objective_values,
+            normalised=False
         )
 
     def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:

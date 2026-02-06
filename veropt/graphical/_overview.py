@@ -8,6 +8,7 @@ from plotly import graph_objects as go
 from plotly.express import colors
 from plotly.subplots import make_subplots
 
+from veropt.optimiser.optimiser_utility import ReferencePoint
 from veropt.optimiser.utility import DataShape
 
 
@@ -93,7 +94,9 @@ def plot_point_overview_separate_subplots(
         objective_values: torch.Tensor,
         objective_names: list[str],
         variable_names: list[str],
-        shown_indices: Optional[list[int]] = None
+        bounds: torch.Tensor,
+        shown_indices: Optional[list[int]] = None,
+        reference_point: Optional[ReferencePoint] = None
 ) -> go.Figure:
 
     # TODO: Maybe want a longer colour scale to avoid duplicate colours...?
@@ -167,6 +170,38 @@ def plot_point_overview_separate_subplots(
                         col=col_no
                     )
 
+
+    if reference_point is not None:
+        for variable_index in range(n_variables):
+            for objective_index in range(n_objectives):
+                row_no = n_objectives - objective_index
+                col_no = variable_index + 1
+
+                figure.add_trace(
+                    go.Scatter(
+                        x=[reference_point.variable_values[0, variable_index].item()],
+                        y=[reference_point.objective_values[0, objective_index].item()],
+                        mode='markers',
+                        marker={
+                            'color': 'black',
+                            'symbol': 'square'
+                        },
+                        name="Reference point",
+                        showlegend=True if (row_no == 1 and col_no == 1) else False,
+                        legendgroup="Reference point",
+                        hovertemplate="<b>Reference Point</b><br>"
+                                      f"{variable_names[variable_index]}:" + " %{x:.3f}<br>"
+                                      f"{objective_names[objective_index]}:" + " %{y:.3f}<extra></extra>"
+                    ),
+                    row=row_no, col=col_no
+                )
+
+    for variable_index in range(n_variables):
+        figure.update_xaxes(
+            range=[bounds[0, variable_index], bounds[1, variable_index]],
+            col=variable_index + 1
+        )
+
     # Note: Currently would merge all the obj. axes
     # for data in figure.data:
     #     data.yaxis = 'y'
@@ -182,7 +217,8 @@ def plot_point_overview_separate_subplots(
 def _plot_progression(
         objective_values: torch.Tensor,
         objective_names: list[str],
-        n_initial_points: int
+        n_initial_points: int,
+        reference_point: Optional[ReferencePoint] = None
 ) -> go.Figure:
 
     n_evaluated_points = objective_values.shape[DataShape.index_points]
@@ -236,13 +272,38 @@ def _plot_progression(
             yaxis=yaxis_names[objective_index]
         ))
 
+        if reference_point is not None:
+            reference_value = reference_point.objective_values[0, objective_index]
+
+            # Horizontal dashed line across the x-axis range
+            data.append(go.Scatter(
+                x=[-5, n_evaluated_points + 6],
+                y=[reference_value, reference_value],
+                mode='lines',
+                name='Reference value',
+                legendgroup='Reference point',
+                showlegend=True if objective_index == 0 else False,
+                opacity=0.8,
+                line={
+                    'color': 'black',
+                    'dash': 'dash',
+                    'width': 2
+                },
+                xaxis='x',
+                yaxis=yaxis_names[objective_index],
+                hovertemplate=f"Reference: {reference_value:.3f}<extra></extra>"
+            ))
+
     figure = go.Figure(
         data=data,
         layout=layout
     )
 
     figure.update_layout(
-        xaxis={'title': {'text': "Evaluated points"}},  # TODO: Add if they're normalised or not
+        xaxis={
+            'title': {'text': "Evaluated points"},  # TODO: Add if they're normalised or not
+            'range': [-1, n_evaluated_points]
+        },
         **{
             yaxis_names_ver_2[objective_index]: {'title': {'text': objective_names[objective_index]}}
             for objective_index in range(n_objectives)

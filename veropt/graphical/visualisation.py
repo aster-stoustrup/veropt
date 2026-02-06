@@ -40,9 +40,14 @@ def plot_point_overview(
     if normalised:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
+        bounds = optimiser.bounds.tensor
+        reference_point = None
+
     else:
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
+        bounds = optimiser.bounds_real_units
+        reference_point = optimiser.reference_point
 
     if points == 'all':
         pass
@@ -120,23 +125,30 @@ def plot_point_overview(
     objective_names = optimiser.objective.objective_names
     variable_names = optimiser.objective.variable_names
 
-    if normalised:
-        figure = _plot_point_overview(
-            variable_values=variable_values,
-            objective_values=objective_values,
-            objective_names=objective_names,
-            variable_names=variable_names,
-            shown_indices=shown_inds
-        )
+    # Note: Disabled this for now because it just feels a little unnecessary to continue to take care of this
+    # when it's probably unlikely to be used. Should maybe just delete eventually?
+    #   - Counter-point could be that for large amounts of parameters, *maybe* it's easier to use...?
+    #
+    # if normalised:
+    #     figure = _plot_point_overview(
+    #         variable_values=variable_values,
+    #         objective_values=objective_values,
+    #         objective_names=objective_names,
+    #         variable_names=variable_names,
+    #         shown_indices=shown_inds
+    #     )
+    #
+    # else:
 
-    else:
-        figure = plot_point_overview_separate_subplots(
-            variable_values=variable_values,
-            objective_values=objective_values,
-            objective_names=objective_names,
-            variable_names=variable_names,
-            shown_indices=shown_inds
-        )
+    figure = plot_point_overview_separate_subplots(
+        variable_values=variable_values,
+        objective_values=objective_values,
+        objective_names=objective_names,
+        variable_names=variable_names,
+        bounds=bounds,
+        shown_indices=shown_inds,
+        reference_point=reference_point
+    )
 
     return figure
 
@@ -148,14 +160,17 @@ def plot_progression(
 
     if normalised is False:
         objective_values = optimiser.evaluated_objectives_real_units
+        reference_point = optimiser.reference_point
 
     else:
         objective_values = optimiser.evaluated_objective_values.tensor
+        reference_point = None
 
     figure = _plot_progression(
         objective_values=objective_values,
         objective_names=optimiser.objective.objective_names,
         n_initial_points=optimiser.n_initial_points,
+        reference_point=reference_point
     )
 
     return figure
@@ -170,11 +185,13 @@ def plot_pareto_front_grid(
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
         suggested_points = optimiser.suggested_points_real_units
+        reference_point = optimiser.reference_point
 
     else:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
         suggested_points = optimiser.suggested_points
+        reference_point = None
 
     pareto_optimal_indices = get_pareto_optimal_points(
         variable_values=variable_values,
@@ -189,7 +206,7 @@ def plot_pareto_front_grid(
         pareto_optimal_indices=pareto_optimal_indices,
         n_initial_points=optimiser.n_initial_points,
         suggested_points=suggested_points,
-        reference_point=optimiser.reference_point,
+        reference_point=reference_point,
         return_figure=True
     )
 
@@ -206,11 +223,13 @@ def plot_pareto_front(
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
         suggested_points = optimiser.suggested_points_real_units
+        reference_point = optimiser.reference_point
 
     else:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
         suggested_points = optimiser.suggested_points
+        reference_point = None
 
     pareto_optimal_indices = get_pareto_optimal_points(
         variable_values=variable_values,
@@ -224,7 +243,7 @@ def plot_pareto_front(
         objective_names=optimiser.objective.objective_names,
         n_initial_points=optimiser.n_initial_points,
         suggested_points=suggested_points,
-        reference_point=optimiser.reference_point,
+        reference_point=reference_point,
         return_figure=True
     )
 
@@ -244,11 +263,13 @@ def plot_prediction_grid(
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
         suggested_points = optimiser.suggested_points_real_units
+        reference_point = optimiser.reference_point
 
     else:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
         suggested_points = optimiser.suggested_points
+        reference_point = None
 
     objective_names = optimiser.objective.objective_names
     variable_names = optimiser.objective.variable_names
@@ -345,6 +366,7 @@ def plot_prediction_grid(
         objective_names=objective_names,
         variable_names=variable_names,
         suggested_points=suggested_points,
+        reference_point=reference_point,
         plot_acquisition=plot_acquisition
     )
 
