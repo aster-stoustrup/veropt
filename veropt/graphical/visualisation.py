@@ -189,6 +189,7 @@ def plot_pareto_front_grid(
         pareto_optimal_indices=pareto_optimal_indices,
         n_initial_points=optimiser.n_initial_points,
         suggested_points=suggested_points,
+        reference_point=optimiser.reference_point,
         return_figure=True
     )
 
@@ -223,7 +224,8 @@ def plot_pareto_front(
         objective_names=optimiser.objective.objective_names,
         n_initial_points=optimiser.n_initial_points,
         suggested_points=suggested_points,
-        return_figure=True,
+        reference_point=optimiser.reference_point,
+        return_figure=True
     )
 
     return figure

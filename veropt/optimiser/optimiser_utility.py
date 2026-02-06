@@ -259,13 +259,7 @@ ReferencePointInputDict = [dict[str, float], dict[str, float]]
 @dataclass
 class ReferencePoint(SavableDataClass):
     variable_values: torch.Tensor
-    objective_values: Optional[torch.Tensor]
-
-    def add_objective_values(
-            self,
-            objective_values: torch.Tensor
-    ) -> None:
-        self.objective_values = objective_values
+    objective_values: torch.Tensor
 
 
 def _format_number(
@@ -465,7 +459,7 @@ def get_pareto_optimal_points(
     }
 
 
-def _validate_and_convert_for_format_input(
+def _validate_and_convert_for_named_values_conversion(
         variable_values: dict[str, Union[torch.Tensor, float]],
         objective_values: dict[str, Union[torch.Tensor, float]],
         variable_names: list[str],
@@ -498,7 +492,7 @@ def named_values_to_tensor(
         expected_amount_points: int
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
-    new_variable_values, new_objective_values = _validate_and_convert_for_format_input(
+    new_variable_values, new_objective_values = _validate_and_convert_for_named_values_conversion(
         variable_values=new_variable_values,
         objective_values=new_objective_values,
         variable_names=variable_names,
