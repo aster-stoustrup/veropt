@@ -253,9 +253,7 @@ def unnormalise_suggested_points(
     )
 
 
-class ReferencePointInputDict(TypedDict):
-    variable_values: torch.Tensor
-    objective_values: torch.Tensor
+ReferencePointInputDict = [dict[str, float], dict[str, float]]
 
 
 @dataclass
@@ -467,19 +465,46 @@ def get_pareto_optimal_points(
     }
 
 
-def format_input_from_objective(
-        new_variable_values: dict[str, torch.Tensor],
-        new_objective_values: dict[str, torch.Tensor],
+def _validate_and_convert_for_format_input(
+        variable_values: dict[str, Union[torch.Tensor, float]],
+        objective_values: dict[str, Union[torch.Tensor, float]],
+        variable_names: list[str],
+        objective_names: list[str],
+        expected_amount_points: int
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+
+    for name in variable_names:
+
+        if not isinstance(variable_values[name], torch.Tensor):
+            variable_values[name] = torch.tensor([variable_values[name]])
+
+        assert len(variable_values[name]) in (expected_amount_points, 0)
+
+    for name in objective_names:
+
+        if not isinstance(objective_values[name], torch.Tensor):
+            objective_values[name] = torch.tensor([objective_values[name]])
+
+        assert len(objective_values[name]) in (expected_amount_points, 0)
+
+    return variable_values, objective_values
+
+
+def named_values_to_tensor(
+        new_variable_values: dict[str, Union[torch.Tensor, float]],
+        new_objective_values: dict[str, Union[torch.Tensor, float]],
         variable_names: list[str],
         objective_names: list[str],
         expected_amount_points: int
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
-    for name in variable_names:
-        assert len(new_variable_values[name]) in (expected_amount_points, 0)
-
-    for name in objective_names:
-        assert len(new_objective_values[name]) in (expected_amount_points, 0)
+    new_variable_values, new_objective_values = _validate_and_convert_for_format_input(
+        variable_values=new_variable_values,
+        objective_values=new_objective_values,
+        variable_names=variable_names,
+        objective_names=objective_names,
+        expected_amount_points=expected_amount_points
+    )
 
     new_variable_values_tensor = torch.stack(
         [new_variable_values[name] for name in variable_names],

@@ -17,7 +17,7 @@ from veropt.optimiser.optimiser_utility import (
     BestPoints, OptimisationMode,
     OptimiserSettings, OptimiserSettingsInputDict, ParetoOptimalPoints, ReferencePoint, ReferencePointInputDict,
     SuggestedPoints,
-    format_input_from_objective,
+    named_values_to_tensor,
     format_output_for_objective, get_best_points, get_pareto_optimal_points,
     list_with_floats_to_string, normalise_suggested_points, unnormalise_suggested_points
 )
@@ -155,9 +155,18 @@ class BayesianOptimiser(SavableClass):
         suggested_points_history: list[SuggestedPoints] = []
 
         if reference_point is not None:
+
+            reference_variable_values, reference_objective_values = named_values_to_tensor(
+                new_variable_values=reference_point['variable_values'],
+                new_objective_values=reference_point['objective_values'],
+                variable_names=objective.variable_names,
+                objective_names=objective.objective_names,
+                expected_amount_points=1
+            )
+
             reference_point_in_class = ReferencePoint(
-                variable_values=reference_point['variable_values'],
-                objective_values=reference_point['objective_values'],
+                variable_values=reference_variable_values,
+                objective_values=reference_objective_values,
             )
 
         else:
@@ -543,6 +552,24 @@ class BayesianOptimiser(SavableClass):
 
         return unnormalise_objectives
 
+    def add_reference_point(
+            self,
+            reference_point: ReferencePointInputDict,
+    ):
+
+        reference_variable_values, reference_objective_values = named_values_to_tensor(
+            new_variable_values=reference_point['variable_values'],
+            new_objective_values=reference_point['objective_values'],
+            variable_names=self.objective.variable_names,
+            objective_names=self.objective.objective_names,
+            expected_amount_points=1
+        )
+
+        self.reference_point = ReferencePoint(
+            variable_values=reference_variable_values,
+            objective_values=reference_objective_values,
+        )
+
     def _evaluate_points(self) -> tuple[TensorWithNormalisationFlag, TensorWithNormalisationFlag]:
 
         assert self.objective_type == ObjectiveKind.callable, (
@@ -635,7 +662,7 @@ class BayesianOptimiser(SavableClass):
 
         new_variable_values, new_objective_values = self.objective.load_evaluated_points()  # type: ignore[union-attr]
 
-        new_variable_values_tensor, new_objective_values_tensor = format_input_from_objective(
+        new_variable_values_tensor, new_objective_values_tensor = named_values_to_tensor(
             new_variable_values=new_variable_values,
             new_objective_values=new_objective_values,
             variable_names=self.objective.variable_names,
