@@ -1,10 +1,12 @@
+import torch
+
 from veropt import bayesian_optimiser
 from veropt.optimiser.practice_objectives import DTLZ1
 from veropt.graphical.visualisation import (
     plot_pareto_front, plot_pareto_front_grid,
     plot_prediction_grid,
     plot_point_overview,
-    plot_progression
+    plot_progression, build_table, plot_table
 )
 
 
@@ -28,18 +30,36 @@ optimiser = bayesian_optimiser(
     }
 )
 
-reference_point_data = {
-    'variable_values': {
-        'var_1': 0.5, 'var_2': 0.5, 'var_3': 0.5
-    },
-    'objective_values': {
-        'DTLZ1 1': -50.0, 'DTLZ1 2': -50.0
-    }
+# Evaluate the objective at the reference point
+reference_point_variables = {'var_1': 0.5, 'var_2': 0.5, 'var_3': 0.5}
+variable_order = [reference_point_variables[name] for name in objective.variable_names]
+reference_point_objectives_tensor = objective(torch.tensor([variable_order]))
+reference_point_objectives = {
+    name: float(value) for name, value in
+    zip(objective.objective_names, reference_point_objectives_tensor[0])
 }
+
+reference_point_data = {
+    'variable_values': reference_point_variables,
+    'objective_values': reference_point_objectives
+}
+
 optimiser.add_reference_point_real_units(reference_point_data)
 
 for iteration in range(5):
     optimiser.run_optimisation_step()
+
+# Print parameter table
+chosen_point_indices = [0, 5, 10]
+table = build_table(
+    optimiser=optimiser,
+    chosen_points=chosen_point_indices
+)
+table_figure = plot_table(
+    table_data=table
+)
+table_figure.show()
+
 
 # TODO: Also do a pareto grid...?
 figure_pareto = plot_pareto_front(

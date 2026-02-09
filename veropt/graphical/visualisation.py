@@ -681,3 +681,129 @@ def plot_prediction_surface_grid(
     )
 
     return figure
+
+
+def build_table(
+        optimiser: BayesianOptimiser,
+        chosen_points: list[int]
+) -> dict[Literal['parameters', 'objectives'], list[dict[str, Optional[float]]]]:
+
+    """
+    Build a table with parameters and objectives separated, with point names based on indices.
+
+    Args:
+        optimiser: BayesianOptimiser instance.
+        chosen_points: list of point indices to include in the table.
+
+    Returns:
+        Dict with 'parameters' and 'objectives' keys, each containing a list of dicts.
+    """
+
+    parameter_names = optimiser.objective.variable_names
+    objective_names = optimiser.objective.objective_names
+
+    default_values = None
+    has_reference_point = optimiser.reference_point is not None
+    if has_reference_point:
+        default_values = optimiser.reference_point.variable_values.reshape(-1)
+
+    parameter_rows = []
+    for parameter_index, parameter_name in enumerate(parameter_names):
+        row = {"parameter": parameter_name}
+
+        if has_reference_point:
+            row["default"] = float(default_values[parameter_index])
+
+        for point_number, point_idx in enumerate(chosen_points):
+            point = optimiser.evaluated_variable_values.tensor[point_idx]
+            values = point.reshape(-1)
+            row[f"point_{point_idx}"] = float(values[parameter_index])
+
+        parameter_rows.append(row)
+
+    objective_rows = []
+    for objective_index, objective_name in enumerate(objective_names):
+        row = {"parameter": objective_name}
+
+        if has_reference_point:
+            row["default"] = float(optimiser.reference_point.objective_values[0, objective_index])
+
+        for point_number, point_idx in enumerate(chosen_points):
+            objective = optimiser.evaluated_objective_values.tensor[point_idx]
+            values = objective.reshape(-1)
+            row[f"point_{point_idx}"] = float(values[objective_index])
+
+        objective_rows.append(row)
+
+    return {
+        'parameters': parameter_rows,
+        'objectives': objective_rows
+    }
+
+
+def _build_cell_values(
+        rows: list[dict[str, Optional[float]]],
+        columns: list[str]
+) -> list[list]:
+    """
+    Build cell values for a table from rows and column names.
+
+    Args:
+        rows: List of dicts containing row data.
+        columns: List of column names.
+
+    Returns:
+        List of cell value lists, one per column.
+    """
+    cell_values = [[] for _ in range(len(columns))]
+
+    for row in rows:
+        cell_values[0].append(row["parameter"])
+        if "Default" in columns:
+            cell_values[1].append(row.get("default", ""))
+        for col_idx, col in enumerate(columns[2:] if "Default" in columns else columns[1:]):
+            actual_col_idx = col_idx + (2 if "Default" in columns else 1)
+            cell_values[actual_col_idx].append(row.get(col, ""))
+
+    return cell_values
+
+
+def plot_table(
+        table_data: dict[Literal['parameters', 'objectives'], list[dict[str, Optional[float]]]]
+) -> go.Figure:
+
+    parameter_rows = table_data['parameters']
+    objective_rows = table_data['objectives']
+
+    # Extract column names from parameters
+    columns = ["Parameter"]
+    if any("default" in row for row in parameter_rows):
+        columns.append("Default")
+    columns.extend([key for key in parameter_rows[0].keys() if key.startswith("point_")])
+
+    # Build cell values for both sections
+    parameter_cell_values = _build_cell_values(parameter_rows, columns)
+    objective_cell_values = _build_cell_values(objective_rows, columns)
+
+    # Combine with separator row
+    cell_values = [[] for _ in range(len(columns))]
+    for col_idx in range(len(columns)):
+        cell_values[col_idx].extend(parameter_cell_values[col_idx])
+        cell_values[col_idx].append("Objectives" if col_idx == 0 else "")  # Separator row with label
+        cell_values[col_idx].extend(objective_cell_values[col_idx])
+
+    # Format floats to 3 decimal places
+    for col_idx in range(len(columns)):
+        for row_idx in range(len(cell_values[col_idx])):
+            value = cell_values[col_idx][row_idx]
+            if isinstance(value, float):
+                cell_values[col_idx][row_idx] = f"{value:.3f}"
+
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=columns),
+        cells=dict(values=cell_values)
+    )])
+
+    return fig
+
+

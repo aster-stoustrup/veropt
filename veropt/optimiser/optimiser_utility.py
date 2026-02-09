@@ -253,7 +253,9 @@ def unnormalise_suggested_points(
     )
 
 
-ReferencePointInputDict = [dict[str, float], dict[str, float]]
+class ReferencePointInputDict(TypedDict, total=False):
+    variable_values: dict[str, float]
+    objective_values: dict[str, float]
 
 
 @dataclass
@@ -261,6 +263,18 @@ class ReferencePoint(SavableDataClass):
     variable_values: torch.Tensor
     objective_values: torch.Tensor
     normalised: bool
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+
+        return cls(
+            variable_values=torch.tensor(saved_state['variable_values']),
+            objective_values=torch.tensor(saved_state['objective_values']),
+            normalised=saved_state['normalised']
+        )
 
 
 def _format_number(
