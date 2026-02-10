@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+from pathlib import Path
 from typing import Optional, Literal
 
 import plotly.graph_objects as go
@@ -129,3 +131,49 @@ def _plot_table(
     )])
 
     return figure
+
+
+def _save_table_as_csv(
+        table_data: dict[Literal['variables', 'objectives'], list[dict[str, Optional[float]]]],
+        filepath: str | Path
+) -> None:
+    """
+    Save table data to a CSV file.
+
+    Args:
+        table_data: Dict with 'variables' and 'objectives' keys containing row data.
+        filepath: Path where the CSV file will be saved.
+    """
+    variable_rows = table_data['variables']
+    objective_rows = table_data['objectives']
+
+    # Extract column names from variable rows
+    columns = ["Name"]
+    if any("default" in row for row in variable_rows):
+        columns.append("Default")
+    columns.extend([key for key in variable_rows[0].keys() if key.startswith("point_")])
+
+    with open(filepath, 'w', newline='') as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=columns)
+        writer.writeheader()
+
+        # Write variable rows
+        for row in variable_rows:
+            csv_row = {"Name": row["variable"]}
+            if "default" in row:
+                csv_row["Default"] = row["default"]
+            for key in row.keys():
+                if key.startswith("point_"):
+                    csv_row[key] = row[key]
+            writer.writerow(csv_row)
+
+        # Write objectives header and rows
+        writer.writerow({"Name": "Objectives"})
+        for row in objective_rows:
+            csv_row = {"Name": row["objective"]}
+            if "default" in row:
+                csv_row["Default"] = row["default"]
+            for key in row.keys():
+                if key.startswith("point_"):
+                    csv_row[key] = row[key]
+            writer.writerow(csv_row)

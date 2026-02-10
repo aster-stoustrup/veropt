@@ -280,10 +280,16 @@ class ReferencePoint(SavableDataClass):
 def _format_number(
         number: float
 ) -> str:
-    if abs(number) < 0.01:
+    if abs(number) < 0.0001:
         return f"{number:.2e}"
+    elif abs(number) < 0.01:
+        return f"{number:.4f}"
+    elif abs(number) < 1:
+        return f"{number:.3f}"
+    elif abs(number) > 100:
+        return f"{number:.1f}"
     elif abs(number) >= 10_000:
-        return f"{number:.2e}"
+        return f"{number:.3e}"
     else:
         return f"{number:.2f}"
 

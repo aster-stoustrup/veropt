@@ -16,7 +16,7 @@ from veropt.graphical._model_visualisation import (
 )
 from veropt.graphical._overview import plot_point_overview_separate_subplots, _plot_progression
 from veropt.graphical._pareto_front import _plot_pareto_front_grid, _plot_pareto_front
-from veropt.graphical._table import _build_table, _plot_table
+from veropt.graphical._table import _build_table, _plot_table, _save_table_as_csv
 from veropt.graphical._visualisation_utility import (
     ModelPredictionContainer, get_point_from_number
 )
@@ -690,21 +690,12 @@ def build_table(
         chosen_points: list[int]
 ) -> dict[Literal['variables', 'objectives'], list[dict[str, Optional[float]]]]:
 
-    """
-    Build a table with variables and objectives separated, with point names based on indices.
-
-    Args:
-        optimiser: BayesianOptimiser instance.
-        chosen_points: list of point indices to include in the table.
-
-    Returns:
-        Dict with 'variables' and 'objectives' keys, each containing a list of dicts.
-    """
-
     variable_names = optimiser.objective.variable_names
     objective_names = optimiser.objective.objective_names
-    evaluated_variable_values = optimiser.evaluated_variable_values.tensor
-    evaluated_objective_values = optimiser.evaluated_objective_values.tensor
+
+    # Use real units instead of normalised values
+    evaluated_variable_values = optimiser.evaluated_variables_real_units
+    evaluated_objective_values = optimiser.evaluated_objectives_real_units
 
     reference_variable_values = None
     reference_objective_values = None
@@ -740,4 +731,19 @@ def plot_table(
     return figure
 
 
+def save_table_to_csv(
+        optimiser: BayesianOptimiser,
+        chosen_points: list[int],
+        file_path: str | Path
+) -> None:
+
+    table_data = build_table(
+        optimiser=optimiser,
+        chosen_points=chosen_points
+    )
+
+    _save_table_as_csv(
+        table_data=table_data,
+        filepath=file_path
+    )
 
