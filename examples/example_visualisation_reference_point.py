@@ -51,17 +51,20 @@ for iteration in range(5):
 
 # Print parameter table
 chosen_point_indices = [0, 5, 10]
-table = build_table(
+# Note: You can also just build the table without plotting it, e.g. to use it for a paper
+# table = build_table(
+#     optimiser=optimiser,
+#     chosen_points=chosen_point_indices
+# )
+table_figure = plot_table(
     optimiser=optimiser,
     chosen_points=chosen_point_indices
-)
-table_figure = plot_table(
-    table_data=table
 )
 table_figure.show()
 
 
 # TODO: Also do a pareto grid...?
+#   - Maybe just once to look at it before releasing this branch
 figure_pareto = plot_pareto_front(
     optimiser=optimiser,
     plotted_objective_indices=[0, 1]
