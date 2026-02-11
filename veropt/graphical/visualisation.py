@@ -16,7 +16,9 @@ from veropt.graphical._model_visualisation import (
 )
 from veropt.graphical._overview import plot_point_overview_separate_subplots, _plot_progression
 from veropt.graphical._pareto_front import _plot_pareto_front_grid, _plot_pareto_front
-from veropt.graphical._table import _build_table, _plot_table, _save_table_as_csv
+from veropt.graphical._table import (
+    _build_table, _plot_table, _save_table_as_csv, _plot_bounds_table
+)
 from veropt.graphical._visualisation_utility import (
     ModelPredictionContainer, get_point_from_number
 )
@@ -724,9 +726,24 @@ def plot_table(
         chosen_points=chosen_points
     )
 
-    figure = _plot_table(
-        table_data=table_data
+    figure = make_subplots(
+        rows=2,
+        cols=1,
+        specs=[[{'type': 'table'}], [{'type': 'table'}]],
+        vertical_spacing=0.05,
+        row_heights=[0.7, 0.3]
     )
+
+    main_table = _plot_table(table_data=table_data)
+    figure.add_trace(main_table.data[0], row=1, col=1)
+
+    bounds_table = _plot_bounds_table(
+        variable_names=optimiser.objective.variable_names,
+        bounds=optimiser.bounds_real_units
+    )
+    figure.add_trace(bounds_table, row=2, col=1)
+
+    figure.update_layout(height=800)
 
     return figure
 

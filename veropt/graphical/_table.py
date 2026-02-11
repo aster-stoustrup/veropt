@@ -133,6 +133,34 @@ def _plot_table(
     return figure
 
 
+def _plot_bounds_table(
+        variable_names: list[str],
+        bounds: torch.Tensor
+) -> go.Table:
+    """
+    Create a table displaying the bounds of all variables.
+
+    Args:
+        variable_names: List of variable names.
+        bounds: Tensor containing bounds with shape [2, n_variables].
+
+    Returns:
+        A plotly Table object showing variable bounds.
+    """
+    bounds_columns = ["Variable", "Lower Bound", "Upper Bound"]
+    bounds_cell_values = [
+        variable_names,
+        [_format_number(float(bounds[0, i])) for i in range(len(variable_names))],
+        [_format_number(float(bounds[1, i])) for i in range(len(variable_names))]
+    ]
+
+    return go.Table(
+        header=dict(values=bounds_columns),
+        cells=dict(values=bounds_cell_values)
+    )
+
+
+
 def _save_table_as_csv(
         table_data: dict[Literal['variables', 'objectives'], list[dict[str, Optional[float]]]],
         filepath: str | Path
