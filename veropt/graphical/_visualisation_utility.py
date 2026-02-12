@@ -10,15 +10,27 @@ from veropt.optimiser.optimiser_utility import SuggestedPoints
 from veropt.optimiser.utility import DataShape, PredictionDict
 
 
+def _convert_to_rgb(color: str) -> str:
+    """Convert a color to rgb format if it's in hex format."""
+    if color.startswith('#'):
+        # Convert hex to rgb
+        hex_color = color.lstrip('#')
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+        return f"rgb({r}, {g}, {b})"
+    return color
+
+
 def get_continuous_colour(
         colour_scale: list[list],
         value: float
 ) -> str:
 
     if value == 0.0:
-        return colour_scale[0][1]
+        return _convert_to_rgb(colour_scale[0][1])
     if value == 1.0:
-        return colour_scale[-1][1]
+        return _convert_to_rgb(colour_scale[-1][1])
 
     low_cutoff = None
     low_colour = None
@@ -37,6 +49,10 @@ def get_continuous_colour(
     assert low_colour is not None
     assert high_cutoff is not None
     assert high_colour is not None
+
+    # Convert colors to rgb format if they're in hex
+    low_colour = _convert_to_rgb(low_colour)
+    high_colour = _convert_to_rgb(high_colour)
 
     intermediate_colour = colors.find_intermediate_color(
         lowcolor=low_colour, highcolor=high_colour,

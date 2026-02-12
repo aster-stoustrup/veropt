@@ -734,14 +734,9 @@ def plot_table(
         row_heights=[0.7, 0.3]
     )
 
-    reference_values = None
-    if optimiser.reference_point is not None:
-        reference_values = optimiser.reference_point.variable_values[0]
-
     main_table = _plot_table(
         table_data=table_data,
-        bounds=optimiser.bounds_real_units,
-        reference_values=reference_values
+        bounds=optimiser.bounds_real_units
     )
     figure.add_trace(main_table.data[0], row=1, col=1)
 
@@ -754,7 +749,6 @@ def plot_table(
     figure.update_layout(height=800)
 
     return figure
-
 
 
 def save_table_to_csv(
