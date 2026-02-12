@@ -24,13 +24,22 @@ def _convert_to_rgb(color: str) -> str:
 
 def get_continuous_colour(
         colour_scale: list[list],
-        value: float
+        value: float,
+        alpha: Optional[float] = None
 ) -> str:
 
     if value == 0.0:
-        return _convert_to_rgb(colour_scale[0][1])
+        color = _convert_to_rgb(colour_scale[0][1])
+        if alpha is not None:
+            rgb_values = colors.unlabel_rgb(color)
+            return f"rgba({rgb_values[0]:.2f}, {rgb_values[1]:.2f}, {rgb_values[2]:.2f}, {alpha})"
+        return color
     if value == 1.0:
-        return _convert_to_rgb(colour_scale[-1][1])
+        color = _convert_to_rgb(colour_scale[-1][1])
+        if alpha is not None:
+            rgb_values = colors.unlabel_rgb(color)
+            return f"rgba({rgb_values[0]:.2f}, {rgb_values[1]:.2f}, {rgb_values[2]:.2f}, {alpha})"
+        return color
 
     low_cutoff = None
     low_colour = None
@@ -63,6 +72,10 @@ def get_continuous_colour(
     # Trying to fix a plotly bug >:(
     #   - Might still make a small error, should test when some of the colours are very small
     unlabeled_colour = colors.unlabel_rgb(intermediate_colour)
+
+    if alpha is not None:
+        return f"rgba({unlabeled_colour[0]:.2f}, {unlabeled_colour[1]:.2f}, {unlabeled_colour[2]:.2f}, {alpha})"
+
     relabeled_colour = f"rgb({unlabeled_colour[0]:.2f}, {unlabeled_colour[1]:.2f}, {unlabeled_colour[2]:.2f})"
 
     return relabeled_colour

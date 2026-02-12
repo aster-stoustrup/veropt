@@ -83,7 +83,8 @@ def _build_cell_values(
 def _plot_table(
         table_data: dict[Literal['variables', 'objectives'], list[dict[str, Optional[float]]]],
         bounds: Optional[torch.Tensor] = None,
-        colorscale: Optional[str] = 'Viridis'
+        colorscale: Optional[str] = 'Bluered',
+        color_alpha: float = 0.2
 ) -> go.Figure:
 
     variable_rows = table_data['variables']
@@ -144,7 +145,7 @@ def _plot_table(
                     if upper != lower:
                         normalized = (value - lower) / (upper - lower)
                         normalized = max(0.0, min(1.0, normalized))  # Clamp to [0, 1]
-                        fill_colors[col_idx].append(get_continuous_colour(colour_scale, normalized))
+                        fill_colors[col_idx].append(get_continuous_colour(colour_scale, normalized, alpha=color_alpha))
                     else:
                         fill_colors[col_idx].append('rgb(235, 240, 248)')
                 else:
