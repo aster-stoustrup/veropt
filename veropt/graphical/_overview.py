@@ -170,7 +170,6 @@ def plot_point_overview_separate_subplots(
                         col=col_no
                     )
 
-
     if reference_point is not None:
         for variable_index in range(n_variables):
             for objective_index in range(n_objectives):

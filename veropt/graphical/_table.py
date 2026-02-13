@@ -117,7 +117,6 @@ def _plot_table(
 
     # Create fill colors based on bounds
     n_variables = len(variable_rows)
-    n_objectives = len(objective_rows)
     separator_row_index = n_variables
     n_rows = len(cell_values[0])
     n_cols = len(columns)
@@ -197,7 +196,6 @@ def _plot_bounds_table(
         header=dict(values=bounds_columns),
         cells=dict(values=bounds_cell_values)
     )
-
 
 
 def _save_table_as_csv(

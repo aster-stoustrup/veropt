@@ -1,14 +1,11 @@
 import torch
 
 from veropt import bayesian_optimiser
-from veropt.optimiser.practice_objectives import DTLZ1
 from veropt.graphical.visualisation import (
-    plot_pareto_front, plot_pareto_front_grid,
-    plot_prediction_grid,
-    plot_point_overview,
-    plot_progression, build_table, plot_table
+    plot_pareto_front, plot_point_overview, plot_prediction_grid,
+    plot_progression, plot_table
 )
-
+from veropt.optimiser.practice_objectives import DTLZ1
 
 objective = DTLZ1(n_variables=3, n_objectives=2)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from itertools import islice
+from pathlib import Path
 from typing import Literal, Optional, Union
 
 import numpy as np
@@ -766,4 +767,3 @@ def save_table_to_csv(
         table_data=table_data,
         filepath=file_path
     )
-
