@@ -691,7 +691,7 @@ def plot_prediction_surface_grid(
 def build_table(
         optimiser: BayesianOptimiser,
         chosen_points: list[int]
-) -> dict[Literal['variables', 'objectives'], list[dict[str, Optional[float]]]]:
+) -> dict[Literal['variables', 'objectives'], list[dict[str, str | float | None]]]:
 
     variable_names = optimiser.objective.variable_names
     objective_names = optimiser.objective.objective_names

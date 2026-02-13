@@ -20,11 +20,11 @@ def _build_table(
         evaluated_objective_values: torch.Tensor,
         reference_variable_values: Optional[torch.Tensor] = None,
         reference_objective_values: Optional[torch.Tensor] = None,
-) -> dict[Literal['variables', 'objectives'], list[dict[str, Optional[float]]]]:
+) -> dict[Literal['variables', 'objectives'], list[dict[str, str | float | None]]]:
 
     variable_rows = []
     for variable_index, variable_name in enumerate(variable_names):
-        row = {"variable": variable_name}
+        row: dict[str, str | float | None] = {"variable": variable_name}
 
         if reference_variable_values is not None:
             row["default"] = float(reference_variable_values[variable_index])
@@ -36,15 +36,15 @@ def _build_table(
 
     objective_rows = []
     for objective_index, objective_name in enumerate(objective_names):
-        row = {"objective": objective_name}
+        obj_row: dict[str, str | float | None] = {"objective": objective_name}
 
         if reference_objective_values is not None:
-            row["default"] = float(reference_objective_values[objective_index])
+            obj_row["default"] = float(reference_objective_values[objective_index])
 
         for point_number in chosen_points:
-            row[f"point_{point_number}"] = float(evaluated_objective_values[point_number, objective_index])
+            obj_row[f"point_{point_number}"] = float(evaluated_objective_values[point_number, objective_index])
 
-        objective_rows.append(row)
+        objective_rows.append(obj_row)
 
     return {
         'variables': variable_rows,
@@ -53,10 +53,10 @@ def _build_table(
 
 
 def _build_cell_values(
-        rows: list[dict[str, Optional[float]]],
+        rows: list[dict[str, str | float | None]],
         columns: list[str],
         data_name: str
-) -> list[list]:
+) -> list[list[str | float]]:
     """
     Build cell values for a table from rows and column names.
 
@@ -67,21 +67,24 @@ def _build_cell_values(
     Returns:
         List of cell value lists, one per column.
     """
-    cell_values = [[] for _ in range(len(columns))]
+    cell_values: list[list[str | float]] = [[] for _ in range(len(columns))]
 
     for row in rows:
-        cell_values[0].append(row[data_name])
+        name_value = row[data_name]
+        cell_values[0].append(name_value if name_value is not None else "")
         if "Default" in columns:
-            cell_values[1].append(row.get("default", ""))
+            default_value = row.get("default", "")
+            cell_values[1].append(default_value if default_value is not None else "")
         for col_idx, col in enumerate(columns[2:] if "Default" in columns else columns[1:]):
             actual_col_idx = col_idx + (2 if "Default" in columns else 1)
-            cell_values[actual_col_idx].append(row.get(col, ""))
+            col_value = row.get(col, "")
+            cell_values[actual_col_idx].append(col_value if col_value is not None else "")
 
     return cell_values
 
 
 def _plot_table(
-        table_data: dict[Literal['variables', 'objectives'], list[dict[str, Optional[float]]]],
+        table_data: dict[Literal['variables', 'objectives'], list[dict[str, str | float | None]]],
         bounds: Optional[torch.Tensor] = None,
         colorscale: Optional[str] = 'Bluered',
         color_alpha: float = 0.2
@@ -109,7 +112,7 @@ def _plot_table(
     )
 
     # Combine with separator row
-    cell_values = [[] for _ in range(len(columns))]
+    cell_values: list[list[str | float]] = [[] for _ in range(len(columns))]
     for col_idx in range(len(columns)):
         cell_values[col_idx].extend(variable_cell_values[col_idx])
         cell_values[col_idx].append("Objectives" if col_idx == 0 else "")  # Separator row with label
@@ -125,7 +128,7 @@ def _plot_table(
     colour_scale = colors.get_colorscale(colorscale) if colorscale else None
 
     # Build fill colors per column
-    fill_colors = [[] for _ in range(n_cols)]
+    fill_colors: list[list[str]] = [[] for _ in range(n_cols)]
 
     for row_idx in range(n_rows):
         for col_idx in range(n_cols):
@@ -199,7 +202,7 @@ def _plot_bounds_table(
 
 
 def _save_table_as_csv(
-        table_data: dict[Literal['variables', 'objectives'], list[dict[str, Optional[float]]]],
+        table_data: dict[Literal['variables', 'objectives'], list[dict[str, str | float | None]]],
         filepath: str | Path
 ) -> None:
     """

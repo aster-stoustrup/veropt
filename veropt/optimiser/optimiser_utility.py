@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass, asdict
 from enum import StrEnum, auto
-from typing import Iterator, Optional, Self, TypedDict, Union
+from typing import Iterator, Mapping, Optional, Self, TypedDict, Union
 
 import torch
 
@@ -481,33 +481,39 @@ def get_pareto_optimal_points(
 
 
 def _validate_and_convert_for_named_values_conversion(
-        variable_values: dict[str, Union[torch.Tensor, float]],
-        objective_values: dict[str, Union[torch.Tensor, float]],
+        variable_values: Mapping[str, Union[torch.Tensor, float]],
+        objective_values: Mapping[str, Union[torch.Tensor, float]],
         variable_names: list[str],
         objective_names: list[str],
         expected_amount_points: int
 ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
 
+    converted_variable_values: dict[str, torch.Tensor] = {}
     for name in variable_names:
+        value = variable_values[name]
+        if not isinstance(value, torch.Tensor):
+            converted_variable_values[name] = torch.tensor([value])
+        else:
+            converted_variable_values[name] = value
 
-        if not isinstance(variable_values[name], torch.Tensor):
-            variable_values[name] = torch.tensor([variable_values[name]])
+        assert len(converted_variable_values[name]) in (expected_amount_points, 0)
 
-        assert len(variable_values[name]) in (expected_amount_points, 0)
-
+    converted_objective_values: dict[str, torch.Tensor] = {}
     for name in objective_names:
+        value = objective_values[name]
+        if not isinstance(value, torch.Tensor):
+            converted_objective_values[name] = torch.tensor([value])
+        else:
+            converted_objective_values[name] = value
 
-        if not isinstance(objective_values[name], torch.Tensor):
-            objective_values[name] = torch.tensor([objective_values[name]])
+        assert len(converted_objective_values[name]) in (expected_amount_points, 0)
 
-        assert len(objective_values[name]) in (expected_amount_points, 0)
-
-    return variable_values, objective_values
+    return converted_variable_values, converted_objective_values
 
 
 def named_values_to_tensor(
-        new_variable_values: dict[str, Union[torch.Tensor, float]],
-        new_objective_values: dict[str, Union[torch.Tensor, float]],
+        new_variable_values: Mapping[str, Union[torch.Tensor, float]],
+        new_objective_values: Mapping[str, Union[torch.Tensor, float]],
         variable_names: list[str],
         objective_names: list[str],
         expected_amount_points: int
