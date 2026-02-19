@@ -480,11 +480,12 @@ def get_pareto_optimal_points(
     }
 
 
-def _convert_named_values(
+def _convert_to_tensors(
         values: Mapping[str, Union[torch.Tensor, float]],
         names: list[str],
         expected_amount_points: int
 ) -> dict[str, torch.Tensor]:
+
     converted: dict[str, torch.Tensor] = {}
     for name in names:
         value = values[name]
@@ -506,8 +507,16 @@ def named_values_to_tensor(
         expected_amount_points: int
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
-    new_variable_values = _convert_named_values(new_variable_values, variable_names, expected_amount_points)
-    new_objective_values = _convert_named_values(new_objective_values, objective_names, expected_amount_points)
+    new_variable_values = _convert_to_tensors(
+        values=new_variable_values,
+        names=variable_names,
+        expected_amount_points=expected_amount_points
+    )
+    new_objective_values = _convert_to_tensors(
+        values=new_objective_values,
+        names=objective_names,
+        expected_amount_points=expected_amount_points
+    )
 
     new_variable_values_tensor = torch.stack(
         [new_variable_values[name] for name in variable_names],
