@@ -480,35 +480,22 @@ def get_pareto_optimal_points(
     }
 
 
-def _validate_and_convert_for_named_values_conversion(
-        variable_values: Mapping[str, Union[torch.Tensor, float]],
-        objective_values: Mapping[str, Union[torch.Tensor, float]],
-        variable_names: list[str],
-        objective_names: list[str],
+def _convert_named_values(
+        values: Mapping[str, Union[torch.Tensor, float]],
+        names: list[str],
         expected_amount_points: int
-) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-
-    converted_variable_values: dict[str, torch.Tensor] = {}
-    for name in variable_names:
-        value = variable_values[name]
+) -> dict[str, torch.Tensor]:
+    converted: dict[str, torch.Tensor] = {}
+    for name in names:
+        value = values[name]
         if not isinstance(value, torch.Tensor):
-            converted_variable_values[name] = torch.tensor([value])
+            converted[name] = torch.tensor([value])
+        elif len(value.shape) < 1:
+            converted[name] = value.unsqueeze(dim=0)
         else:
-            converted_variable_values[name] = value
-
-        assert len(converted_variable_values[name]) in (expected_amount_points, 0)
-
-    converted_objective_values: dict[str, torch.Tensor] = {}
-    for name in objective_names:
-        value = objective_values[name]
-        if not isinstance(value, torch.Tensor):
-            converted_objective_values[name] = torch.tensor([value])
-        else:
-            converted_objective_values[name] = value
-
-        assert len(converted_objective_values[name]) in (expected_amount_points, 0)
-
-    return converted_variable_values, converted_objective_values
+            converted[name] = value
+        assert len(converted[name]) in (expected_amount_points, 0)
+    return converted
 
 
 def named_values_to_tensor(
@@ -519,13 +506,8 @@ def named_values_to_tensor(
         expected_amount_points: int
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
-    new_variable_values, new_objective_values = _validate_and_convert_for_named_values_conversion(
-        variable_values=new_variable_values,
-        objective_values=new_objective_values,
-        variable_names=variable_names,
-        objective_names=objective_names,
-        expected_amount_points=expected_amount_points
-    )
+    new_variable_values = _convert_named_values(new_variable_values, variable_names, expected_amount_points)
+    new_objective_values = _convert_named_values(new_objective_values, objective_names, expected_amount_points)
 
     new_variable_values_tensor = torch.stack(
         [new_variable_values[name] for name in variable_names],

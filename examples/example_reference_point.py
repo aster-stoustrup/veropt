@@ -28,18 +28,19 @@ optimiser = bayesian_optimiser(
 )
 
 # Evaluate the objective at the reference point
-# TODO: Fix this, it is not working correctly right now! :)
-reference_point_variables = {'var_1': 0.5, 'var_2': 0.1, 'var_3': 0.8}
-variable_order = [reference_point_variables[name] for name in objective.variable_names]
-reference_point_objectives_tensor = objective(torch.tensor([variable_order]))
-reference_point_objectives = {
-    name: float(value) for name, value in
-    zip(objective.objective_names, reference_point_objectives_tensor[0])
-}
+reference_point_variable_values = torch.tensor([[0.5, 0.1, 0.8]])
+reference_point_objective_values = optimiser.objective(reference_point_variable_values)
 
 reference_point_data = {
-    'variable_values': reference_point_variables,
-    'objective_values': reference_point_objectives
+    'variable_values': {
+        'var_1': reference_point_variable_values[0, 0],
+        'var_2': reference_point_variable_values[0, 1],
+        'var_3': reference_point_variable_values[0, 2]
+    },
+    'objective_values': {
+        'DTLZ1 1': reference_point_objective_values[0, 0],
+        'DTLZ1 2': reference_point_objective_values[0, 1]
+    }
 }
 
 optimiser.add_reference_point_real_units(reference_point_data)  # type: ignore[arg-type]
