@@ -2,7 +2,7 @@ import os
 import stat
 import time
 import subprocess
-from typing import Literal
+from typing import Literal, Optional
 
 from veropt.interfaces.simulation import Simulation, SimulationResult, SimulationRunner
 from veropt.interfaces.utility import Config
@@ -142,9 +142,13 @@ class SlurmVerosRunner(SimulationRunner):
             simulation_id: str,
             parameters: dict[str, float],
             run_script_directory: str,
-            run_script_filename: str,
+            run_script_filename: Optional[str],
             output_filename: str
     ) -> SimulationResult:
+
+        assert run_script_filename is not None, (
+            "SlurmVerosRunner requires a run_script_filename."
+        )
 
         run_script_file = os.path.join(run_script_directory, f"{run_script_filename}.py")
         batch_script_filename = f"veros_batch_{simulation_id}"

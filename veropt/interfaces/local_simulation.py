@@ -158,7 +158,7 @@ class MockSimulationRunner(SimulationRunner):
             simulation_id: str,
             parameters: dict[str, float],
             run_script_directory: str = "",
-            run_script_filename: str = "",
+            run_script_filename: Optional[str] = None,
             output_filename: str = ""
     ) -> SimulationResult:
 
@@ -209,9 +209,13 @@ class LocalVerosRunner(SimulationRunner):
             simulation_id: str,
             parameters: dict[str, float],
             run_script_directory: str,
-            run_script_filename: str,
+            run_script_filename: Optional[str],
             output_filename: str
     ) -> SimulationResult:
+
+        assert run_script_filename is not None, (
+            "LocalVerosRunner requires a run_script_filename."
+        )
 
         run_script = os.path.join(run_script_directory, f"{run_script_filename}.py")
 
