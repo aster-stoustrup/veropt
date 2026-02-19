@@ -70,5 +70,3 @@ def test_save_table_to_csv() -> None:
                 f"Objective '{obj_name}' at point {point_idx}: "
                 f"expected {expected_value}, got {csv_value}"
             )
-
-
