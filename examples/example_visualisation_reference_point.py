@@ -1,5 +1,4 @@
 import torch
-from typing import cast
 
 from veropt import bayesian_optimiser
 from veropt.graphical.visualisation import (
@@ -7,7 +6,6 @@ from veropt.graphical.visualisation import (
     plot_progression, plot_table
 )
 from veropt.optimiser.practice_objectives import DTLZ1
-from veropt.optimiser.optimiser_utility import ReferencePointInputDict
 
 objective = DTLZ1(n_variables=3, n_objectives=2)
 
@@ -30,7 +28,8 @@ optimiser = bayesian_optimiser(
 )
 
 # Evaluate the objective at the reference point
-reference_point_variables = {'var_1': 0.5, 'var_2': 0.5, 'var_3': 0.5}
+# TODO: Fix this, it is not working correctly right now! :)
+reference_point_variables = {'var_1': 0.5, 'var_2': 0.1, 'var_3': 0.8}
 variable_order = [reference_point_variables[name] for name in objective.variable_names]
 reference_point_objectives_tensor = objective(torch.tensor([variable_order]))
 reference_point_objectives = {
@@ -38,12 +37,12 @@ reference_point_objectives = {
     zip(objective.objective_names, reference_point_objectives_tensor[0])
 }
 
-reference_point_data: ReferencePointInputDict = {
+reference_point_data = {
     'variable_values': reference_point_variables,
     'objective_values': reference_point_objectives
 }
 
-optimiser.add_reference_point_real_units(reference_point_data)
+optimiser.add_reference_point_real_units(reference_point_data)  # type: ignore[arg-type]
 
 for iteration in range(5):
     optimiser.run_optimisation_step()

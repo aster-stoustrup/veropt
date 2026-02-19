@@ -164,7 +164,6 @@ class BayesianOptimiser(SavableClass):
                 expected_amount_points=1
             )
 
-
             reference_point_in_class = ReferencePoint(
                 variable_values=reference_variable_values,
                 objective_values=reference_objective_values,
