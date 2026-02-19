@@ -51,9 +51,10 @@ for iteration in range(5):
 # Print parameter table
 chosen_point_indices = [0, 5, 10]
 # Note: You can also just build the table without plotting it, e.g. to use it for a paper
-# table = build_table(
+# table = save_table_to_csv(
 #     optimiser=optimiser,
-#     chosen_points=chosen_point_indices
+#     chosen_points=chosen_point_indices,
+#     file_path='example_reference_point_table.csv'
 # )
 table_figure = plot_table(
     optimiser=optimiser,
