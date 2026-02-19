@@ -29,7 +29,7 @@ optimiser = bayesian_optimiser(
 
 # Evaluate the objective at the reference point
 reference_point_variable_values = torch.tensor([[0.5, 0.1, 0.8]])
-reference_point_objective_values = optimiser.objective(reference_point_variable_values)
+reference_point_objective_values = objective(reference_point_variable_values)
 
 reference_point_data = {
     'variable_values': {
