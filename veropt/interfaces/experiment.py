@@ -69,6 +69,7 @@ class Experiment:
             batch_manager: Union[DirectBatchManager, SubmitBatchManager],
             state: ExperimentalState
     ) -> None:
+
         self.experiment_config = experiment_config
         self.path_manager = path_manager
 
@@ -81,6 +82,8 @@ class Experiment:
 
         self.n_parameters = len(self.experiment_config.parameter_names)
         self.n_objectives = len(self.result_processor.objective_names)
+
+        self.just_rebuilt = False
 
     @classmethod
     def from_the_beginning(
@@ -320,6 +323,8 @@ class Experiment:
         experiment.optimiser.train_model()
         experiment._save_optimiser()
 
+        experiment.just_rebuilt = True
+
         return experiment
 
     @staticmethod
@@ -523,7 +528,7 @@ class Experiment:
             "Batch manager must be subclassing SubmitBatchManager to call this method"
         )
 
-        if not self.current_step == 0:
+        if not self.current_step == 0 and not self.just_rebuilt:
 
             self.batch_manager.wait_for_jobs(  # type: ignore[union-attr]  # Checked above
                 experimental_state=self.state
@@ -550,6 +555,8 @@ class Experiment:
             self.send_objectives_to_optimiser(
                 dict_of_objectives=dict_of_objectives
             )
+
+            self.just_rebuilt = False  # Maybe find more general name
 
         self.optimiser.run_optimisation_step()
 
