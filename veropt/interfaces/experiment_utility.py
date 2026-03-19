@@ -35,6 +35,7 @@ class ExperimentalState(Config):
     experiment_directory: str
     points: dict[int, Point]
     next_point: int
+    just_rebuilt: bool = False
 
     def update(
             self,
