@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from itertools import islice
+from pathlib import Path
 from typing import Literal, Optional, Union
 
 import numpy as np
@@ -9,12 +10,16 @@ import torch
 from dash import Dash, Input, Output, State, callback, dcc, html
 from dash.exceptions import PreventUpdate
 from plotly.subplots import make_subplots
+
 from veropt.graphical._model_visualisation import (
     _fill_model_prediction_from_optimiser, _plot_prediction_grid, _plot_prediction_surface,
     choose_plot_point, _add_labels, _calculate_grid_model_matrix
 )
-from veropt.graphical._overview import _plot_point_overview, plot_point_overview_separate_subplots, _plot_progression
+from veropt.graphical._overview import plot_point_overview_separate_subplots, _plot_progression
 from veropt.graphical._pareto_front import _plot_pareto_front_grid, _plot_pareto_front
+from veropt.graphical._table import (
+    _build_table, _plot_table, _save_table_as_csv, _plot_bounds_table
+)
 from veropt.graphical._visualisation_utility import (
     ModelPredictionContainer, get_point_from_number
 )
@@ -40,9 +45,14 @@ def plot_point_overview(
     if normalised:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
+        bounds = optimiser.bounds.tensor
+        reference_point = None
+
     else:
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
+        bounds = optimiser.bounds_real_units
+        reference_point = optimiser.reference_point
 
     if points == 'all':
         pass
@@ -120,23 +130,30 @@ def plot_point_overview(
     objective_names = optimiser.objective.objective_names
     variable_names = optimiser.objective.variable_names
 
-    if normalised:
-        figure = _plot_point_overview(
-            variable_values=variable_values,
-            objective_values=objective_values,
-            objective_names=objective_names,
-            variable_names=variable_names,
-            shown_indices=shown_inds
-        )
+    # Note: Disabled this for now because it just feels a little unnecessary to continue to take care of this
+    # when it's probably unlikely to be used. Should maybe just delete eventually?
+    #   - Counter-point could be that for large amounts of parameters, *maybe* it's easier to use...?
+    #
+    # if normalised:
+    #     figure = _plot_point_overview(
+    #         variable_values=variable_values,
+    #         objective_values=objective_values,
+    #         objective_names=objective_names,
+    #         variable_names=variable_names,
+    #         shown_indices=shown_inds
+    #     )
+    #
+    # else:
 
-    else:
-        figure = plot_point_overview_separate_subplots(
-            variable_values=variable_values,
-            objective_values=objective_values,
-            objective_names=objective_names,
-            variable_names=variable_names,
-            shown_indices=shown_inds
-        )
+    figure = plot_point_overview_separate_subplots(
+        variable_values=variable_values,
+        objective_values=objective_values,
+        objective_names=objective_names,
+        variable_names=variable_names,
+        bounds=bounds,
+        shown_indices=shown_inds,
+        reference_point=reference_point
+    )
 
     return figure
 
@@ -148,14 +165,17 @@ def plot_progression(
 
     if normalised is False:
         objective_values = optimiser.evaluated_objectives_real_units
+        reference_point = optimiser.reference_point
 
     else:
         objective_values = optimiser.evaluated_objective_values.tensor
+        reference_point = None
 
     figure = _plot_progression(
         objective_values=objective_values,
         objective_names=optimiser.objective.objective_names,
         n_initial_points=optimiser.n_initial_points,
+        reference_point=reference_point
     )
 
     return figure
@@ -170,11 +190,13 @@ def plot_pareto_front_grid(
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
         suggested_points = optimiser.suggested_points_real_units
+        reference_point = optimiser.reference_point
 
     else:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
         suggested_points = optimiser.suggested_points
+        reference_point = None
 
     pareto_optimal_indices = get_pareto_optimal_points(
         variable_values=variable_values,
@@ -189,6 +211,7 @@ def plot_pareto_front_grid(
         pareto_optimal_indices=pareto_optimal_indices,
         n_initial_points=optimiser.n_initial_points,
         suggested_points=suggested_points,
+        reference_point=reference_point,
         return_figure=True
     )
 
@@ -205,11 +228,13 @@ def plot_pareto_front(
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
         suggested_points = optimiser.suggested_points_real_units
+        reference_point = optimiser.reference_point
 
     else:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
         suggested_points = optimiser.suggested_points
+        reference_point = None
 
     pareto_optimal_indices = get_pareto_optimal_points(
         variable_values=variable_values,
@@ -223,7 +248,8 @@ def plot_pareto_front(
         objective_names=optimiser.objective.objective_names,
         n_initial_points=optimiser.n_initial_points,
         suggested_points=suggested_points,
-        return_figure=True,
+        reference_point=reference_point,
+        return_figure=True
     )
 
     return figure
@@ -242,11 +268,13 @@ def plot_prediction_grid(
         variable_values = optimiser.evaluated_variables_real_units
         objective_values = optimiser.evaluated_objectives_real_units
         suggested_points = optimiser.suggested_points_real_units
+        reference_point = optimiser.reference_point
 
     else:
         variable_values = optimiser.evaluated_variable_values.tensor
         objective_values = optimiser.evaluated_objective_values.tensor
         suggested_points = optimiser.suggested_points
+        reference_point = None
 
     objective_names = optimiser.objective.objective_names
     variable_names = optimiser.objective.variable_names
@@ -343,6 +371,7 @@ def plot_prediction_grid(
         objective_names=objective_names,
         variable_names=variable_names,
         suggested_points=suggested_points,
+        reference_point=reference_point,
         plot_acquisition=plot_acquisition
     )
 
@@ -449,7 +478,8 @@ def plot_prediction_surface(
         normalised: bool = False,
         n_points_per_dimension: int = 200,
         figure: Optional[go.Figure] = None,
-        row_col: Optional[tuple] = None
+        row_col: Optional[tuple] = None,
+        camera: Optional[dict[Literal['eye', 'center', 'up'], dict[Literal['x', 'y', 'z'], float]]] = None
 ) -> go.Figure:
 
     if normalised is False:
@@ -519,7 +549,7 @@ def plot_prediction_surface(
         y_axis_title += ' (normalised)'
         z_axis_title += ' (normalised)'
 
-    return _plot_prediction_surface(
+    figure = _plot_prediction_surface(
         prediction_objective_matrix=prediction_objective_matrix,
         prediction_grid_x=grid_x,
         prediction_grid_y=grid_y,
@@ -535,6 +565,12 @@ def plot_prediction_surface(
         figure=figure,
         row_col=row_col
     )
+
+    if camera is not None:
+        # Maybe move to underlying function
+        figure.update_layout(scene_camera=camera)
+
+    return figure
 
 
 def plot_prediction_surface_grid(
@@ -615,7 +651,8 @@ def plot_prediction_surface_grid(
                     normalised=normalised,
                     n_points_per_dimension=n_points_per_dimension,
                     figure=figure,
-                    row_col=(variable_no_y, variable_no_x + 1)
+                    row_col=(variable_no_y, variable_no_x + 1),
+                    camera=camera
                 )
 
                 plotted_combinations.append(
@@ -648,9 +685,85 @@ def plot_prediction_surface_grid(
         labels_y=labels_y[::-1]
     )
 
-    if camera is not None:
-        figure.update_scenes(
-            camera=camera
-        )
+    return figure
+
+
+def build_table(
+        optimiser: BayesianOptimiser,
+        chosen_points: list[int]
+) -> dict[Literal['variables', 'objectives'], list[dict[str, str | float | None]]]:
+
+    variable_names = optimiser.objective.variable_names
+    objective_names = optimiser.objective.objective_names
+
+    # Use real units instead of normalised values
+    evaluated_variable_values = optimiser.evaluated_variables_real_units
+    evaluated_objective_values = optimiser.evaluated_objectives_real_units
+
+    reference_variable_values = None
+    reference_objective_values = None
+    if optimiser.reference_point is not None:
+        reference_variable_values = optimiser.reference_point.variable_values[0]
+        reference_objective_values = optimiser.reference_point.objective_values[0]
+
+    return _build_table(
+        variable_names=variable_names,
+        objective_names=objective_names,
+        chosen_points=chosen_points,
+        evaluated_variable_values=evaluated_variable_values,
+        evaluated_objective_values=evaluated_objective_values,
+        reference_variable_values=reference_variable_values,
+        reference_objective_values=reference_objective_values,
+    )
+
+
+def plot_table(
+        optimiser: BayesianOptimiser,
+        chosen_points: list[int]
+) -> go.Figure:
+
+    table_data = build_table(
+        optimiser=optimiser,
+        chosen_points=chosen_points
+    )
+
+    figure = make_subplots(
+        rows=2,
+        cols=1,
+        specs=[[{'type': 'table'}], [{'type': 'table'}]],
+        vertical_spacing=0.05,
+        row_heights=[0.7, 0.3]
+    )
+
+    main_table = _plot_table(
+        table_data=table_data,
+        bounds=optimiser.bounds_real_units
+    )
+    figure.add_trace(main_table.data[0], row=1, col=1)
+
+    bounds_table = _plot_bounds_table(
+        variable_names=optimiser.objective.variable_names,
+        bounds=optimiser.bounds_real_units
+    )
+    figure.add_trace(bounds_table, row=2, col=1)
+
+    figure.update_layout(height=800)
 
     return figure
+
+
+def save_table_to_csv(
+        optimiser: BayesianOptimiser,
+        chosen_points: list[int],
+        file_path: str | Path
+) -> None:
+
+    table_data = build_table(
+        optimiser=optimiser,
+        chosen_points=chosen_points
+    )
+
+    _save_table_as_csv(
+        table_data=table_data,
+        filepath=file_path
+    )

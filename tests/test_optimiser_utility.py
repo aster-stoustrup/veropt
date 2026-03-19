@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from veropt.optimiser.optimiser_utility import format_input_from_objective, format_output_for_objective, \
+from veropt.optimiser.optimiser_utility import named_values_to_tensor, format_output_for_objective, \
     get_best_points, get_pareto_optimal_points
 
 
@@ -207,7 +207,7 @@ def test_format_input_from_objective() -> None:
     expected_variable_tensor = expected_variable_tensor.T
     expected_objective_values = expected_objective_values.T
 
-    (new_variable_values_tensor, new_objective_values_tensor) = format_input_from_objective(
+    (new_variable_values_tensor, new_objective_values_tensor) = named_values_to_tensor(
         new_variable_values=new_variable_values,
         new_objective_values=new_objective_values,
         variable_names=variable_names,
@@ -239,7 +239,7 @@ def test_format_input_from_objective_too_few_points() -> None:
     }
 
     with pytest.raises(AssertionError):
-        format_input_from_objective(
+        named_values_to_tensor(
             new_variable_values=new_variable_values,
             new_objective_values=new_objective_values,
             variable_names=variable_names,
@@ -278,7 +278,37 @@ def test_format_output_for_objective() -> None:
 
 
 def test_get_nadir_point() -> None:
-
     # TODO: Implement
 
     pass
+
+
+def test_format_input_from_objective_with_scalar_floats() -> None:
+    expected_amount_points = 1
+
+    variable_names = ['var_1', 'var_2', 'var_3']
+    objective_names = ['obj_1', 'obj_2']
+
+    new_variable_values = {
+        'var_1': 0.4,
+        'var_2': 1.2,
+        'var_3': 0.2,
+    }
+    new_objective_values = {
+        'obj_1': 1.1,
+        'obj_2': 0.5,
+    }
+
+    new_variable_values_tensor, new_objective_values_tensor = named_values_to_tensor(
+        new_variable_values=new_variable_values,
+        new_objective_values=new_objective_values,
+        variable_names=variable_names,
+        objective_names=objective_names,
+        expected_amount_points=expected_amount_points
+    )
+
+    expected_variable_tensor = torch.tensor([[0.4, 1.2, 0.2]])
+    expected_objective_tensor = torch.tensor([[1.1, 0.5]])
+
+    assert torch.equal(new_variable_values_tensor, expected_variable_tensor)
+    assert torch.equal(new_objective_values_tensor, expected_objective_tensor)

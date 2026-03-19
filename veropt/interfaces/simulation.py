@@ -41,7 +41,7 @@ class SimulationRunner(ABC):
             simulation_id: str,
             parameters: dict[str, float],
             run_script_directory: str,
-            run_script_filename: str,
+            run_script_filename: Optional[str],
             output_filename: str
     ) -> SimulationResult:
         ...
@@ -51,7 +51,7 @@ class SimulationRunner(ABC):
             simulation_id: str,
             parameters: dict[str, float],
             run_script_directory: str,
-            run_script_filename: str,
+            run_script_filename: Optional[str],
             output_filename: str
     ) -> SimulationResult:
 

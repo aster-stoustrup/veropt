@@ -110,7 +110,7 @@ class ExperimentConfig(Config):
     path_to_experiment: str
     experiment_mode: ExperimentMode
     experiment_directory_name: Optional[str] = None
-    run_script_filename: str  # TODO: Make this optional or remove!!
+    run_script_filename: Optional[str] = None
     run_script_root_directory: Optional[str] = None
     output_filename: str
 
@@ -124,9 +124,10 @@ class PathManager:
         self.experiment_config = experiment_config
 
         create_directory(self.experiment_directory)
-        # TODO: Make this optional or remove!!
-        #   - Currently forced to use this even when not meaningful to experiment
-        assert os.path.isdir(self.run_script_root_directory), "Run script root directory not found."
+
+        if self.run_script_root_directory is not None:
+            assert os.path.isdir(self.run_script_root_directory), "Run script root directory not found."
+
         create_directory(self.results_directory)
 
     @property
@@ -146,18 +147,20 @@ class PathManager:
         return path
 
     @property
-    def run_script_root_directory(self) -> str:
+    def run_script_root_directory(self) -> Optional[str]:
 
         if self.experiment_config.run_script_root_directory is not None:
-            path = self.experiment_config.run_script_root_directory
+            return self.experiment_config.run_script_root_directory
 
-        else:
-            path = os.path.join(
-                self.experiment_directory,
-                f"{self.experiment_config.experiment_name}_setup"  # better name?
-            )
+        default_path = os.path.join(
+            self.experiment_directory,
+            f"{self.experiment_config.experiment_name}_setup"
+        )
 
-        return path
+        if os.path.isdir(default_path):
+            return default_path
+
+        return None
 
     @property
     def results_directory(self) -> str:
