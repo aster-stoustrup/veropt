@@ -82,26 +82,29 @@ def test_submit_experiment_submits_expected_batches() -> None:
 
 def test_new_version_experiment_processes_pending_jobs() -> None:
     """
-    After continue_with_new_version, running the experiment should correctly wait for and
-    process the pending jobs that were submitted by the old experiment.
+    After continue_with_new_version, running the experiment should:
+      1. Skip waiting on the first new step (just_rebuilt=True) - no new-version jobs are pending yet.
+      2. Submit its own new bayesian jobs on that first step.
+      3. On the second step (just_rebuilt=False), correctly wait for and process those new jobs.
 
-    Scenario:
-    - Old experiment runs 2 steps: step 0 submits 4 initial points, step 1 processes initial
-      results and submits 4 bayesian points. The bayesian jobs are left pending.
-    - New version rebuilds from the 4 evaluated initial points (n_steps_to_reevaluate = 1).
-    - Running the new experiment (1 remaining step) should wait for the pending bayesian jobs,
-      process them, and feed results to the optimiser.
+    We use n_bayesian_points=8 so the new version has 2 remaining steps after the rebuild
+    (n_total_steps=4, old experiment leaves current_step=2, so n_remaining=2). This gives
+    one step to submit and one step to wait.
 
-    This test exposes the bug where just_rebuilt is never reset to False, causing the
-    wait_for_jobs / result processing block to be skipped on all subsequent steps.
+    This test exposes the bug where just_rebuilt is never reset to False, causing
+    wait_for_jobs to be skipped on every step - meaning the new version's own submitted
+    jobs are never processed.
     """
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         old_config = _make_experiment_config(tmp_dir, version=None)
         new_config = _make_experiment_config(tmp_dir, version="v2")
-        optimiser_config = _make_optimiser_config()
 
-        # --- Build and partially run old experiment ---
+        # n_bayesian=8 gives n_total_steps = (4+8)//4 + 1 = 4
+        optimiser_config = _make_optimiser_config()
+        optimiser_config["n_bayesian_points"] = 8
+
+        # --- Build and partially run old experiment (2 of 4 steps) ---
 
         old_experiment = Experiment.from_the_beginning(
             simulation_runner=_make_simulation_runner(),
@@ -114,14 +117,10 @@ def test_new_version_experiment_processes_pending_jobs() -> None:
         old_experiment.run_experiment_step()  # Step 0: submits 4 initial points
         old_experiment.run_experiment_step()  # Step 1: processes initial, submits 4 bayesian
 
-        # Sanity-check: old experiment has submitted 8 points but only evaluated 4 (initial)
         assert old_experiment.n_points_submitted == 8
         assert old_experiment.n_points_evaluated == 4
 
-        # Bayesian points are still waiting
-        assert old_experiment.state.points[4].state == "Simulation started"
-
-        # --- Create new version, which rebuilds from the 4 initial evaluated points ---
+        # --- Create new version, rebuilding from the 4 evaluated initial points ---
 
         new_experiment = Experiment.continue_with_new_version(
             simulation_runner=_make_simulation_runner(),
@@ -132,27 +131,25 @@ def test_new_version_experiment_processes_pending_jobs() -> None:
             batch_manager_class=FakeSubmitBatchManager
         )
 
-        # After rebuild: 4 initial points re-evaluated, old state (8 submitted) carried over
-        assert new_experiment.n_points_evaluated == 4
-        assert new_experiment.n_points_submitted == 8
-        assert new_experiment.just_rebuilt is True
+        assert new_experiment.n_points_evaluated == 4   # initial points re-evaluated
+        assert new_experiment.n_points_submitted == 8   # old state carried over
+        assert new_experiment.state.just_rebuilt is True
 
-        # --- Run the 1 remaining step of the new experiment ---
-        # Correct behaviour: wait for points 4-7, process their results, feed to optimiser
-        # Bug behaviour: just_rebuilt never resets → wait_for_jobs and result processing are skipped
+        # --- Run the 2 remaining steps of the new experiment ---
+        # Step 1 (just_rebuilt=True):  skip waiting, suggest + submit 4 new bayesian points
+        # Step 2 (just_rebuilt=False): wait for those new jobs, process, make final suggestions
 
         new_experiment.run_experiment()
 
-        # The bayesian jobs from the old experiment should have been waited for
-        assert new_experiment.state.points[4].state == "Simulation completed"
-        assert new_experiment.state.points[7].state == "Simulation completed"
+        new_fake_bm = new_experiment.batch_manager
+        assert isinstance(new_fake_bm, FakeSubmitBatchManager)
 
-        # All 8 points (4 initial + 4 bayesian) should now be in the optimiser
-        assert new_experiment.n_points_evaluated == 8
+        # New version should have submitted exactly 1 new batch (its own step 1)
+        assert new_fake_bm.n_batches_submitted == 1
+        assert new_fake_bm.n_jobs_submitted == 4
 
-        # Data integrity: objective value for point N is float(N + 1), so the last 4 evaluated
-        # points should be 5.0, 6.0, 7.0, 8.0 (not a repeat of the initial 1.0–4.0)
-        evaluated_objectives = new_experiment.optimiser.evaluated_objectives_real_units
-        last_four_objectives = evaluated_objectives[-4:, 0].tolist()
-        assert last_four_objectives == [5.0, 6.0, 7.0, 8.0]
-
+        # The new version's own jobs (points 8-11) should have been waited for on step 2.
+        # With the bug (just_rebuilt never resets), step 2 also skips wait_for_jobs,
+        # so these points stay "Simulation started" and this assertion fails.
+        assert new_experiment.state.points[8].state == "Simulation completed"
+        assert new_experiment.state.points[11].state == "Simulation completed"

@@ -554,8 +554,6 @@ class Experiment:
                 dict_of_objectives=dict_of_objectives
             )
 
-            self.state.just_rebuilt = False  # Maybe find more general name
-
         self.optimiser.run_optimisation_step()
 
         dict_of_parameters = self.get_parameters_from_optimiser()
@@ -567,6 +565,9 @@ class Experiment:
                 dict_of_parameters=dict_of_parameters,
                 experimental_state=self.state
             )
+
+        if self.state.just_rebuilt:
+            self.state.just_rebuilt = False
 
     def re_run_experiment_step_from_existing_data(self) -> None:
 
