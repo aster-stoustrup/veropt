@@ -123,8 +123,8 @@ Functions use `@_check_input_dimensions` decorator (in `acquisition.py`, `model.
 - Single-objective: `n_objectives=1`
 - Multi-objective: Nadir point automatically generated via `get_nadir_point()` for qLogEHVI acquisition
 - **BoTorch Reference Point**: Mathematical entity used internally in acquisition function calculations. Do not confuse with veropt's reference points.
-- **veropt Reference Points** (visualization only): User-supplied variable values for visual comparison in plots - **distinct from BoTorch's reference point**
-  - Stored as `variable_values` dictionaries, not objective values
+- **veropt Reference Points** (visualization only): User-supplied points for comparison in plots - **distinct from BoTorch's reference point**
+  - Contains both `variable_values` and `objective_values` (stored as `torch.Tensor`)
   - Interfaces aim to support automatic evaluation of user variable values to extract objective values for visualization
   - Cannot be auto-created; requires explicit user input
 
