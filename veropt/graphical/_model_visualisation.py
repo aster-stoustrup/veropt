@@ -629,7 +629,9 @@ def _plot_prediction_surface(
         current_point_marker_size = 10
 
         row_col_args = {}
-        marker_args = {}
+        marker_args = {
+            'size': 4
+        }
         zaxis_arg = {
             'zaxis': {
                 'title': {
