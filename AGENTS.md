@@ -28,8 +28,8 @@ The library follows this optimization loop:
 - **`saver_loader_utility.py`**: Serialization via `SavableClass` interface - all core objects implement this
 
 #### `veropt/interfaces/` - External Simulation Integration
-- **`experiment.py`**: `Experiment` class orchestrating simulations with batch management
-- **`simulation.py`**: Abstract `SimulationRunner` for executing objective functions
+- **`experiment.py`**: `Experiment` class - recommended high-level interface orchestrating simulations with batch management and state persistence
+- **`simulation.py`**: Abstract `SimulationRunner` for executing objective functions (local or SLURM-based)
 - **`batch_manager.py`**: Submit jobs locally or to SLURM clusters
 - **`result_processing.py`**: `ResultProcessor` to extract objectives from simulation outputs
 - **`experiment_utility.py`**: State management (`ExperimentalState`) and configuration (`ExperimentConfig`)
@@ -61,7 +61,24 @@ BayesianOptimiser.run_optimisation_step()
 
 ## Critical Developer Patterns
 
-### 1. Configuration via TypedDict
+### 0. Code Design Priorities
+Follow this hierarchy when generating code - **always start minimal**:
+1. **KISS (Keep It Simple, Stupid)** - Primary goal. Start with minimal implementation.
+2. **YAGNI (You Aren't Gonna Need It)** - Avoid speculation. If edge case not demonstrated, add `assert` instead.
+3. **SRP (Single Responsibility Principle)** - One clear purpose per function/class
+4. **Rest of SOLID principles**
+
+Example: Don't build a general strategy pattern if a simple `if/else` works. Add assertions for unsupported cases rather than over-engineering.
+
+### 1. Natural Naming Conventions
+- **Loops**: Use descriptive names, not single letters. Examples:
+  - `for point_number in range(n_points):` not `for i in range(n_points):`
+  - `for objective_index, obj_value in enumerate(objectives):` not `for i, val in enumerate(objectives):`
+  - `for step in range(max_steps):` not `for i in range(max_steps):`
+- **Variables**: Name for clarity even if verbose. `evaluated_objectives_normalised` is better than `evals`.
+- **Boolean flags**: Prefix with verb (is_, has_, can_). Example: `should_normalize_inputs` not `normalize`.
+
+### 2. Configuration via TypedDict
 The library uses `TypedDict` for flexible, validated configuration dictionaries rather than explicit arguments:
 
 ```python
@@ -78,33 +95,38 @@ optimiser = bayesian_optimiser(
 
 See `optimiser_utility.py` for `OptimiserSettingsInputDict` definition.
 
-### 2. Savable/Loadable Architecture
+### 3. Savable/Loadable Architecture
 All core classes inherit from `SavableClass` (abstract base in `saver_loader_utility.py`):
 - Implement `gather_dicts_to_save()` to return serializable dict
 - Implement `from_saved_state(saved_state: dict)` for deserialization
+- For dataclasses, inherit from `SavableDataClass` instead - automatically implements both methods via `asdict()`
 - This enables checkpointing: `save_to_json(optimiser, path)` / `load_optimiser_from_state(path)`
 
-### 3. Normalization as Wrapper
+### 4. Normalization as Wrapper
 Normalisation is transparent - objectives/variables can be in real or normalized space:
 - Stored in `_normaliser_variables` and `_normaliser_objectives` (optional)
 - Properties like `bounds_normalised`, `evaluated_variables_normalised` cache normalized versions
 - Always work in real units internally, normalize only when needed by GP
 
-### 4. Torch as Default Numerics
+### 5. Torch as Default Numerics
 - `torch.set_default_dtype(torch.float64)` set at module load
 - All numeric operations use PyTorch tensors
 - `numpy` compatibility handled explicitly (see `check_incoming_objective_dimensions_fix_1d`)
 
-### 5. Decorator Pattern for Input Validation
+### 6. Decorator Pattern for Input Validation
 Functions use `@_check_input_dimensions` decorator (in `acquisition.py`, `model.py`) to:
 - Enforce consistent variable/objective dimensions
 - Support flexible positional/keyword arguments via `**kwargs`
 - See `utility.py` for `enforce_amount_of_positional_arguments`
 
-### 6. Multi-Objective via Reference Points
+### 7. Multi-Objective & Visualization Reference Points
 - Single-objective: `n_objectives=1`
-- Multi-objective: Reference point required for qLogEHVI (`veropt/optimiser/optimiser_utility.py`)
-- Use `get_nadir_point()` for automatic reference point generation
+- Multi-objective: Nadir point automatically generated via `get_nadir_point()` for qLogEHVI acquisition
+- **BoTorch Reference Point**: Mathematical entity used internally in acquisition function calculations. Do not confuse with veropt's reference points.
+- **veropt Reference Points** (visualization only): User-supplied variable values for visual comparison in plots - **distinct from BoTorch's reference point**
+  - Stored as `variable_values` dictionaries, not objective values
+  - Interfaces aim to support automatic evaluation of user variable values to extract objective values for visualization
+  - Cannot be auto-created; requires explicit user input
 
 ## Testing & Validation
 
@@ -134,7 +156,7 @@ python local_workflows/linting.py
 
 ### Test Structure
 - Test files match source structure: `tests/test_*.py` for `veropt/*.py`
-- Use practice objectives (`Hartmann`, `VehicleSafety`) for testing
+- Use practice objectives from `veropt.optimiser.practice_objectives` for testing: `Hartmann` (3/4/6-d), `VehicleSafety` (5-d, multi-objective), `DTLZ1` (configurable)
 - Example: `test_run_optimisation_step()` in `test_optimiser.py` runs 5 steps with reduced iterations
 
 ## Examples & Interfaces
