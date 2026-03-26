@@ -80,8 +80,8 @@ class BatchManager(ABC):
     def __init__(
             self,
             simulation_runner: SimulationRunner,
-            run_script_filename: str,
-            run_script_root_directory: str,
+            run_script_filename: Optional[str],
+            run_script_root_directory: Optional[str],
             results_directory: str,
             experimental_state_json: str,
             output_filename: str,
@@ -122,10 +122,11 @@ class BatchManager(ABC):
 
         create_directory(path=result_directory)
 
-        copy_files(
-            source_directory=self.run_script_root_directory,
-            destination_directory=result_directory
-        )
+        if self.run_script_root_directory is not None:
+            copy_files(
+                source_directory=self.run_script_root_directory,
+                destination_directory=result_directory
+            )
 
         return simulation_id, result_directory
 
@@ -145,8 +146,8 @@ def _get_batch_manager_class(
 def make_batch_manager(
         experiment_mode: Literal['local', 'local_slurm', 'remote_slurm'],
         simulation_runner: SimulationRunner,
-        run_script_filename: str,
-        run_script_root_directory: str,
+        run_script_filename: Optional[str],
+        run_script_root_directory: Optional[str],
         results_directory: str,
         experimental_state_json: str,
         output_filename: str,

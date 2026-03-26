@@ -8,7 +8,7 @@ from plotly import graph_objects as go
 from plotly.express import colors
 from plotly.subplots import make_subplots
 
-from veropt.optimiser.optimiser_utility import SuggestedPoints
+from veropt.optimiser.optimiser_utility import ReferencePoint, SuggestedPoints
 from veropt.optimiser.utility import DataShape
 
 
@@ -18,6 +18,7 @@ def _plot_pareto_front_grid(
         pareto_optimal_indices: list[int],
         n_initial_points: int,
         suggested_points: Optional[SuggestedPoints] = None,
+        reference_point: Optional[ReferencePoint] = None,
         return_figure: bool = False
 ) -> Union[go.Figure, None]:
 
@@ -44,6 +45,7 @@ def _plot_pareto_front_grid(
                     pareto_optimal_indices=pareto_optimal_indices,
                     n_initial_points=n_initial_points,
                     suggested_points=suggested_points,
+                    reference_point=reference_point,
                     row=row,
                     col=col
                 )
@@ -72,6 +74,7 @@ def _add_pareto_traces_2d(
         pareto_optimal_indices: list[int],
         n_initial_points: int,
         suggested_points: Optional[SuggestedPoints] = None,
+        reference_point: Optional[ReferencePoint] = None,
         row: Optional[int] = None,
         col: Optional[int] = None
 ) -> go.Figure:
@@ -206,6 +209,7 @@ def _add_pareto_traces_2d(
                     name='Suggested points',
                     legendgroup="Suggested points",
                     showlegend=True if (suggested_point_no == 0 and show_legend) else False,
+                    visible='legendonly',
                     customdata=np.dstack([
                                 [prediction['lower'][objective_index_x].detach().numpy()],
                                 [prediction['upper'][objective_index_x].detach().numpy()],
@@ -221,6 +225,26 @@ def _add_pareto_traces_2d(
                 **row_col_info
             )
 
+    if reference_point is not None:
+        figure.add_trace(
+            go.Scatter(
+                x=[reference_point.objective_values[0, objective_index_x]],
+                y=[reference_point.objective_values[0, objective_index_y]],
+                mode='markers',
+                name='Reference point',
+                legendgroup='Reference point',
+                showlegend=show_legend,
+                marker={
+                    'symbol': 'square',
+                    'color': 'purple'
+                },
+                hovertemplate="Reference Point <br>"
+                              f"{objective_names[objective_index_x]}:" + " %{x:.3f} <br>"
+                              f"{objective_names[objective_index_y]}:" + " %{y:.3f} <br>"
+            ),
+            **row_col_info
+        )
+
     return figure
 
 
@@ -231,6 +255,7 @@ def _plot_pareto_front(
         objective_names: list[str],
         n_initial_points: int,
         suggested_points: Optional[SuggestedPoints] = None,
+        reference_point: Optional[ReferencePoint] = None,
         return_figure: bool = False
 ) -> Union[go.Figure, None]:
 
@@ -249,7 +274,8 @@ def _plot_pareto_front(
             objective_names=objective_names,
             pareto_optimal_indices=pareto_optimal_indices,
             n_initial_points=n_initial_points,
-            suggested_points=suggested_points
+            suggested_points=suggested_points,
+            reference_point=reference_point
         )
 
         figure.update_xaxes(

@@ -14,7 +14,7 @@ from veropt.graphical._visualisation_utility import (
     opacity_for_multidimensional_points, get_continuous_colour
 )
 from veropt.optimiser.optimiser import BayesianOptimiser
-from veropt.optimiser.optimiser_utility import SuggestedPoints
+from veropt.optimiser.optimiser_utility import ReferencePoint, SuggestedPoints
 from veropt.optimiser.prediction import Predictor
 from veropt.optimiser.utility import DataShape
 
@@ -190,6 +190,7 @@ def _plot_prediction_grid(
         objective_names: list[str],
         variable_names: list[str],
         suggested_points: Optional[SuggestedPoints] = None,
+        reference_point: Optional[ReferencePoint] = None,
         plot_acquisition: bool = False,
         variables: Optional[list[int]] = None
 ) -> go.Figure:
@@ -436,6 +437,28 @@ def _plot_prediction_grid(
                         row=row_no, col=col_no
                     )
 
+            if reference_point is not None:
+                figure.add_trace(
+                    go.Scatter(
+                        x=[reference_point.variable_values[0, variable_index].item()],
+                        y=[reference_point.objective_values[0, objective_index].item()],
+                        mode='markers',
+                        name='Reference point',
+                        visible='legendonly',
+                        legendgroup='Reference point',
+                        showlegend=True if (row_no == 1 and col_no == 1) else False,
+                        marker={
+                            'symbol': 'square',
+                            'size': 8,
+                            'color': 'blue',
+                        },
+                        hovertemplate="<b>Reference Point</b><br>"
+                                      f"{variable_names[variable_index]}:" + " %{x:.3f}<br>"
+                                      f"{objective_names[objective_index]}:" + " %{y:.3f}<extra></extra>"
+                    ),
+                    row=row_no, col=col_no
+                )
+
             figure.update_xaxes(
                 range=[model_prediction.variable_array.min(), model_prediction.variable_array.max()],
                 row=row_no,
@@ -611,7 +634,7 @@ def _plot_prediction_surface(
         figure = go.Figure()
 
     if row_col is None:
-        current_point_marker_size = 20
+        current_point_marker_size = 10
 
         row_col_args = {}
         marker_args = {}

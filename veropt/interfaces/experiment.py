@@ -69,6 +69,7 @@ class Experiment:
             batch_manager: Union[DirectBatchManager, SubmitBatchManager],
             state: ExperimentalState
     ) -> None:
+
         self.experiment_config = experiment_config
         self.path_manager = path_manager
 
@@ -243,7 +244,7 @@ class Experiment:
         old_state_path = old_path_manager.experimental_state_json
 
         assert new_experiment_config.experiment_name == old_experiment_config.experiment_name, (
-            f"Attempted to make new version of experiment '{old_experiment_config.experiment_name}' but name doesn't"
+            f"Attempted to make new version of experiment '{old_experiment_config.experiment_name}' but name doesn't "
             f"match with the one in the new configuration file ('{new_experiment_config.experiment_name}')."
         )
 
@@ -319,6 +320,8 @@ class Experiment:
 
         experiment.optimiser.train_model()
         experiment._save_optimiser()
+
+        experiment.state.just_rebuilt = True
 
         return experiment
 
@@ -523,7 +526,7 @@ class Experiment:
             "Batch manager must be subclassing SubmitBatchManager to call this method"
         )
 
-        if not self.current_step == 0:
+        if not self.current_step == 0 and not self.state.just_rebuilt:
 
             self.batch_manager.wait_for_jobs(  # type: ignore[union-attr]  # Checked above
                 experimental_state=self.state
@@ -550,6 +553,8 @@ class Experiment:
             self.send_objectives_to_optimiser(
                 dict_of_objectives=dict_of_objectives
             )
+
+            self.state.just_rebuilt = False  # Maybe find more general name
 
         self.optimiser.run_optimisation_step()
 

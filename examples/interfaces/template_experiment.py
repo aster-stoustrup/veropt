@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from veropt.interfaces.constructors import experiment
 from veropt.interfaces.result_processing import ResultProcessor
@@ -11,7 +11,7 @@ class UserDefinedSimulationRunner(SimulationRunner):
             simulation_id: str,
             parameters: dict[str, float],
             run_script_directory: str,
-            run_script_filename: str,
+            run_script_filename: Optional[str],
             output_filename: str
     ) -> SimulationResult:
 

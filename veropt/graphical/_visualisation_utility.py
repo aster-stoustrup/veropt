@@ -10,15 +10,36 @@ from veropt.optimiser.optimiser_utility import SuggestedPoints
 from veropt.optimiser.utility import DataShape, PredictionDict
 
 
+def _convert_to_rgb(color: str) -> str:
+    """Convert a color to rgb format if it's in hex format."""
+    if color.startswith('#'):
+        # Convert hex to rgb
+        hex_color = color.lstrip('#')
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+        return f"rgb({r}, {g}, {b})"
+    return color
+
+
 def get_continuous_colour(
         colour_scale: list[list],
-        value: float
+        value: float,
+        alpha: Optional[float] = None
 ) -> str:
 
     if value == 0.0:
-        return colour_scale[0][1]
+        color = _convert_to_rgb(colour_scale[0][1])
+        if alpha is not None:
+            rgb_values = colors.unlabel_rgb(color)
+            return f"rgba({rgb_values[0]:.2f}, {rgb_values[1]:.2f}, {rgb_values[2]:.2f}, {alpha})"
+        return color
     if value == 1.0:
-        return colour_scale[-1][1]
+        color = _convert_to_rgb(colour_scale[-1][1])
+        if alpha is not None:
+            rgb_values = colors.unlabel_rgb(color)
+            return f"rgba({rgb_values[0]:.2f}, {rgb_values[1]:.2f}, {rgb_values[2]:.2f}, {alpha})"
+        return color
 
     low_cutoff = None
     low_colour = None
@@ -38,6 +59,10 @@ def get_continuous_colour(
     assert high_cutoff is not None
     assert high_colour is not None
 
+    # Convert colors to rgb format if they're in hex
+    low_colour = _convert_to_rgb(low_colour)
+    high_colour = _convert_to_rgb(high_colour)
+
     intermediate_colour = colors.find_intermediate_color(
         lowcolor=low_colour, highcolor=high_colour,
         intermed=((value - low_cutoff) / (high_cutoff - low_cutoff)),
@@ -47,6 +72,10 @@ def get_continuous_colour(
     # Trying to fix a plotly bug >:(
     #   - Might still make a small error, should test when some of the colours are very small
     unlabeled_colour = colors.unlabel_rgb(intermediate_colour)
+
+    if alpha is not None:
+        return f"rgba({unlabeled_colour[0]:.2f}, {unlabeled_colour[1]:.2f}, {unlabeled_colour[2]:.2f}, {alpha})"
+
     relabeled_colour = f"rgb({unlabeled_colour[0]:.2f}, {unlabeled_colour[1]:.2f}, {unlabeled_colour[2]:.2f})"
 
     return relabeled_colour
@@ -101,8 +130,18 @@ def get_point_from_number(
             variable_values,
             suggested_points.variable_values
         ])
+        suggested_points_error_string = f" and {suggested_points.variable_values.shape[0]} suggested points"
     else:
         concatenated_variable_values = variable_values
+        suggested_points_error_string = ""
+
+    if point_number >= concatenated_variable_values.shape[0]:
+        raise ValueError(
+            f"The received point number '{point_number}' is out of range, since there are {variable_values.shape[0]} "
+            f"evaluated points" +
+            suggested_points_error_string +
+            f". The maximal point number is {concatenated_variable_values.shape[0] - 1}."
+        )
 
     point = concatenated_variable_values[point_number:point_number + 1]
 

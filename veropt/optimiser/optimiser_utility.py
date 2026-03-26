@@ -1,7 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass, asdict
 from enum import StrEnum, auto
-from typing import Iterator, Optional, Self, TypedDict, Union
+from typing import Iterator, Mapping, Optional, Self, TypedDict, Union
 
 import torch
 
@@ -260,13 +260,43 @@ def unnormalise_suggested_points(
     )
 
 
+class ReferencePointInputDict(TypedDict, total=False):
+    variable_values: dict[str, float]
+    objective_values: dict[str, float]
+
+
+@dataclass
+class ReferencePoint(SavableDataClass):
+    variable_values: torch.Tensor
+    objective_values: torch.Tensor
+    normalised: bool
+
+    @classmethod
+    def from_saved_state(
+            cls,
+            saved_state: dict
+    ) -> Self:
+
+        return cls(
+            variable_values=torch.tensor(saved_state['variable_values']),
+            objective_values=torch.tensor(saved_state['objective_values']),
+            normalised=saved_state['normalised']
+        )
+
+
 def _format_number(
         number: float
 ) -> str:
-    if abs(number) < 0.01:
+    if abs(number) < 0.0001:
         return f"{number:.2e}"
+    elif abs(number) < 0.01:
+        return f"{number:.4f}"
+    elif abs(number) < 1:
+        return f"{number:.3f}"
+    elif abs(number) > 100:
+        return f"{number:.1f}"
     elif abs(number) >= 10_000:
-        return f"{number:.2e}"
+        return f"{number:.3e}"
     else:
         return f"{number:.2f}"
 
@@ -457,19 +487,43 @@ def get_pareto_optimal_points(
     }
 
 
-def format_input_from_objective(
-        new_variable_values: dict[str, torch.Tensor],
-        new_objective_values: dict[str, torch.Tensor],
+def _convert_to_tensors(
+        values: Mapping[str, Union[torch.Tensor, float]],
+        names: list[str],
+        expected_amount_points: int
+) -> dict[str, torch.Tensor]:
+
+    converted: dict[str, torch.Tensor] = {}
+    for name in names:
+        value = values[name]
+        if not isinstance(value, torch.Tensor):
+            converted[name] = torch.tensor([value])
+        elif len(value.shape) < 1:
+            converted[name] = value.unsqueeze(dim=0)
+        else:
+            converted[name] = value
+        assert len(converted[name]) in (expected_amount_points, 0)
+    return converted
+
+
+def named_values_to_tensor(
+        new_variable_values: Mapping[str, Union[torch.Tensor, float]],
+        new_objective_values: Mapping[str, Union[torch.Tensor, float]],
         variable_names: list[str],
         objective_names: list[str],
         expected_amount_points: int
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
-    for name in variable_names:
-        assert len(new_variable_values[name]) in (expected_amount_points, 0)
-
-    for name in objective_names:
-        assert len(new_objective_values[name]) in (expected_amount_points, 0)
+    new_variable_values = _convert_to_tensors(
+        values=new_variable_values,
+        names=variable_names,
+        expected_amount_points=expected_amount_points
+    )
+    new_objective_values = _convert_to_tensors(
+        values=new_objective_values,
+        names=objective_names,
+        expected_amount_points=expected_amount_points
+    )
 
     new_variable_values_tensor = torch.stack(
         [new_variable_values[name] for name in variable_names],
