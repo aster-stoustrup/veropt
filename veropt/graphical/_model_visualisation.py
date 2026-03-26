@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import torch
@@ -190,7 +190,8 @@ def _plot_prediction_grid(
         objective_names: list[str],
         variable_names: list[str],
         suggested_points: Optional[SuggestedPoints] = None,
-        plot_acquisition: bool = False
+        plot_acquisition: bool = False,
+        variables: Optional[list[int]] = None
 ) -> go.Figure:
 
     # TODO: Add option to plot subset of all these
@@ -204,7 +205,13 @@ def _plot_prediction_grid(
     if suggested_points:
         n_suggested_points = len(suggested_points)
 
-    n_variables = variable_values.shape[1]
+    if not variables:  
+        n_variables = variable_values.shape[1]
+        var_range = range(n_variables)
+    else:
+        n_variables = len(variables)
+        var_range = variables
+
     n_objectives = len(objective_names)
 
     colour_scale = colors.get_colorscale('matter')
@@ -222,7 +229,8 @@ def _plot_prediction_grid(
         cols=n_variables
     )
 
-    for variable_index in range(n_variables):
+    for col_no, variable_index in enumerate(var_range):
+        col_no += 1  # Plotly is 1-indexed for row and col
 
         model_prediction = model_prediction_container(
             variable_index=variable_index,
@@ -291,7 +299,7 @@ def _plot_prediction_grid(
 
             # Placing these backwards to make the "y axes" of subplots go positive upwards
             row_no = n_objectives - objective_index
-            col_no = variable_index + 1
+            # col_no = variable_index + 1
 
             # Quick scaling as long as we're just jamming it into this plot
             # acq_func_scaling = np.abs(model_pred_data.acq_fun_vals).max() * 0.5

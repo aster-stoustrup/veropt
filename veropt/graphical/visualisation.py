@@ -231,6 +231,7 @@ def plot_pareto_front(
 
 def plot_prediction_grid(
         optimiser: BayesianOptimiser,
+        variables: Optional[list[int]] = None,
         model_prediction_container: Optional[ModelPredictionContainer] = None,
         evaluated_point: Optional[Union[torch.Tensor, int]] = None,
         plot_acquisition: bool = False,
@@ -337,6 +338,7 @@ def plot_prediction_grid(
 
     figure = _plot_prediction_grid(
         model_prediction_container=model_prediction_container,
+        variables=variables,
         evaluated_point=evaluated_point,
         variable_values=variable_values,
         objective_values=objective_values,
