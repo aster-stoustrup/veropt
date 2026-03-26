@@ -5,8 +5,9 @@ from typing import Callable, Optional, Self, Union, Unpack
 
 import torch
 
-# TODO: Should we do more/something else to ensure compatibility between numpy and torch?
-torch.set_default_dtype(torch.float64)
+# Import device_manager to ensure default dtype (float64) is set globally
+# The device_manager module-level code sets torch.set_default_dtype(torch.float64)
+from veropt.optimiser import device_manager  # noqa: F401
 
 from veropt.optimiser.initial_points import generate_initial_points
 from veropt.optimiser.normalisation import Normaliser, get_normaliser_class
@@ -42,7 +43,8 @@ class BayesianOptimiser(SavableClass):
             suggested_points_real_units: Optional[SuggestedPoints],
             suggested_points_history: list[SuggestedPoints],
             evaluated_variables_real_units: torch.Tensor,
-            evaluated_objectives_real_units: torch.Tensor
+            evaluated_objectives_real_units: torch.Tensor,
+            device: Optional[torch.device] = None
     ):
         self.objective = objective
         self.n_objectives = objective.n_objectives
@@ -50,6 +52,9 @@ class BayesianOptimiser(SavableClass):
             objective=objective
         )
         self._bounds_real_units = objective.bounds
+        
+        # Store device for model training and acquisition optimization
+        self.device = device or torch.device('cpu')
 
         self.predictor = predictor
 
@@ -111,6 +116,7 @@ class BayesianOptimiser(SavableClass):
             objective: Union[CallableObjective, InterfaceObjective],
             predictor: Predictor,
             normaliser_class: type[Normaliser],
+            device: torch.device,
             **kwargs: Unpack[OptimiserSettingsInputDict]
     ) -> 'BayesianOptimiser':
 
@@ -160,7 +166,8 @@ class BayesianOptimiser(SavableClass):
             normaliser_variables=normaliser_variables,
             normaliser_objectives=normaliser_objectives,
             evaluated_variables_real_units=evaluated_variables_real_units,
-            evaluated_objectives_real_units=evaluated_objectives_real_units
+            evaluated_objectives_real_units=evaluated_objectives_real_units,
+            device=device
         )
 
     @classmethod

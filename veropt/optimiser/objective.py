@@ -6,6 +6,7 @@ import torch
 
 from veropt.optimiser.saver_loader_utility import SavableClass
 from veropt.optimiser.utility import check_incoming_objective_dimensions_fix_1d
+from veropt.optimiser.device_manager import tensors_to_cpu
 
 
 class Objective(SavableClass, metaclass=abc.ABCMeta):
@@ -49,7 +50,7 @@ class Objective(SavableClass, metaclass=abc.ABCMeta):
         return {
             'name': self.name,
             'state': {
-                'bounds': self.bounds,
+                'bounds': tensors_to_cpu(self.bounds),
                 'n_variables': self.n_variables,
                 'n_objectives': self.n_objectives,
                 'variable_names': self.variable_names,

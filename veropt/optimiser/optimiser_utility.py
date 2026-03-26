@@ -10,6 +10,7 @@ from veropt.optimiser.initial_points import InitialPointsGenerationMode
 from veropt.optimiser.normalisation import Normaliser
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass
 from veropt.optimiser.utility import DataShape, PredictionDict, TensorWithNormalisationFlag
+from veropt.optimiser.device_manager import tensors_to_cpu
 
 
 class OptimisationMode(StrEnum):
@@ -66,12 +67,17 @@ class OptimiserSettings(SavableClass):
 
         if objective_weights is None:
             self.objective_weights = torch.ones(self.n_objectives) / self.n_objectives
+        elif isinstance(objective_weights, torch.Tensor):
+            # Handle case where objective_weights is already a tensor (e.g., loaded from saved state)
+            self.objective_weights = objective_weights
         else:
             self.objective_weights = torch.tensor(objective_weights)
 
     def gather_dicts_to_save(self) -> dict:
-
-        return self.__dict__
+        # Ensure objective_weights is CPU before saving
+        saved_dict = self.__dict__.copy()
+        saved_dict['objective_weights'] = tensors_to_cpu(saved_dict['objective_weights'])
+        return saved_dict
 
     @classmethod
     def from_saved_state(
@@ -151,9 +157,10 @@ class SuggestedPoints(SavableDataClass):
                 'upper': self.predicted_objective_values['upper'].detach().clone(),
             }
 
+        # Clone and convert to CPU to ensure saved state is device-agnostic
         return SuggestedPoints(
-            variable_values=self.variable_values.detach().clone(),
-            predicted_objective_values=predicted_values_cloned,
+            variable_values=tensors_to_cpu(self.variable_values.detach().clone()),
+            predicted_objective_values=tensors_to_cpu(predicted_values_cloned),
             generated_at_step=deepcopy(self.generated_at_step),
             generated_with_mode=deepcopy(self.generated_with_mode),
             normalised=deepcopy(self.normalised),

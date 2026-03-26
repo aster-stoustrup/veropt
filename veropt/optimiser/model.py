@@ -18,6 +18,7 @@ from veropt.optimiser.utility import (
     check_variable_objective_values_matching, enforce_amount_of_positional_arguments,
     unpack_variables_objectives_from_kwargs
 )
+from veropt.optimiser.device_manager import move_to_device, tensors_to_cpu, tensors_to_device
 
 
 # TODO: Consider deleting this abstraction. Does it have a function at this point?
@@ -109,7 +110,8 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             mean_module: gpytorch.means.Mean,
             kernel: gpytorch.kernels.Kernel,
             n_variables: int,
-            train_noise: bool = False
+            train_noise: bool = False,
+            device: Optional[torch.device] = None
     ) -> None:
 
         self.likelihood = likelihood
@@ -123,6 +125,8 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
         self.trained_parameters: list[dict[str, Iterator[torch.nn.Parameter]]] = [{}]
 
         self.train_noise = train_noise
+        
+        self.device = device or torch.device('cpu')
 
         assert 'name' in self.__class__.__dict__, (
             f"Must give subclass '{self.__class__.__name__}' the static class variable 'name'."
@@ -161,11 +165,25 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             settings=saved_state['settings']
         )
 
+        # Restore device if available in saved state
+        if 'device' in saved_state:
+            model.device = torch.device(saved_state['device'])
+
         if len(saved_state['state_dict']) > 0:
-            model.initialise_model_from_state_dict(
-                train_inputs=torch.tensor(saved_state['train_inputs']),
-                train_targets=torch.tensor(saved_state['train_targets']),
-                state_dict=format_json_state_dict(saved_state['state_dict']),
+            # Load tensors on CPU first (as they come from JSON storage)
+            train_inputs = torch.tensor(saved_state['train_inputs'])
+            train_targets = torch.tensor(saved_state['train_targets'])
+            state_dict = format_json_state_dict(saved_state['state_dict'])
+            
+            # Restore tensors to the model's device
+            train_inputs = tensors_to_device(train_inputs, device=model.device)
+            train_targets = tensors_to_device(train_targets, device=model.device)
+            state_dict = tensors_to_device(state_dict, device=model.device)
+            
+            model._from_state_dict(
+                train_inputs=train_inputs,
+                train_targets=train_targets,
+                state_dict=state_dict,
             )
 
         return model
@@ -208,6 +226,10 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             train_targets: torch.Tensor,
     ) -> None:
 
+        # Move tensors to device before creating the data model
+        train_inputs = move_to_device(train_inputs, device=self.device)
+        train_targets = move_to_device(train_targets, device=self.device)
+
         self.model_with_data = GPyTorchDataModel(
             train_inputs=train_inputs,
             train_targets=train_targets,
@@ -248,6 +270,12 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
             train_inputs = None
             train_targets = None
 
+        # Convert all tensors to CPU before saving
+        # This ensures saved state is device-agnostic and portable
+        state_dict = tensors_to_cpu(state_dict)
+        train_inputs = tensors_to_cpu(train_inputs)
+        train_targets = tensors_to_cpu(train_targets)
+
         return {
             'name': self.name,
             'state': {
@@ -255,6 +283,7 @@ class GPyTorchSingleModel(SavableClass, metaclass=abc.ABCMeta):
                 'train_inputs': train_inputs,
                 'train_targets': train_targets,
                 'n_variables': self.n_variables,
+                'device': str(self.device),
                 'settings': self.get_settings().gather_dicts_to_save()
             }
         }
@@ -472,10 +501,12 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             n_objectives: int,
             single_model_list: Sequence[GPyTorchSingleModel],
             model_optimiser: TorchModelOptimiser,
-            settings: GPyTorchTrainingParameters
+            settings: GPyTorchTrainingParameters,
+            device: Optional[torch.device] = None
     ) -> None:
 
         self.settings = settings
+        self.device = device or torch.device('cpu')
 
         assert len(single_model_list) == n_objectives, "Number of objectives must match the length of the model list"
 
@@ -512,6 +543,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             n_objectives: int,
             single_model_list: Sequence[GPyTorchSingleModel],
             model_optimiser: TorchModelOptimiser,
+            device: Optional[torch.device] = None,
             **kwargs: Unpack[GPyTorchTrainingParametersInputDict]
     ) -> 'GPyTorchFullModel':
 
@@ -524,7 +556,8 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             n_objectives=n_objectives,
             single_model_list=single_model_list,
             model_optimiser=model_optimiser,
-            settings=training_settings
+            settings=training_settings,
+            device=device
         )
 
     @classmethod
@@ -554,12 +587,18 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
             saved_state=saved_state['model_optimiser']['state']
         )
 
+        # Restore device if available in saved state
+        device = None
+        if 'device' in saved_state:
+            device = torch.device(saved_state['device'])
+
         return cls(
             n_variables=saved_state['n_variables'],
             n_objectives=saved_state['n_objectives'],
             single_model_list=model_list,
             model_optimiser=model_optimiser,
-            settings=settings
+            settings=settings,
+            device=device
         )
 
     @staticmethod
@@ -676,6 +715,7 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
                 'model_optimiser': self._model_optimiser.gather_dicts_to_save(),
                 'n_variables': self.n_variables,
                 'n_objectives': self.n_objectives,
+                'device': str(self.device),
             }
         }
 
@@ -759,8 +799,8 @@ class GPyTorchFullModel(SurrogateModel, SavableClass):
 
         assert self._model_optimiser.optimiser is not None, "Model optimiser must be initiated to use this function"
 
-        loss_difference = torch.tensor(1e5)  # initial values
-        loss = torch.tensor(1e20)  # TODO: Find a way to make sure this number is always big enough
+        loss_difference = torch.tensor(1e5, device=self.device)  # initial values
+        loss = torch.tensor(1e20, device=self.device)  # TODO: Find a way to make sure this number is always big enough
         assert self.settings.loss_change_to_stop < loss_difference
         iteration = 1
 

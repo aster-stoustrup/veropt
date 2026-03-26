@@ -5,6 +5,7 @@ import torch
 
 from veropt.optimiser.utility import DataShape, _load_defaults
 from veropt.optimiser.saver_loader_utility import SavableClass, get_all_subclasses
+from veropt.optimiser.device_manager import tensors_to_cpu, tensors_to_device
 
 
 class Normaliser(SavableClass, metaclass=abc.ABCMeta):
@@ -96,8 +97,8 @@ class NormaliserZeroMeanUnitVariance(Normaliser):
         return {
             'name': self.name,
             'state': {
-                'means': self.means,
-                'variances': self.variances,
+                'means': tensors_to_cpu(self.means),
+                'variances': tensors_to_cpu(self.variances),
             }
         }
 

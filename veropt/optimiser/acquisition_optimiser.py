@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import abc
+import warnings
 from dataclasses import dataclass
 from typing import Any, Literal, Mapping, Optional, Self, TypedDict, Unpack, Callable
 
 import numpy as np
 import scipy
 import torch
+from botorch.optim import optimize_acqf
 from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
 from veropt.optimiser.acquisition import AcquisitionFunction
+from veropt.optimiser.device_manager import tensors_to_cpu
 from veropt.optimiser.saver_loader_utility import SavableClass, SavableDataClass, rehydrate_object
 from veropt.optimiser.utility import DataShape, _validate_typed_dict
+from veropt.optimiser.device_manager import get_device, move_to_device, tensor_to_numpy, numpy_to_tensor
 
 
 class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
@@ -65,7 +69,7 @@ class AcquisitionOptimiser(SavableClass, metaclass=abc.ABCMeta):
         return {
             'name': self.name,
             'state': {
-                'bounds': self.bounds,
+                'bounds': tensors_to_cpu(self.bounds),
                 'n_evaluations_per_step': self.n_evaluations_per_step,
                 'settings': self.get_settings().gather_dicts_to_save()
             }
@@ -116,10 +120,10 @@ class TorchNumpyWrapper:
             variable_values = variable_values.reshape(1, len(variable_values))
 
         output = self.acquisition_function(
-            variable_values=torch.tensor(variable_values)
+            variable_values=numpy_to_tensor(variable_values)
         )
 
-        return output.detach().numpy()
+        return tensor_to_numpy(output)
 
 
 class DualAnnealingSettingsInputDict(TypedDict, total=False):
@@ -185,6 +189,148 @@ class DualAnnealingOptimiser(AcquisitionOptimiser):
         _validate_typed_dict(
             typed_dict=settings,
             expected_typed_dict_class=DualAnnealingSettingsInputDict,
+            object_name=cls.name
+        )
+
+        return cls(
+            bounds=bounds,
+            n_evaluations_per_step=n_evaluations_per_step,
+            **settings
+        )
+
+    def get_settings(self) -> SavableDataClass:
+        return self.settings
+
+
+class BotorchSettingsInputDict(TypedDict, total=False):
+    max_iter: int
+    num_restarts: int
+    raw_samples: int
+
+
+@dataclass
+class BotorchSettings(SavableDataClass):
+    max_iter: int = 100
+    num_restarts: int = 20
+    raw_samples: int = 512
+
+
+class _BotorchAcqFuncWrapper:
+    """Wrapper to convert BoTorch tensor format to acquisition function format.
+    
+    BoTorch's optimize_acqf passes tensors with shape [batch_size, q, n_vars],
+    but our acquisition functions expect [n_points, n_vars].
+    This wrapper handles the conversion transparently.
+    """
+    
+    def __init__(self, acq_func: AcquisitionFunction, q: int):
+        """
+        Args:
+            acq_func: Acquisition function to wrap
+            q: Batch size (number of candidates per batch)
+        """
+        self.acq_func = acq_func
+        self.q = q
+    
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """Convert BoTorch format to acquisition function format.
+        
+        Args:
+            x: Tensor with shape [batch_size, q, n_vars] from BoTorch
+            
+        Returns:
+            Tensor with shape [batch_size] of acquisition values
+        """
+        # Reshape from [batch_size, q, n_vars] to [batch_size * q, n_vars]
+        batch_size = x.size(0)
+        x_flat = x.reshape(batch_size * self.q, -1)
+        
+        # Evaluate acquisition function (works with flat array)
+        acq_values = self.acq_func(variable_values=x_flat)
+        
+        # Reshape back to [batch_size, q] then return best value in each batch
+        acq_values_reshaped = acq_values.reshape(batch_size, self.q)
+        
+        # Return max over q candidates (BoTorch will track best across restarts)
+        return acq_values_reshaped.max(dim=1)[0]
+
+
+class BotorchAcquisitionOptimiser(AcquisitionOptimiser):
+    """GPU-native acquisition function optimizer using BoTorch's optimize_acqf.
+    
+    Provides efficient acquisition optimization with native tensor operations.
+    Supports both sequential (q=1) and batch (q > 1) optimization modes.
+    Batch optimization can be combined with proximity punishment to avoid clustering.
+    """
+    
+    name = 'botorch'
+    # BoTorch supports batch optimization, so maximize this to 128
+    # Actual batch size is controlled by n_evaluations_per_step parameter
+    maximum_evaluations_per_step = 128
+
+    def __init__(
+            self,
+            bounds: torch.Tensor,
+            n_evaluations_per_step: int,
+            **settings: Unpack[BotorchSettingsInputDict]
+    ):
+        self.settings = BotorchSettings(**settings)
+
+        super().__init__(
+            bounds=bounds,
+            n_evaluations_per_step=n_evaluations_per_step
+        )
+
+    def optimise(
+            self,
+            acquisition_function: AcquisitionFunction
+    ) -> torch.Tensor:
+        """Optimize acquisition function using BoTorch's multi-start optimization.
+        
+        Supports both sequential (q=1) and batch (q > 1) optimization.
+        For batch mode, combine with ProximityPunishAcquisitionFunction to avoid clusters.
+        
+        Args:
+            acquisition_function: AcquisitionFunction to optimize.
+                Can be a ProximityPunishAcquisitionFunction for batch acquisition.
+            
+        Returns:
+            Optimal candidate point(s) as tensor with shape [n_candidates, n_variables].
+        """
+        # Move bounds to current device
+        bounds = move_to_device(self.bounds)
+        
+        # Wrap acquisition function for BoTorch compatibility
+        wrapper = _BotorchAcqFuncWrapper(acquisition_function, self.n_evaluations_per_step)
+        
+        # Optimize using BoTorch
+        candidates, _ = optimize_acqf(
+            acq_function=wrapper,
+            bounds=bounds,
+            q=self.n_evaluations_per_step,  # Support batch optimization
+            num_restarts=self.settings.num_restarts,
+            raw_samples=self.settings.raw_samples,
+            options={"maxiter": self.settings.max_iter},
+        )
+        
+        # candidates shape is [batch_size, q, n_vars]
+        # Flatten to [batch_size * q, n_vars]
+        if candidates.dim() == 3:
+            candidates = candidates.reshape(-1, candidates.size(-1))
+        
+        return candidates
+
+    @classmethod
+    def from_bounds_n_evaluations_per_step_and_settings(
+            cls,
+            bounds: torch.Tensor,
+            n_evaluations_per_step: int,
+            settings: Mapping[str, Any]
+    ) -> Self:
+
+        _validate_typed_dict(
+            typed_dict=settings,
+            expected_typed_dict_class=BotorchSettingsInputDict,
             object_name=cls.name
         )
 

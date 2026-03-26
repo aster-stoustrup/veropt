@@ -5,8 +5,10 @@ import torch
 from veropt.optimiser.acquisition import BotorchAcquisitionFunction, UpperConfidenceBoundOptionsInputDict
 from veropt.optimiser.acquisition_optimiser import (
     AcquisitionOptimiser, DualAnnealingSettingsInputDict,
-    ProximityPunishSettingsInputDict, ProximityPunishmentSequentialOptimiser
+    ProximityPunishSettingsInputDict, ProximityPunishmentSequentialOptimiser,
+    BotorchSettingsInputDict
 )
+from veropt.optimiser.device_manager import DeviceConfig, initialize, get_device
 from veropt.optimiser.kernels import KernelInputDict, SingleKernelOptions
 from veropt.optimiser.model import (
     AdamInputDict, GPyTorchFullModel, GPyTorchSingleModel,
@@ -23,10 +25,10 @@ from veropt.optimiser.utility import _load_defaults, _validate_typed_dict
 KernelOptimiserOptions = Literal['adam']
 
 AcquisitionOptions = Literal['qlogehvi', 'ucb']
-AcquisitionOptimiserOptions = Literal['dual_annealing']
+AcquisitionOptimiserOptions = Literal['dual_annealing', 'botorch']
 
 AcquisitionSettings = UpperConfidenceBoundOptionsInputDict  # expand with more options when adding acq_funcs
-AcquisitionOptimiserSettings = DualAnnealingSettingsInputDict  # expand when adding more options
+AcquisitionOptimiserSettings = Union[DualAnnealingSettingsInputDict, BotorchSettingsInputDict]
 
 ModelOptimiserSettings = AdamInputDict
 
@@ -58,11 +60,6 @@ class AcquisitionOptimiserChoice(TypedDict, total=False):
     proximity_punish_settings: Optional[ProximityPunishSettingsInputDict]
 
 
-# TODO: Consider making a function that can give valid arguments to the user?
-#   - Like something that prints out an overview of options
-#   - Should probably live in some documentation somewhere actually...?
-
-
 def bayesian_optimiser(
         n_initial_points: int,
         n_bayesian_points: int,
@@ -72,6 +69,7 @@ def bayesian_optimiser(
         acquisition_function: Union[BotorchAcquisitionFunction, 'AcquisitionChoice', None] = None,
         acquisition_optimiser: Union[AcquisitionOptimiser, 'AcquisitionOptimiserChoice', None] = None,
         normaliser: Union[type[Normaliser], NormaliserChoice, None] = None,
+        use_gpu: bool = False,
         **kwargs: Unpack[OptimiserSettingsInputDict]
 ) -> BayesianOptimiser:
 
@@ -82,11 +80,18 @@ def bayesian_optimiser(
         'bounds': objective.bounds.tolist(),
     }
 
+    # Initialize device manager with GPU configuration
+    device_config = DeviceConfig(use_gpu=use_gpu)
+    initialize(device_config)
+    device = get_device()
+
     built_predictor = botorch_predictor(
         problem_information=problem_information,
         model=model,
         acquisition_function=acquisition_function,
         acquisition_optimiser=acquisition_optimiser,
+        device=device,
+        use_gpu=use_gpu,
     )
 
     if type(normaliser) is type:
@@ -110,6 +115,7 @@ def bayesian_optimiser(
         objective=objective,
         predictor=built_predictor,
         normaliser_class=normaliser_class,
+        device=device,
         **kwargs
     )
 
@@ -118,7 +124,9 @@ def botorch_predictor(
         problem_information: ProblemInformation,
         model: Optional[Union[GPyTorchFullModel, 'GPytorchModelChoice']] = None,
         acquisition_function: Union[BotorchAcquisitionFunction, 'AcquisitionChoice', None] = None,
-        acquisition_optimiser: Union[AcquisitionOptimiser, 'AcquisitionOptimiserChoice', None] = None
+        acquisition_optimiser: Union[AcquisitionOptimiser, 'AcquisitionOptimiserChoice', None] = None,
+        device: Optional[torch.device] = None,
+        use_gpu: bool = False
 ) -> BotorchPredictor:
 
     if isinstance(model, GPyTorchFullModel):
@@ -137,6 +145,7 @@ def botorch_predictor(
         built_model = gpytorch_model(
             n_variables=problem_information['n_variables'],
             n_objectives=problem_information['n_objectives'],
+            device=device,
             **model or {},
         )
 
@@ -158,6 +167,7 @@ def botorch_predictor(
         built_acquisition_optimiser = acquisition_optimiser_with_proximity_punishment(
             bounds=problem_information['bounds'],
             n_evaluations_per_step=problem_information['n_evaluations_per_step'],
+            use_gpu=use_gpu,
             **acquisition_optimiser or {}
         )
 
@@ -176,13 +186,15 @@ def gpytorch_model(
         kernel_optimiser: Optional[KernelOptimiserOptions] = None,
         kernel_optimiser_settings: Optional[ModelOptimiserSettings] = None,
         training_settings: Optional[GPyTorchTrainingParametersInputDict] = None,
+        device: Optional[torch.device] = None,
 ) -> GPyTorchFullModel:
 
     single_model_list = gpytorch_single_model_list(
         n_variables=n_variables,
         n_objectives=n_objectives,
         kernels=kernels,
-        kernel_settings=kernel_settings
+        kernel_settings=kernel_settings,
+        device=device
     )
 
     model_optimiser = torch_model_optimiser(
@@ -195,6 +207,7 @@ def gpytorch_model(
         n_objectives=n_objectives,
         single_model_list=single_model_list,
         model_optimiser=model_optimiser,
+        device=device,
         **(training_settings or {})
     )
 
@@ -203,7 +216,8 @@ def gpytorch_single_model_list(
         n_variables: int,
         n_objectives: int,
         kernels: Union[SingleKernelOptions, list[SingleKernelOptions], list[GPyTorchSingleModel], None] = None,
-        kernel_settings: Union['KernelInputDict', list['KernelInputDict'], None] = None
+        kernel_settings: Union['KernelInputDict', list['KernelInputDict'], None] = None,
+        device: Optional[torch.device] = None
 ) -> list[GPyTorchSingleModel]:
 
     wrong_kernel_input_message = (
@@ -237,7 +251,8 @@ def gpytorch_single_model_list(
                 single_model_list.append(gpytorch_single_model(
                     n_variables=n_variables,
                     kernel=kernel,  # type: ignore[arg-type]  # checked above, kernel is 'str'
-                    settings=kernel_settings[kernel_no]
+                    settings=kernel_settings[kernel_no],
+                    device=device
                 ))
 
         elif isinstance(kernels[0], GPyTorchSingleModel):
@@ -264,7 +279,8 @@ def gpytorch_single_model_list(
             single_model_list.append(gpytorch_single_model(
                 n_variables=n_variables,
                 kernel=kernels,
-                settings=kernel_settings
+                settings=kernel_settings,
+                device=device,
             ))
 
     elif kernels is None:
@@ -274,7 +290,8 @@ def gpytorch_single_model_list(
         single_model_list = []
         for objective_no in range(n_objectives):
             single_model_list.append(gpytorch_single_model(
-                n_variables=n_variables
+                n_variables=n_variables,
+                device=device,
             ))
 
     else:
@@ -286,7 +303,8 @@ def gpytorch_single_model_list(
 def gpytorch_single_model(
         n_variables: int,
         kernel: Optional[SingleKernelOptions] = None,
-        settings: Optional[KernelInputDict] = None
+        settings: Optional[KernelInputDict] = None,
+        device: Optional[torch.device] = None,
 ) -> GPyTorchSingleModel:
 
     settings = settings or {}
@@ -297,7 +315,8 @@ def gpytorch_single_model(
         return gpytorch_single_model(
             n_variables=n_variables,
             kernel=defaults['model']['kernel'],
-            settings=settings
+            settings=settings,
+            device=device,
         )
 
     subclasses = get_all_subclasses(
@@ -309,6 +328,10 @@ def gpytorch_single_model(
         if kernel == subclass.name:
 
             return subclass.from_n_variables_and_settings(
+                n_variables=n_variables,
+                settings=settings,
+                device=device,
+            ) if device is not None else subclass.from_n_variables_and_settings(
                 n_variables=n_variables,
                 settings=settings
             )
@@ -405,7 +428,8 @@ def acquisition_optimiser_with_proximity_punishment(
         optimiser: Optional[AcquisitionOptimiserOptions] = None,
         optimiser_settings: Optional[AcquisitionOptimiserSettings] = None,
         allow_proximity_punishment: bool = True,
-        proximity_punish_settings: Optional[ProximityPunishSettingsInputDict] = None
+        proximity_punish_settings: Optional[ProximityPunishSettingsInputDict] = None,
+        use_gpu: bool = False,
 ) -> AcquisitionOptimiser:
 
     if allow_proximity_punishment is False:
@@ -426,12 +450,16 @@ def acquisition_optimiser_with_proximity_punishment(
         )
 
         defaults = _load_defaults()
+        
+        # Auto-select optimiser: botorch for GPU, dual_annealing for CPU
+        selected_optimiser = 'botorch' if use_gpu else defaults['acquisition_optimiser']
 
         return acquisition_optimiser_with_proximity_punishment(
             bounds=bounds,
             n_evaluations_per_step=n_evaluations_per_step,
-            optimiser=defaults['acquisition_optimiser'],
-            proximity_punish_settings=proximity_punish_settings
+            optimiser=selected_optimiser,
+            proximity_punish_settings=proximity_punish_settings,
+            use_gpu=use_gpu,
         )
 
     if optimiser == 'proximity_punish':
