@@ -178,52 +178,49 @@ def _add_pareto_traces_2d(
 
             prediction = point.predicted_objective_values
 
-            assert prediction is not None, (
-                "Must have calculated predictions for the suggested points before calling this function to plot them."
-                "(If the model is trained, the optimiser should do this automatically)."
-            )
+            if prediction:  # Skip plotting these if predictions have not been made
 
-            upper_diff = prediction['upper'] - prediction['mean']
-            lower_diff = prediction['mean'] - prediction['lower']
+                upper_diff = prediction['upper'] - prediction['mean']
+                lower_diff = prediction['mean'] - prediction['lower']
 
-            figure.add_trace(
-                go.Scatter(
-                    x=prediction['mean'][objective_index_x].detach().numpy(),
-                    y=prediction['mean'][objective_index_y].detach().numpy(),
-                    error_x={
-                        'type': 'data',
-                        'symmetric': False,
-                        'array': upper_diff[objective_index_x].detach().numpy(),
-                        'arrayminus': lower_diff[objective_index_x].detach().numpy(),
-                        'color': suggested_point_color
-                    },
-                    error_y={
-                        'type': 'data',
-                        'symmetric': False,
-                        'array': upper_diff[objective_index_y].detach().numpy(),
-                        'arrayminus': lower_diff[objective_index_y].detach().numpy(),
-                        'color': suggested_point_color
-                    },
-                    mode='markers',
-                    marker={'color': suggested_point_color},
-                    name='Suggested points',
-                    legendgroup="Suggested points",
-                    showlegend=True if (suggested_point_no == 0 and show_legend) else False,
-                    visible='legendonly',
-                    customdata=np.dstack([
-                                [prediction['lower'][objective_index_x].detach().numpy()],
-                                [prediction['upper'][objective_index_x].detach().numpy()],
-                                [prediction['lower'][objective_index_y].detach().numpy()],
-                                [prediction['upper'][objective_index_y].detach().numpy()],
-                    ])[0],
-                    hovertemplate=f"Suggested point number: {suggested_point_no} <br>"
-                                  f"{objective_names[objective_index_x]}: "
-                                  "%{x:.3f} (%{customdata[0]:.3f} to %{customdata[1]:.3f}) <br>"
-                                  f"{objective_names[objective_index_y]}: "
-                                  "%{y:.3f} (%{customdata[2]:.3f} to %{customdata[3]:.3f}) <br>"
-                ),
-                **row_col_info
-            )
+                figure.add_trace(
+                    go.Scatter(
+                        x=prediction['mean'][objective_index_x].detach().numpy(),
+                        y=prediction['mean'][objective_index_y].detach().numpy(),
+                        error_x={
+                            'type': 'data',
+                            'symmetric': False,
+                            'array': upper_diff[objective_index_x].detach().numpy(),
+                            'arrayminus': lower_diff[objective_index_x].detach().numpy(),
+                            'color': suggested_point_color
+                        },
+                        error_y={
+                            'type': 'data',
+                            'symmetric': False,
+                            'array': upper_diff[objective_index_y].detach().numpy(),
+                            'arrayminus': lower_diff[objective_index_y].detach().numpy(),
+                            'color': suggested_point_color
+                        },
+                        mode='markers',
+                        marker={'color': suggested_point_color},
+                        name='Suggested points',
+                        legendgroup="Suggested points",
+                        showlegend=True if (suggested_point_no == 0 and show_legend) else False,
+                        visible='legendonly',
+                        customdata=np.dstack([
+                                    [prediction['lower'][objective_index_x].detach().numpy()],
+                                    [prediction['upper'][objective_index_x].detach().numpy()],
+                                    [prediction['lower'][objective_index_y].detach().numpy()],
+                                    [prediction['upper'][objective_index_y].detach().numpy()],
+                        ])[0],
+                        hovertemplate=f"Suggested point number: {suggested_point_no} <br>"
+                                      f"{objective_names[objective_index_x]}: "
+                                      "%{x:.3f} (%{customdata[0]:.3f} to %{customdata[1]:.3f}) <br>"
+                                      f"{objective_names[objective_index_y]}: "
+                                      "%{y:.3f} (%{customdata[2]:.3f} to %{customdata[3]:.3f}) <br>"
+                    ),
+                    **row_col_info
+                )
 
     if reference_point is not None:
         figure.add_trace(

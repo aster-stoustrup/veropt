@@ -78,7 +78,28 @@ Example: Don't build a general strategy pattern if a simple `if/else` works. Add
 - **Variables**: Name for clarity even if verbose. `evaluated_objectives_normalised` is better than `evals`.
 - **Boolean flags**: Prefix with verb (is_, has_, can_). Example: `should_normalize_inputs` not `normalize`.
 
-### 2. Configuration via TypedDict
+### 2. Formatting
+- **Line length**: keep lines within 120 characters (PyCharm right-margin guide).
+- **Multi-line calls and dicts**: when a call or dict literal must be split across lines, put *every* argument/key on its own line — never mix some arguments on the opening line and others below. Either the whole call fits on one line, or each argument gets its own line.
+
+```python
+# No — mixed style
+marker=dict(symbol='circle-open', size=11, color=src_colours,
+            line=dict(width=2, color=src_colours)),
+
+# Yes — fully expanded
+marker=dict(
+    symbol='circle-open',
+    size=11,
+    color=src_colours,
+    line=dict(
+        width=2,
+        color=src_colours,
+    ),
+),
+```
+
+### 3. Configuration via TypedDict
 The library uses `TypedDict` for flexible, validated configuration dictionaries rather than explicit arguments:
 
 ```python
