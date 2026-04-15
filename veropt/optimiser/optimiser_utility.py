@@ -31,7 +31,8 @@ class OptimiserSettings(SavableClass):
             verbose: bool = True,
             renormalise_each_step: Optional[bool] = None,
             n_points_before_fitting: Optional[int] = None,
-            objective_weights: Optional[list[float]] = None
+            objective_weights: Optional[list[float]] = None,
+            allow_automatic_json_updates: bool = False
     ):
         self.n_initial_points = n_initial_points
         self.n_bayesian_points = n_bayesian_points
@@ -69,6 +70,8 @@ class OptimiserSettings(SavableClass):
         else:
             self.objective_weights = torch.tensor(objective_weights)
 
+        self.allow_automatic_json_updates = allow_automatic_json_updates
+
     def gather_dicts_to_save(self) -> dict:
 
         return self.__dict__
@@ -91,6 +94,7 @@ class OptimiserSettingsInputDict(TypedDict, total=False):
     verbose: bool
     renormalise_each_step: bool
     initial_points_generator: InitialPointsChoice
+    allow_automatic_json_updates: bool
 
 
 @dataclass

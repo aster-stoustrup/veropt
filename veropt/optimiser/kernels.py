@@ -3,7 +3,7 @@ from typing import TypedDict, Unpack, Mapping, Any, Optional, Self, Union, Liter
 
 import gpytorch
 import torch
-from veropt.optimiser.model import GPyTorchSingleModel, change_interval_constraints
+from veropt.optimiser.model import GPyTorchSingleModel, NoiseSettingsInputDict, change_interval_constraints
 from veropt.optimiser.saver_loader_utility import SavableDataClass
 from veropt.optimiser.utility import _validate_typed_dict
 
@@ -24,9 +24,6 @@ class MaternParametersInputDict(TypedDict, total=False):
     lengthscale_lower_bound: float
     lengthscale_upper_bound: float
     nu: float
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
 
 
 @dataclass
@@ -34,9 +31,6 @@ class MaternParameters(SavableDataClass):
     lengthscale_lower_bound: float = 0.1
     lengthscale_upper_bound: float = 2.0
     nu: float = 2.5
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
 
 
 class DoubleMaternParametersInputDict(TypedDict, total=False):
@@ -46,9 +40,6 @@ class DoubleMaternParametersInputDict(TypedDict, total=False):
     lengthscale_short_lower_bound: float
     lengthscale_short_upper_bound: float
     nu_short: float
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
 
 
 @dataclass
@@ -59,9 +50,6 @@ class DoubleMaternParameters(SavableDataClass):
     lengthscale_short_lower_bound: float = 0.001
     lengthscale_short_upper_bound: float = 0.1
     nu_short: float = 2.5
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
 
 
 class MaternKernel(GPyTorchSingleModel):
@@ -71,6 +59,7 @@ class MaternKernel(GPyTorchSingleModel):
     def __init__(
             self,
             n_variables: int,
+            noise_settings: Optional[NoiseSettingsInputDict] = None,
             **settings: Unpack[MaternParametersInputDict]
     ):
 
@@ -91,14 +80,15 @@ class MaternKernel(GPyTorchSingleModel):
             mean_module=mean_module,
             kernel=kernel,
             n_variables=n_variables,
-            train_noise=self.settings.train_noise  # TODO: Handle this in a nicer way >:)
+            noise_settings=noise_settings
         )
 
     @classmethod
     def from_n_variables_and_settings(
             cls,
             n_variables: int,
-            settings: Mapping[str, Any]
+            settings: Mapping[str, Any],
+            noise_settings: Optional[NoiseSettingsInputDict] = None
     ) -> 'MaternKernel':
 
         _validate_typed_dict(
@@ -109,6 +99,7 @@ class MaternKernel(GPyTorchSingleModel):
 
         return cls(
             n_variables=n_variables,
+            noise_settings=noise_settings,
             **settings
         )
 
@@ -119,13 +110,7 @@ class MaternKernel(GPyTorchSingleModel):
             upper_bound=self.settings.lengthscale_upper_bound
         )
 
-        self.set_noise(
-            noise=self.settings.noise
-        )
-
-        self.set_noise_constraint(
-            lower_bound=self.settings.noise_lower_bound
-        )
+        self._set_up_noise_constraints()
 
     def change_lengthscale_constraints(
             self,
@@ -159,6 +144,7 @@ class DoubleMaternKernel(GPyTorchSingleModel):
     def __init__(
             self,
             n_variables: int,
+            noise_settings: Optional[NoiseSettingsInputDict] = None,
             **settings: Unpack[DoubleMaternParametersInputDict]
     ):
 
@@ -188,14 +174,15 @@ class DoubleMaternKernel(GPyTorchSingleModel):
             mean_module=mean_module,
             kernel=kernel,
             n_variables=n_variables,
-            train_noise=self.settings.train_noise  # TODO: Handle this in a nicer way >:)
+            noise_settings=noise_settings
         )
 
     @classmethod
     def from_n_variables_and_settings(
             cls,
             n_variables: int,
-            settings: Mapping[str, Any]
+            settings: Mapping[str, Any],
+            noise_settings: Optional[NoiseSettingsInputDict] = None
     ) -> 'DoubleMaternKernel':
 
         _validate_typed_dict(
@@ -206,6 +193,7 @@ class DoubleMaternKernel(GPyTorchSingleModel):
 
         return cls(
             n_variables=n_variables,
+            noise_settings=noise_settings,
             **settings
         )
 
@@ -223,13 +211,7 @@ class DoubleMaternKernel(GPyTorchSingleModel):
             upper_bound=self.settings.lengthscale_short_upper_bound
         )
 
-        self.set_noise(
-            noise=self.settings.noise
-        )
-
-        self.set_noise_constraint(
-            lower_bound=self.settings.noise_lower_bound
-        )
+        self._set_up_noise_constraints()
 
     def change_lengthscale_constraints(
             self,
@@ -253,21 +235,6 @@ class DoubleMaternKernel(GPyTorchSingleModel):
 
         raise NotImplementedError()
 
-    def set_noise(
-            self,
-            noise: float
-    ) -> None:
-
-        if self.model_with_data is not None:
-
-            if noise < self.likelihood.noise_covar.raw_noise_constraint.lower_bound:
-                noise = self.likelihood.noise_covar.raw_noise_constraint.lower_bound
-
-            self.model_with_data.likelihood.noise = torch.tensor(float(noise))
-
-        else:
-            raise NotImplementedError("Currently don't support setting constraints before model is given data.")
-
     def get_settings(self) -> SavableDataClass:
         return self.settings
 
@@ -277,9 +244,6 @@ class RQParametersInputDict(TypedDict, total=False):
     lengthscale_upper_bound: float
     alpha_lower_bound: Optional[float]
     alpha_upper_bound: Optional[float]
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
 
 
 @dataclass
@@ -288,9 +252,6 @@ class RQParameters(SavableDataClass):
     lengthscale_upper_bound: float = 2.0
     alpha_lower_bound: Optional[float] = None
     alpha_upper_bound: Optional[float] = None
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
 
 
 class RationalQuadraticKernel(GPyTorchSingleModel):
@@ -300,6 +261,7 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
     def __init__(
             self,
             n_variables: int,
+            noise_settings: Optional[NoiseSettingsInputDict] = None,
             **settings: Unpack[RQParametersInputDict]
     ):
 
@@ -318,14 +280,15 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
             mean_module=mean_module,
             kernel=kernel,
             n_variables=n_variables,
-            train_noise=self.settings.train_noise  # TODO: Handle this in a nicer way >:)
+            noise_settings=noise_settings
         )
 
     @classmethod
     def from_n_variables_and_settings(
             cls,
             n_variables: int,
-            settings: Mapping[str, Any]
+            settings: Mapping[str, Any],
+            noise_settings: Optional[NoiseSettingsInputDict] = None
     ) -> Self:
 
         _validate_typed_dict(
@@ -336,6 +299,7 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
 
         return cls(
             n_variables=n_variables,
+            noise_settings=noise_settings,
             **settings
         )
 
@@ -355,13 +319,7 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
         elif (self.settings.alpha_lower_bound is not None) or (self.settings.alpha_upper_bound is not None):
             raise NotImplementedError("Currently only support setting both or none of alpha's bounds.")
 
-        self.set_noise(
-            noise=self.settings.noise
-        )
-
-        self.set_noise_constraint(
-            lower_bound=self.settings.noise_lower_bound
-        )
+        self._set_up_noise_constraints()
 
     def change_alpha_constraints(
             self,
@@ -416,9 +374,6 @@ class RQMaternParametersInputDict(TypedDict, total=False):
     alpha_upper_bound: Optional[float]
     matern_lengthscale_lower_bound: float
     matern_lengthscale_upper_bound: float
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
 
 
 @dataclass
@@ -429,9 +384,6 @@ class RQMaternParameters(SavableDataClass):
     alpha_upper_bound: Optional[float] = None
     matern_lengthscale_lower_bound: float = 0.1
     matern_lengthscale_upper_bound: float = 2.0
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
 
 
 # TODO: Probably need to implement combining kernel classes
@@ -443,6 +395,7 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
     def __init__(
             self,
             n_variables: int,
+            noise_settings: Optional[NoiseSettingsInputDict] = None,
             **settings: Unpack[RQMaternParametersInputDict]
     ):
 
@@ -471,24 +424,26 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
             mean_module=mean_module,
             kernel=kernel,
             n_variables=n_variables,
-            train_noise=self.settings.train_noise  # TODO: Handle this in a nicer way >:)
+            noise_settings=noise_settings
         )
 
     @classmethod
     def from_n_variables_and_settings(
             cls,
             n_variables: int,
-            settings: Mapping[str, Any]
+            settings: Mapping[str, Any],
+            noise_settings: Optional[NoiseSettingsInputDict] = None
     ) -> Self:
 
         _validate_typed_dict(
             typed_dict=settings,
-            expected_typed_dict_class=RQMaternParameters,
+            expected_typed_dict_class=RQMaternParametersInputDict,
             object_name=cls.name,
         )
 
         return cls(
             n_variables=n_variables,
+            noise_settings=noise_settings,
             **settings
         )
 
@@ -520,13 +475,8 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
             module=self.model_with_data.covar_module.kernels[1].base_kernel,
             parameter_name='raw_lengthscale'
         )
-        self.set_noise(
-            noise=self.settings.noise
-        )
 
-        self.set_noise_constraint(
-            lower_bound=self.settings.noise_lower_bound
-        )
+        self._set_up_noise_constraints()
 
     def get_lengthscale(self) -> dict[str, torch.Tensor]:
 
@@ -574,17 +524,11 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
 
 class SMKParametersInputDict(TypedDict, total=False):
     n_mixtures: int
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
 
 
 @dataclass
 class SMKParameters(SavableDataClass):
     n_mixtures: int = 4
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
 
 
 class SpectralMixtureKernel(GPyTorchSingleModel):
@@ -593,6 +537,7 @@ class SpectralMixtureKernel(GPyTorchSingleModel):
     def __init__(
             self,
             n_variables: int,
+            noise_settings: Optional[NoiseSettingsInputDict] = None,
             **settings: Unpack[SMKParametersInputDict]
     ):
 
@@ -612,24 +557,26 @@ class SpectralMixtureKernel(GPyTorchSingleModel):
             mean_module=mean_module,
             kernel=kernel,
             n_variables=n_variables,
-            train_noise=self.settings.train_noise  # TODO: Handle this in a nicer way >:)
+            noise_settings=noise_settings
         )
 
     @classmethod
     def from_n_variables_and_settings(
             cls,
             n_variables: int,
-            settings: Mapping[str, Any]
+            settings: Mapping[str, Any],
+            noise_settings: Optional[NoiseSettingsInputDict] = None
     ) -> Self:
 
         _validate_typed_dict(
             typed_dict=settings,
-            expected_typed_dict_class=SMKParameters,
+            expected_typed_dict_class=SMKParametersInputDict,
             object_name=cls.name,
         )
 
         return cls(
             n_variables=n_variables,
+            noise_settings=noise_settings,
             **settings
         )
 
@@ -637,15 +584,7 @@ class SpectralMixtureKernel(GPyTorchSingleModel):
         return self.settings
 
     def _set_up_model_constraints(self) -> None:
-
-        # TODO: Find a way to move all this noise stuff to the superclass >:( >:)
-        self.set_noise(
-            noise=self.settings.noise
-        )
-
-        self.set_noise_constraint(
-            lower_bound=self.settings.noise_lower_bound
-        )
+        self._set_up_noise_constraints()
 
     def initialise_model_with_data(
             self,
@@ -653,12 +592,12 @@ class SpectralMixtureKernel(GPyTorchSingleModel):
             train_targets: torch.Tensor,
     ) -> None:
 
-        assert self.model_with_data is not None, "Model must be initialised to call this method"
-
         super().initialise_model_with_data(
             train_inputs=train_inputs,
             train_targets=train_targets,
         )
+
+        assert self.model_with_data is not None, "Model must be initialised after calling super"
 
         self.model_with_data.covar_module.initialize_from_data(
             train_x=train_inputs,
@@ -668,17 +607,11 @@ class SpectralMixtureKernel(GPyTorchSingleModel):
 
 class SpectralDeltaParametersInputDict(TypedDict, total=False):
     n_deltas: int
-    noise: float
-    noise_lower_bound: float
-    train_noise: bool
 
 
 @dataclass
 class SpectralDeltaParameters(SavableDataClass):
     n_deltas: Optional[int] = None
-    noise: float = 1e-8
-    noise_lower_bound: float = 1e-8
-    train_noise: bool = False
 
 
 class SpectralDeltaKernel(GPyTorchSingleModel):
@@ -688,6 +621,7 @@ class SpectralDeltaKernel(GPyTorchSingleModel):
     def __init__(
             self,
             n_variables: int,
+            noise_settings: Optional[NoiseSettingsInputDict] = None,
             **settings: Unpack[SpectralDeltaParametersInputDict]
     ):
 
@@ -711,24 +645,26 @@ class SpectralDeltaKernel(GPyTorchSingleModel):
             mean_module=mean_module,
             kernel=kernel,
             n_variables=n_variables,
-            train_noise=self.settings.train_noise  # TODO: Handle this in a nicer way >:)
+            noise_settings=noise_settings
         )
 
     @classmethod
     def from_n_variables_and_settings(
             cls,
             n_variables: int,
-            settings: Mapping[str, Any]
+            settings: Mapping[str, Any],
+            noise_settings: Optional[NoiseSettingsInputDict] = None
     ) -> Self:
 
         _validate_typed_dict(
             typed_dict=settings,
-            expected_typed_dict_class=SpectralDeltaParameters,
+            expected_typed_dict_class=SpectralDeltaParametersInputDict,
             object_name=cls.name,
         )
 
         return cls(
             n_variables=n_variables,
+            noise_settings=noise_settings,
             **settings
         )
 
@@ -736,15 +672,7 @@ class SpectralDeltaKernel(GPyTorchSingleModel):
         return self.settings
 
     def _set_up_model_constraints(self) -> None:
-
-        # TODO: Find a way to move all this noise stuff to the superclass >:( >:)
-        self.set_noise(
-            noise=self.settings.noise
-        )
-
-        self.set_noise_constraint(
-            lower_bound=self.settings.noise_lower_bound
-        )
+        self._set_up_noise_constraints()
 
     def initialise_model_with_data(
             self,
@@ -752,12 +680,12 @@ class SpectralDeltaKernel(GPyTorchSingleModel):
             train_targets: torch.Tensor,
     ) -> None:
 
-        assert self.model_with_data is not None, "Model must be initialised to call this method"
-
         super().initialise_model_with_data(
             train_inputs=train_inputs,
             train_targets=train_targets,
         )
+
+        assert self.model_with_data is not None, "Model must be initialised after calling super"
 
         self.model_with_data.covar_module.initialize_from_data(
             train_x=train_inputs,

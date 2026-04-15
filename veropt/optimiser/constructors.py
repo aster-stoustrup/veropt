@@ -10,7 +10,7 @@ from veropt.optimiser.acquisition_optimiser import (
 from veropt.optimiser.kernels import KernelInputDict, SingleKernelOptions
 from veropt.optimiser.model import (
     AdamInputDict, GPyTorchFullModel, GPyTorchSingleModel,
-    GPyTorchTrainingParametersInputDict, TorchModelOptimiser
+    GPyTorchTrainingParametersInputDict, NoiseSettingsInputDict, TorchModelOptimiser
 )
 from veropt.optimiser.normalisation import Normaliser, NormaliserChoice, get_normaliser_class
 from veropt.optimiser.objective import CallableObjective, InterfaceObjective
@@ -41,6 +41,7 @@ class ProblemInformation(TypedDict):
 class GPytorchModelChoice(TypedDict, total=False):
     kernels: Union[SingleKernelOptions, list[SingleKernelOptions], list[GPyTorchSingleModel], None]
     kernel_settings: Optional['KernelInputDict']
+    noise_settings: Optional[Union[NoiseSettingsInputDict, list[NoiseSettingsInputDict]]]
     kernel_optimiser: Optional[KernelOptimiserOptions]
     kernel_optimiser_settings: Optional[ModelOptimiserSettings]
     training_settings: Optional[GPyTorchTrainingParametersInputDict]
@@ -139,7 +140,6 @@ def botorch_predictor(
             n_objectives=problem_information['n_objectives'],
             **model or {},
         )
-
     if isinstance(acquisition_function, BotorchAcquisitionFunction):
 
         built_acquisition_function = acquisition_function
@@ -173,6 +173,7 @@ def gpytorch_model(
         n_objectives: int,
         kernels: Union[SingleKernelOptions, list[SingleKernelOptions], list[GPyTorchSingleModel], None] = None,
         kernel_settings: Union['KernelInputDict', list['KernelInputDict'], None] = None,
+        noise_settings: Union[NoiseSettingsInputDict, list[NoiseSettingsInputDict], None] = None,
         kernel_optimiser: Optional[KernelOptimiserOptions] = None,
         kernel_optimiser_settings: Optional[ModelOptimiserSettings] = None,
         training_settings: Optional[GPyTorchTrainingParametersInputDict] = None,
@@ -182,7 +183,8 @@ def gpytorch_model(
         n_variables=n_variables,
         n_objectives=n_objectives,
         kernels=kernels,
-        kernel_settings=kernel_settings
+        kernel_settings=kernel_settings,
+        noise_settings=noise_settings
     )
 
     model_optimiser = torch_model_optimiser(
@@ -203,13 +205,26 @@ def gpytorch_single_model_list(
         n_variables: int,
         n_objectives: int,
         kernels: Union[SingleKernelOptions, list[SingleKernelOptions], list[GPyTorchSingleModel], None] = None,
-        kernel_settings: Union['KernelInputDict', list['KernelInputDict'], None] = None
+        kernel_settings: Union['KernelInputDict', list['KernelInputDict'], None] = None,
+        noise_settings: Union[NoiseSettingsInputDict, list[NoiseSettingsInputDict], None] = None
 ) -> list[GPyTorchSingleModel]:
 
     wrong_kernel_input_message = (
         "'kernels' must be either None, a list of GPyTorchSingleModel, a valid kernel option or "
         "a list of valid kernel choices"
     )
+
+    # Resolve noise_settings into a per-objective list (broadcast single dict, or validate list length)
+    if noise_settings is None:
+        noise_settings_list: list[Optional[NoiseSettingsInputDict]] = [None] * n_objectives
+    elif isinstance(noise_settings, list):
+        assert len(noise_settings) == n_objectives, (
+            f"'noise_settings' list must have one entry per objective. "
+            f"Expected {n_objectives} but got {len(noise_settings)}."
+        )
+        noise_settings_list = noise_settings
+    else:
+        noise_settings_list = [noise_settings] * n_objectives
 
     if isinstance(kernels, list):
 
@@ -237,7 +252,8 @@ def gpytorch_single_model_list(
                 single_model_list.append(gpytorch_single_model(
                     n_variables=n_variables,
                     kernel=kernel,  # type: ignore[arg-type]  # checked above, kernel is 'str'
-                    settings=kernel_settings[kernel_no]
+                    settings=kernel_settings[kernel_no],
+                    noise_settings=noise_settings_list[kernel_no]
                 ))
 
         elif isinstance(kernels[0], GPyTorchSingleModel):
@@ -264,7 +280,8 @@ def gpytorch_single_model_list(
             single_model_list.append(gpytorch_single_model(
                 n_variables=n_variables,
                 kernel=kernels,
-                settings=kernel_settings
+                settings=kernel_settings,
+                noise_settings=noise_settings_list[objective_no]
             ))
 
     elif kernels is None:
@@ -274,7 +291,8 @@ def gpytorch_single_model_list(
         single_model_list = []
         for objective_no in range(n_objectives):
             single_model_list.append(gpytorch_single_model(
-                n_variables=n_variables
+                n_variables=n_variables,
+                noise_settings=noise_settings_list[objective_no]
             ))
 
     else:
@@ -286,7 +304,8 @@ def gpytorch_single_model_list(
 def gpytorch_single_model(
         n_variables: int,
         kernel: Optional[SingleKernelOptions] = None,
-        settings: Optional[KernelInputDict] = None
+        settings: Optional[KernelInputDict] = None,
+        noise_settings: Optional[NoiseSettingsInputDict] = None
 ) -> GPyTorchSingleModel:
 
     settings = settings or {}
@@ -297,7 +316,8 @@ def gpytorch_single_model(
         return gpytorch_single_model(
             n_variables=n_variables,
             kernel=defaults['model']['kernel'],
-            settings=settings
+            settings=settings,
+            noise_settings=noise_settings
         )
 
     subclasses = get_all_subclasses(
@@ -310,7 +330,8 @@ def gpytorch_single_model(
 
             return subclass.from_n_variables_and_settings(
                 n_variables=n_variables,
-                settings=settings
+                settings=settings,
+                noise_settings=noise_settings
             )
 
     # Shouldn't reach this point if kernel is recognised
