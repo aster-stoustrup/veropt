@@ -103,14 +103,12 @@ class MaternKernel(GPyTorchSingleModel):
             **settings
         )
 
-    def _set_up_model_constraints(self) -> None:
+    def _set_up_kernel_specific_constraints(self) -> None:
 
         self.change_lengthscale_constraints(
             lower_bound=self.settings.lengthscale_lower_bound,
             upper_bound=self.settings.lengthscale_upper_bound
         )
-
-        self._set_up_noise_constraints()
 
     def change_lengthscale_constraints(
             self,
@@ -197,7 +195,7 @@ class DoubleMaternKernel(GPyTorchSingleModel):
             **settings
         )
 
-    def _set_up_model_constraints(self) -> None:
+    def _set_up_kernel_specific_constraints(self) -> None:
 
         self.change_lengthscale_constraints(
             kernel_number=0,
@@ -210,8 +208,6 @@ class DoubleMaternKernel(GPyTorchSingleModel):
             lower_bound=self.settings.lengthscale_short_lower_bound,
             upper_bound=self.settings.lengthscale_short_upper_bound
         )
-
-        self._set_up_noise_constraints()
 
     def change_lengthscale_constraints(
             self,
@@ -303,7 +299,7 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
             **settings
         )
 
-    def _set_up_model_constraints(self) -> None:
+    def _set_up_kernel_specific_constraints(self) -> None:
 
         self.change_lengthscale_constraints(
             lower_bound=self.settings.lengthscale_lower_bound,
@@ -318,8 +314,6 @@ class RationalQuadraticKernel(GPyTorchSingleModel):
 
         elif (self.settings.alpha_lower_bound is not None) or (self.settings.alpha_upper_bound is not None):
             raise NotImplementedError("Currently only support setting both or none of alpha's bounds.")
-
-        self._set_up_noise_constraints()
 
     def change_alpha_constraints(
             self,
@@ -447,7 +441,7 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
             **settings
         )
 
-    def _set_up_model_constraints(self) -> None:
+    def _set_up_kernel_specific_constraints(self) -> None:
 
         assert self.model_with_data is not None, "Model must be initialised to call this method"
 
@@ -475,8 +469,6 @@ class RationalQuadraticMaternKernel(GPyTorchSingleModel):
             module=self.model_with_data.covar_module.kernels[1].base_kernel,
             parameter_name='raw_lengthscale'
         )
-
-        self._set_up_noise_constraints()
 
     def get_lengthscale(self) -> dict[str, torch.Tensor]:
 
@@ -583,8 +575,8 @@ class SpectralMixtureKernel(GPyTorchSingleModel):
     def get_settings(self) -> SavableDataClass:
         return self.settings
 
-    def _set_up_model_constraints(self) -> None:
-        self._set_up_noise_constraints()
+    def _set_up_kernel_specific_constraints(self) -> None:
+        pass  # No kernel-specific constraints for SpectralMixtureKernel
 
     def initialise_model_with_data(
             self,
@@ -671,14 +663,15 @@ class SpectralDeltaKernel(GPyTorchSingleModel):
     def get_settings(self) -> SavableDataClass:
         return self.settings
 
-    def _set_up_model_constraints(self) -> None:
-        self._set_up_noise_constraints()
+    def _set_up_kernel_specific_constraints(self) -> None:
+        pass  # No kernel-specific constraints for SpectralDeltaKernel
 
     def initialise_model_with_data(
             self,
             train_inputs: torch.Tensor,
             train_targets: torch.Tensor,
     ) -> None:
+
 
         super().initialise_model_with_data(
             train_inputs=train_inputs,

@@ -125,7 +125,8 @@ class Predictor(SavableClass, metaclass=abc.ABCMeta):
             *,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor,
-            train: bool = True
+            train: bool = True,
+            noise_std_in_model_space: Optional[torch.Tensor] = None
     ) -> None:
         pass
 
@@ -303,14 +304,22 @@ class BotorchPredictor(Predictor):
             *,
             variable_values: torch.Tensor,
             objective_values: torch.Tensor,
-            train: bool = True
+            train: bool = True,
+            noise_std_in_model_space: Optional[torch.Tensor] = None
     ) -> None:
 
         if train:
             self.model.train_model(
                 variable_values=variable_values,
-                objective_values=objective_values
+                objective_values=objective_values,
+                noise_std_in_model_space=noise_std_in_model_space
             )
+
+        else:
+            # On reload: re-apply physical noise even without retraining, so state_dict tampering
+            # is overridden and normaliser changes are propagated.
+            if noise_std_in_model_space is not None:
+                self.model._apply_physical_noise(noise_std_in_model_space)
 
         self.acquisition_function.refresh(
             model=self.model.get_gpytorch_model(),

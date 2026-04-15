@@ -82,6 +82,7 @@ class BayesianOptimiser(SavableClass):
 
         self._verify_set_up()
         self._set_up_settings()
+        self._check_noise_configuration()
 
     def __repr__(self) -> str:
         return (
@@ -727,6 +728,29 @@ class BayesianOptimiser(SavableClass):
 
         pass
 
+    def _check_noise_configuration(self) -> None:
+        """Raise ValueError if there is a conflict between objective.noise_std and kernel noise settings.
+
+        Checks that no kernel has train_noise=True when physical noise is set on the objective —
+        physical noise must be fixed during training."""
+
+        if self.objective.noise_std is None:
+            return
+
+        if not hasattr(self.predictor, 'model') or not hasattr(self.predictor.model, '_model_list'):
+            return  # can only check BotorchPredictor; skip other predictor types
+
+        for objective_name, single_model in zip(
+            self.objective.objective_names,
+            self.predictor.model._model_list  # type: ignore[union-attr]  # guarded by hasattr above
+        ):
+            if single_model._noise_settings.train_noise:
+                raise ValueError(
+                    f"train_noise=True for the kernel of objective '{objective_name}', but noise_std is "
+                    f"set on the objective. Physical noise must be fixed during training — "
+                    f"set train_noise=False (the default) or remove noise_std from the objective."
+                )
+
     def _reset_suggested_points(self) -> None:
 
         if self.suggested_points is None:
@@ -752,7 +776,8 @@ class BayesianOptimiser(SavableClass):
         self.predictor.update_with_new_data(
             variable_values=self.evaluated_variable_values.tensor,
             objective_values=self.evaluated_objective_values.tensor,
-            train=train
+            train=train,
+            noise_std_in_model_space=self._noise_std_in_model_space
         )
 
         self.predictor.update_normalisers(
@@ -1143,3 +1168,28 @@ class BayesianOptimiser(SavableClass):
                     normaliser_variables=self._normaliser_variables,
                     normaliser_objectives=self._normaliser_objectives
                 )
+
+    @property
+    def _noise_std_tensor(self) -> Optional[torch.Tensor]:
+        """Physical-units noise std per objective, ordered by objective_names. None if not set."""
+        if self.objective.noise_std is None:
+            return None
+        return torch.tensor(
+            [self.objective.noise_std[name] for name in self.objective.objective_names]
+        )
+
+    @property
+    def _noise_std_in_model_space(self) -> Optional[torch.Tensor]:
+        """Noise std in model-input space: normalised when the normaliser is fitted, physical otherwise.
+        Returns None when no noise_std is set on the objective.
+
+        When normalisation is off (settings.normalise=False) or not yet fitted,
+        _normaliser_objectives is None and physical units are returned directly — which is
+        correct because the GP then operates on physical-unit data."""
+        noise_std_tensor = self._noise_std_tensor
+        if noise_std_tensor is None:
+            return None
+        if self._normaliser_objectives is None:
+            return noise_std_tensor
+        return self._normaliser_objectives.transform_scale(noise_std_tensor)
+

@@ -22,7 +22,7 @@ from veropt.optimiser.utility import _load_defaults, _validate_typed_dict
 
 KernelOptimiserOptions = Literal['adam']
 
-AcquisitionOptions = Literal['qlogehvi', 'ucb']
+AcquisitionOptions = Literal['qlogehvi', 'qlogneHVI', 'ucb']
 AcquisitionOptimiserOptions = Literal['dual_annealing']
 
 AcquisitionSettings = UpperConfidenceBoundOptionsInputDict  # expand with more options when adding acq_funcs
@@ -31,11 +31,15 @@ AcquisitionOptimiserSettings = DualAnnealingSettingsInputDict  # expand when add
 ModelOptimiserSettings = AdamInputDict
 
 
-class ProblemInformation(TypedDict):
+class ProblemInformationRequired(TypedDict):
     n_variables: int
     n_objectives: int
     n_evaluations_per_step: int
     bounds: list[list[float]]
+
+
+class ProblemInformation(ProblemInformationRequired, total=False):
+    is_noisy: bool
 
 
 class GPytorchModelChoice(TypedDict, total=False):
@@ -81,6 +85,7 @@ def bayesian_optimiser(
         'n_objectives': objective.n_objectives,
         'n_evaluations_per_step': n_evaluations_per_step,
         'bounds': objective.bounds.tolist(),
+        'is_noisy': objective.noise_std is not None,
     }
 
     built_predictor = botorch_predictor(
@@ -148,6 +153,7 @@ def botorch_predictor(
         built_acquisition_function = botorch_acquisition_function(
             n_variables=problem_information['n_variables'],
             n_objectives=problem_information['n_objectives'],
+            is_noisy=problem_information.get('is_noisy', False),
             **acquisition_function or {}
         )
 
@@ -376,6 +382,7 @@ def torch_model_optimiser(
 def botorch_acquisition_function(
         n_variables: int,
         n_objectives: int,
+        is_noisy: bool = False,
         function: Optional[AcquisitionOptions] = None,
         parameters: Optional[AcquisitionSettings] = None
 ) -> BotorchAcquisitionFunction:
@@ -386,18 +393,22 @@ def botorch_acquisition_function(
 
         if n_objectives > 1:
 
+            default_key = 'noisy_multi_objective' if is_noisy else 'multi_objective'
             return botorch_acquisition_function(
                 n_variables=n_variables,
                 n_objectives=n_objectives,
-                function=defaults['acquisition']['multi_objective']
+                is_noisy=is_noisy,
+                function=defaults['acquisition'][default_key]
             )
 
         elif n_objectives == 1:
 
+            default_key = 'noisy_single_objective' if is_noisy else 'single_objective'
             return botorch_acquisition_function(
                 n_variables=n_variables,
                 n_objectives=n_objectives,
-                function=defaults['acquisition']['single_objective']
+                is_noisy=is_noisy,
+                function=defaults['acquisition'][default_key]
             )
 
         else:
