@@ -150,7 +150,8 @@ class Experiment:
             simulation_runner: SimulationRunner,
             result_processor: ResultProcessor,
             experiment_config: Union[str, ExperimentConfig],
-            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
+            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None,
+            allow_automatic_json_updates: Optional[bool] = None
     ) -> Self:
 
         experiment_config = ExperimentConfig.load(experiment_config)
@@ -166,7 +167,8 @@ class Experiment:
         )
 
         optimiser = load_optimiser_from_state(
-            file_name=path_manager.optimiser_state_json
+            file_name=path_manager.optimiser_state_json,
+            allow_automatic_json_updates=allow_automatic_json_updates
         )
 
         return cls(
@@ -187,7 +189,8 @@ class Experiment:
             experiment_config: Union[str, ExperimentConfig],
             optimiser_config: Union[str, dict],
             batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None,
-            state_path: Optional[str] = None
+            state_path: Optional[str] = None,
+            allow_automatic_json_updates: Optional[bool] = None
     ) -> Self:
 
         experiment_config = ExperimentConfig.load(experiment_config)
@@ -202,7 +205,8 @@ class Experiment:
                 simulation_runner=simulation_runner,
                 result_processor=result_processor,
                 experiment_config=experiment_config,
-                batch_manager_class=batch_manager_class
+                batch_manager_class=batch_manager_class,
+                allow_automatic_json_updates=allow_automatic_json_updates
             )
         else:
             return cls.from_the_beginning(
@@ -221,7 +225,8 @@ class Experiment:
             old_experiment_config: Union[str, ExperimentConfig],
             new_experiment_config: Union[str, ExperimentConfig],
             optimiser_config: Union[str, dict],
-            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None
+            batch_manager_class: Optional[Union[type[DirectBatchManager], type[SubmitBatchManager]]] = None,
+            allow_automatic_json_updates: Optional[bool] = None
     ) -> Self:
 
         # TODO: Change name
@@ -250,7 +255,8 @@ class Experiment:
 
         old_state = ExperimentalState.load(old_state_path)
         old_optimiser = load_optimiser_from_state(
-            file_name=old_path_manager.optimiser_state_json
+            file_name=old_path_manager.optimiser_state_json,
+            allow_automatic_json_updates=allow_automatic_json_updates
         )
 
         if os.path.exists(new_state_path):
@@ -261,7 +267,8 @@ class Experiment:
             )
 
             new_optimiser = load_optimiser_from_state(
-                file_name=new_path_manager.optimiser_state_json
+                file_name=new_path_manager.optimiser_state_json,
+                allow_automatic_json_updates=allow_automatic_json_updates
             )
 
             assert new_optimiser.n_points_evaluated < old_optimiser.n_points_evaluated, (
@@ -348,7 +355,8 @@ class Experiment:
             variable_names=experiment_config.parameter_names,
             objective_names=result_processor.objective_names,
             suggested_parameters_json=path_manager.suggested_parameters_json,
-            evaluated_objectives_json=path_manager.evaluated_objectives_json
+            evaluated_objectives_json=path_manager.evaluated_objectives_json,
+            noise_std=experiment_config.noise_std
         )
 
         if isinstance(optimiser_config, str):

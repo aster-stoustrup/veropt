@@ -299,6 +299,7 @@ class BayesianOptimiser(SavableClass):
         )
 
         if optimiser.model_has_been_trained:
+            optimiser._check_noise_desync_on_reload()
             optimiser._update_predictor(
                 train=False
             )
@@ -440,7 +441,6 @@ class BayesianOptimiser(SavableClass):
 
         if self.settings.normalise:
             self._fit_normaliser()
-
         self._update_predictor()
 
     def suggest_candidates(self) -> None:
@@ -727,6 +727,49 @@ class BayesianOptimiser(SavableClass):
         #     gpytorch.settings.observation_nan_policy._set_value('mask')
 
         pass
+
+    def _check_noise_desync_on_reload(self) -> None:
+        """Raise ValueError if the noise value stored in the model (loaded from JSON) does not
+        match the expected noise computed from objective.noise_std.
+
+        This guards against users manually editing the kernel noise in the JSON: such a change
+        would be silently overwritten by _apply_physical_noise, so instead we fail loudly so
+        the user knows their edit had no effect and understands where noise is controlled.
+
+        Called from from_saved_state before _update_predictor(train=False)."""
+
+        if self.objective.noise_std is None:
+            return
+
+        if not hasattr(self.predictor, 'model') or not hasattr(self.predictor.model, '_model_list'):
+            return
+
+        expected_noise_model_space = self._noise_std_in_model_space
+        if expected_noise_model_space is None:
+            return
+
+        # Relative tolerance: 2 % covers normalisation rounding but catches manual edits.
+        relative_tolerance = 0.02
+
+        for objective_index, (objective_name, single_model) in enumerate(
+            zip(self.objective.objective_names, self.predictor.model._model_list)  # type: ignore[union-attr]
+        ):
+            if single_model.model_with_data is None:
+                continue
+
+            expected_variance = float(expected_noise_model_space[objective_index] ** 2)
+            actual_variance = float(single_model.model_with_data.likelihood.noise)
+            difference = abs(actual_variance - expected_variance)
+            allowed_difference = relative_tolerance * expected_variance
+
+            if difference > allowed_difference:
+                raise ValueError(
+                    f"Noise desync detected for objective '{objective_name}' on JSON reload.\n"
+                    f"  Model noise variance in JSON : {actual_variance:.6e}\n"
+                    f"  Expected from objective.noise_std: {expected_variance:.6e}\n"
+                    f"Noise is controlled via objective.noise_std — do not edit the kernel "
+                    f"noise value in the JSON directly. Update noise_std in your code instead."
+                )
 
     def _check_noise_configuration(self) -> None:
         """Raise ValueError if there is a conflict between objective.noise_std and kernel noise settings.

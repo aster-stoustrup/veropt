@@ -7,7 +7,12 @@ Covers:
 - GPyTorchFullModel._apply_physical_noise (Step 4)
 - Predictor.update_with_new_data noise threading (Step 5)
 - Auto-selection of noisy acquisition function (Steps 7-8)
+- Model posterior variance with and without noise
+- JSON noise desync detection on reload
 """
+import json
+from typing import Optional
+
 import pytest
 import torch
 
@@ -348,6 +353,161 @@ class TestNoisyAcquisitionAutoSelection:
         for step in range(6):
             optimiser.run_optimisation_step()
         assert optimiser.n_points_evaluated == 6
+
+
+# ---------------------------------------------------------------------------
+# Model posterior variance — does the pinned noise actually reach the GP?
+# ---------------------------------------------------------------------------
+
+class TestModelPosteriorVariance:
+    """Check that fixing noise_std produces meaningfully different posterior uncertainty
+    compared to a noiseless model, both immediately after pinning and after training."""
+
+    def _train_simple_model(self, noise_std_value: Optional[float]) -> GPyTorchFullModel:
+        """Return a GPyTorchFullModel with initialised (not full Adam) training on a small 1-D dataset.
+
+        Using initialise_model + _apply_physical_noise mirrors the path taken by train_model."""
+        from veropt.optimiser.model import AdamModelOptimiser
+        kernel = MaternKernel(n_variables=1)
+        model = GPyTorchFullModel.from_the_beginning(
+            n_variables=1,
+            n_objectives=1,
+            single_model_list=[kernel],
+            model_optimiser=AdamModelOptimiser(),
+            max_iter=5,
+            verbose=False
+        )
+        torch.manual_seed(0)
+        variables = torch.linspace(0.0, 1.0, 8).unsqueeze(-1)
+        objectives = torch.sin(variables * 3.14).squeeze(-1).unsqueeze(-1)
+        model.initialise_model(variable_values=variables, objective_values=objectives)
+        if noise_std_value is not None:
+            noise_tensor = torch.tensor([noise_std_value])
+            model._apply_physical_noise(noise_std_in_model_space=noise_tensor)
+        return model
+
+    def _posterior_variance_at_training_point(self, model: GPyTorchFullModel) -> float:
+        """Return the GP posterior variance at the first training point."""
+        single_model = model._model_list[0]
+        assert single_model.model_with_data is not None
+        gpytorch_model = single_model.model_with_data
+        gpytorch_model.eval()
+        x_test = gpytorch_model.train_inputs[0][0:1]  # first training point from ExactGP storage
+        with torch.no_grad():
+            posterior = gpytorch_model.likelihood(gpytorch_model(x_test))
+        return float(posterior.variance.squeeze())
+
+    def test_noiseless_model_has_near_zero_variance_at_training_point(self) -> None:
+        """With no noise (likelihood noise ≈ 0), the GP nearly interpolates its training data."""
+        model = self._train_simple_model(noise_std_value=None)
+        variance = self._posterior_variance_at_training_point(model)
+        assert variance < 0.01, (
+            f"Expected near-zero posterior variance at training point for noiseless GP, got {variance:.4e}"
+        )
+
+    def test_noisy_model_has_larger_variance_at_training_point(self) -> None:
+        """With noise_std set, the posterior should be meaningfully uncertain at training points."""
+        noise_std = 0.3
+        model = self._train_simple_model(noise_std_value=noise_std)
+        variance = self._posterior_variance_at_training_point(model)
+        assert variance > 0.005, (
+            f"Expected non-negligible variance at training point for noisy GP (noise_std={noise_std}), "
+            f"got {variance:.4e}"
+        )
+
+    def test_noisy_model_has_greater_variance_than_noiseless(self) -> None:
+        """Noisy model should always have higher posterior uncertainty than noiseless."""
+        noiseless_model = self._train_simple_model(noise_std_value=None)
+        noisy_model = self._train_simple_model(noise_std_value=0.3)
+        noiseless_variance = self._posterior_variance_at_training_point(noiseless_model)
+        noisy_variance = self._posterior_variance_at_training_point(noisy_model)
+        assert noisy_variance > noiseless_variance, (
+            f"Noisy model variance ({noisy_variance:.4e}) should exceed "
+            f"noiseless model variance ({noiseless_variance:.4e})"
+        )
+
+    def test_noise_pinning_survives_adam_training(self) -> None:
+        """After running Adam optimisation, the likelihood noise should remain pinned to the physical variance."""
+        from veropt.optimiser.model import AdamModelOptimiser
+        noise_std = 0.1
+        kernel = MaternKernel(n_variables=1)
+        model = GPyTorchFullModel.from_the_beginning(
+            n_variables=1,
+            n_objectives=1,
+            single_model_list=[kernel],
+            model_optimiser=AdamModelOptimiser(),
+            max_iter=10,
+            verbose=False
+        )
+        torch.manual_seed(1)
+        variables = torch.linspace(0.0, 1.0, 8).unsqueeze(-1)
+        objectives = torch.sin(variables * 3.14).squeeze(-1).unsqueeze(-1)
+        noise_tensor = torch.tensor([noise_std])
+        model.train_model(
+            variable_values=variables,
+            objective_values=objectives,
+            noise_std_in_model_space=noise_tensor
+        )
+        expected_variance = noise_std ** 2
+        actual_noise = float(model._model_list[0].model_with_data.likelihood.noise)
+        relative_error = abs(actual_noise - expected_variance) / expected_variance
+        assert relative_error < 0.01, (
+            f"Noise variance should remain pinned to {expected_variance:.4e} after Adam training, "
+            f"but got {actual_noise:.4e} (relative error {relative_error:.2%})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# JSON noise desync detection
+# ---------------------------------------------------------------------------
+
+class TestJsonNoiseDesyncDetection:
+    """Verify that editing the kernel noise in the JSON file (while objective.noise_std
+    disagrees) raises a clear error on reload rather than silently overwriting."""
+
+    def _run_optimiser_and_save(self, tmp_path) -> str:
+        optimiser = _make_single_objective_noisy_optimiser(n_initial=4)
+        for _ in range(4):
+            optimiser.run_optimisation_step()
+        optimiser.settings.allow_automatic_json_updates = True
+        file_path = str(tmp_path / "desync_test.json")
+        save_to_json(optimiser, file_path)
+        return file_path
+
+    def test_clean_json_reloads_without_error(self, tmp_path) -> None:
+        """Sanity check: an unmodified JSON should reload cleanly."""
+        file_path = self._run_optimiser_and_save(tmp_path)
+        loaded = load_optimiser_from_state(file_path)
+        assert loaded.objective.noise_std is not None
+
+    def test_tampered_kernel_noise_raises_on_reload(self, tmp_path) -> None:
+        """Manually changing the kernel likelihood noise in the JSON should raise ValueError."""
+        file_path = self._run_optimiser_and_save(tmp_path)
+
+        with open(file_path, 'r') as json_file:
+            data = json.load(json_file)
+
+        # Navigate to the raw_noise value in the first single model's state_dict.
+        # Structure: optimiser → predictor → state → model → state
+        #            → model_dicts → model_0 → state → state_dict
+        #            → likelihood.noise_covar.raw_noise  (flat list)
+        state_dict = (
+            data['optimiser']['predictor']['state']['model']['state']
+            ['model_dicts']['model_0']['state']['state_dict']
+        )
+        raw_noise_key = 'likelihood.noise_covar.raw_noise'
+        if raw_noise_key in state_dict:
+            # Set raw_noise to a very large value — corresponds to a much higher variance after softplus
+            state_dict[raw_noise_key] = [100.0]  # large positive raw value → huge effective noise
+
+        with open(file_path, 'w') as json_file:
+            json.dump(data, json_file)
+
+        with pytest.raises(ValueError, match="Noise desync detected"):
+            load_optimiser_from_state(file_path)
+
+
+
 
 
 

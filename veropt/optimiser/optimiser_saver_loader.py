@@ -1,6 +1,6 @@
 import json
 import shutil
-from typing import Union
+from typing import Optional, Union
 
 from veropt import bayesian_optimiser
 from veropt.optimiser.objective import CallableObjective, InterfaceObjective
@@ -39,8 +39,22 @@ def save_to_json(
 
 
 def load_optimiser_from_state(
-        file_name: str
+        file_name: str,
+        allow_automatic_json_updates: Optional[bool] = None,
 ) -> 'BayesianOptimiser':
+    """Load a ``BayesianOptimiser`` from a JSON file.
+
+    Parameters
+    ----------
+    file_name:
+        Path to the saved optimiser JSON.
+    allow_automatic_json_updates:
+        Override the ``allow_automatic_json_updates`` flag stored inside the JSON.
+        Useful when the JSON predates the flag (or has it set to ``False``) but
+        you want a one-off migration without editing the file manually.
+        Passing ``True`` will migrate the file in-place and continue.
+        Passing ``None`` (default) defers to whatever value is stored in the JSON.
+    """
 
     with open(file_name, 'r') as json_file:
         saved_dict = json.load(json_file)
@@ -48,12 +62,13 @@ def load_optimiser_from_state(
     schema_version = saved_dict.get('schema_version', 1)
 
     if schema_version < CURRENT_SCHEMA_VERSION:
-        allow_updates = (
+        stored_flag = (
             saved_dict
             .get('optimiser', {})
             .get('settings', {})
             .get('allow_automatic_json_updates', False)
         )
+        allow_updates = allow_automatic_json_updates if allow_automatic_json_updates is not None else stored_flag
 
         if allow_updates:
             migrate_json(file_name)

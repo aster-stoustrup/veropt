@@ -183,7 +183,8 @@ def plot_progression(
 
 def plot_pareto_front_grid(
         optimiser: BayesianOptimiser,
-        normalised: bool = False
+        normalised: bool = False,
+        uncertainty_style: str = 'ellipse'
 ) -> go.Figure:
 
     if optimiser.return_normalised_data and normalised is False:
@@ -198,9 +199,12 @@ def plot_pareto_front_grid(
         suggested_points = optimiser.suggested_points
         reference_point = None
 
+    noise_std_per_objective = optimiser._noise_std_tensor
+
     pareto_optimal_indices = get_pareto_optimal_points(
         variable_values=variable_values,
         objective_values=objective_values,
+        noise_std_per_objective=noise_std_per_objective,
     )['index']
 
     objective_names = optimiser.objective.objective_names
@@ -212,6 +216,8 @@ def plot_pareto_front_grid(
         n_initial_points=optimiser.n_initial_points,
         suggested_points=suggested_points,
         reference_point=reference_point,
+        noise_std_per_objective=noise_std_per_objective,
+        uncertainty_style=uncertainty_style,  # type: ignore[arg-type]
         return_figure=True
     )
 
@@ -221,7 +227,8 @@ def plot_pareto_front_grid(
 def plot_pareto_front(
         optimiser: BayesianOptimiser,
         plotted_objective_indices: list[int],
-        normalised: bool = False
+        normalised: bool = False,
+        uncertainty_style: str = 'ellipse'
 ) -> go.Figure:
 
     if optimiser.return_normalised_data and normalised is False:
@@ -236,9 +243,12 @@ def plot_pareto_front(
         suggested_points = optimiser.suggested_points
         reference_point = None
 
+    noise_std_per_objective = optimiser._noise_std_tensor
+
     pareto_optimal_indices = get_pareto_optimal_points(
         variable_values=variable_values,
         objective_values=objective_values,
+        noise_std_per_objective=noise_std_per_objective,
     )['index']
 
     figure = _plot_pareto_front(
@@ -249,6 +259,8 @@ def plot_pareto_front(
         n_initial_points=optimiser.n_initial_points,
         suggested_points=suggested_points,
         reference_point=reference_point,
+        noise_std_per_objective=noise_std_per_objective,
+        uncertainty_style=uncertainty_style,  # type: ignore[arg-type]
         return_figure=True
     )
 

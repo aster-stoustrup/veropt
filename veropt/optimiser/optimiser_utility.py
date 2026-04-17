@@ -448,8 +448,40 @@ def get_pareto_optimal_points(
         variable_values: torch.Tensor,
         objective_values: torch.Tensor,
         weights: Optional[torch.Tensor] = None,
-        sort_by_max_weighted_sum: bool = False
+        sort_by_max_weighted_sum: bool = False,
+        noise_std_per_objective: Optional[torch.Tensor] = None,
+        noise_confidence_k: float = 1.0
 ) -> ParetoOptimalPoints:
+    """Return the Pareto-optimal (non-dominated) subset of the evaluated points.
+
+    When `noise_std_per_objective` is supplied the algorithm uses a noise-aware
+    dominance criterion (Fieldsend & Everson 2015): point A is *certainly dominated*
+    by B only if B_j − k·σ_j > A_j + k·σ_j for **all** objectives j, i.e. B beats A
+    by more than 2·k·σ_j after accounting for noise.  Points that are not certainly
+    dominated by any other point are kept.
+
+    Parameters
+    ----------
+    noise_std_per_objective:
+        Tensor of shape [n_objectives] with the known noise std per objective.
+        When None the standard (noiseless) Pareto criterion is used.
+    noise_confidence_k:
+        Multiplier on the noise std that controls how conservative the criterion is.
+        k=1 (default) keeps borderline points — recommended for expensive optimisation
+        with few evaluations.  k=2 is the engineering 2-sigma choice.
+    """
+    # When noise is provided, a point p is kept unless B *certainly* dominates it:
+    # B certainly dominates p  ⟺  for ALL j: B_j > p_j + 2·k·σ_j
+    # ⟺  for ALL j: B_j > p_j + margin_j
+    # Equivalently p is kept if for every B, EXISTS j: B_j ≤ p_j + margin_j
+    # The standard algorithm keeps p if EXISTS j: B_j > p_j.
+    # Setting effective threshold = value − margin gives the noisy version:
+    # keep p if EXISTS j: p_j > B_j − margin_j  ⟺  EXISTS j: B_j ≤ p_j + margin_j ✓
+    margin = (
+        2.0 * noise_confidence_k * noise_std_per_objective
+        if noise_std_per_objective is not None
+        else torch.zeros(objective_values.shape[DataShape.index_dimensions])
+    )
 
     pareto_optimal_booleans = torch.ones(
         size=(objective_values.shape[DataShape.index_points],),
@@ -457,8 +489,10 @@ def get_pareto_optimal_points(
     )
     for value_index, value in enumerate(objective_values):
         if pareto_optimal_booleans[value_index]:
+            # Standard:  keep p  if EXISTS j: p_j > value_j
+            # Noisy:     keep p  if EXISTS j: p_j > value_j − margin_j
             pareto_optimal_booleans[pareto_optimal_booleans.clone()] = torch.any(
-                input=objective_values[pareto_optimal_booleans] > value,
+                input=objective_values[pareto_optimal_booleans] > value - margin,
                 dim=DataShape.index_dimensions
             )
             pareto_optimal_booleans[value_index] = True
