@@ -450,7 +450,7 @@ def get_pareto_optimal_points(
         weights: Optional[torch.Tensor] = None,
         sort_by_max_weighted_sum: bool = False,
         noise_std_per_objective: Optional[torch.Tensor] = None,
-        noise_confidence_k: float = 1.0
+        noise_confidence_k: float = 0.5
 ) -> ParetoOptimalPoints:
     """Return the Pareto-optimal (non-dominated) subset of the evaluated points.
 
@@ -467,8 +467,9 @@ def get_pareto_optimal_points(
         When None the standard (noiseless) Pareto criterion is used.
     noise_confidence_k:
         Multiplier on the noise std that controls how conservative the criterion is.
-        k=1 (default) keeps borderline points — recommended for expensive optimisation
-        with few evaluations.  k=2 is the engineering 2-sigma choice.
+        k=0.5 (default) gives a 1σ margin — a natural "within one standard deviation"
+        threshold.  k=1.0 gives a 2σ margin (more conservative).  k=0 reduces to the
+        standard noiseless Pareto criterion.
     """
     # When noise is provided, a point p is kept unless B *certainly* dominates it:
     # B certainly dominates p  ⟺  for ALL j: B_j > p_j + 2·k·σ_j

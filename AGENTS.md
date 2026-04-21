@@ -79,6 +79,7 @@ Example: Don't build a general strategy pattern if a simple `if/else` works. Add
 - **Boolean flags**: Prefix with verb (is_, has_, can_). Example: `should_normalize_inputs` not `normalize`.
 
 ### 2. Formatting
+- **Bug fix comments**: When fixing a bug, document the fix in `CHANGELOG.md`, not as a long comment in the code. Short inline comments (one line) are acceptable only when the code would otherwise be non-obvious.
 - **Line length**: keep lines within 120 characters (PyCharm right-margin guide).
 - **Multi-line calls and dicts**: when a call or dict literal must be split across lines, put *every* argument/key on its own line — never mix some arguments on the opening line and others below. Either the whole call fits on one line, or each argument gets its own line.
 
@@ -218,4 +219,38 @@ python local_workflows/linting.py
 6. **Default Settings**: `veropt/optimiser/default_settings.json` contains hardcoded defaults - modify via TypedDict overrides in constructor, not by editing JSON directly.
 
 7. **Pytest + Python 3.13**: Requires `python >3.13` per `setup.py`. Codebase uses modern syntax (PEP 695 type aliases with `type Foo = ...`).
+
+8. **JSON Schema Versioning**: Saved optimiser JSON files carry a `schema_version` integer. The current version is defined as `CURRENT_SCHEMA_VERSION` in `optimiser_saver_loader.py`. When making changes that alter the JSON structure, increment the version and add a `_migrate_vX_to_vY` function. Migration runs automatically when `allow_automatic_json_updates=True` (creates a `.bak` before writing).
+
+## Changelog Reports
+
+For significant changes, detailed implementation notes live in `changelog_reports/<version>/`.
+Each version folder contains one markdown per feature or fix area, plus a `README.md` index.
+
+**When to create a report**: any non-trivial change — new features, refactors, bug fixes with
+a root-cause story, or anything that touches multiple files.
+
+**Keeping reports accurate is critical.** A misleading report is worse than no report.
+Rules:
+- Update the relevant report immediately whenever the implementation changes during a branch.
+- If a design decision is reversed (e.g. a reload path is changed), edit the report in the
+  same commit — do not leave the old description in place.
+- Mark anything speculative or outdated clearly, or delete it.
+- Reports live in `changelog_reports/`, **not** in `thinking_files/` (which holds planning
+  and design notes that are not expected to stay current).
+
+**Structure:**
+```
+changelog_reports/
+└── v1.3.0/
+    ├── README.md                    ← index table
+    ├── noise_v1_implementation.md   ← one file per major topic
+    ├── noise_settings_refactor.md
+    ├── rollback_implementation.md
+    ├── visualisation_improvements.md
+    └── bug_fixes.md
+```
+
+`CHANGELOG.md` (root) contains the concise per-version summary and links to the relevant
+reports for anyone who wants deeper detail.
 

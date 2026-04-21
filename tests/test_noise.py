@@ -301,6 +301,65 @@ class TestPredictorNoiseThreading:
                 f"but model has {actual_noise:.2e}"
             )
 
+    def test_multi_objective_noisy_reload_does_not_crash(self, tmp_path) -> None:
+        """Regression test: loading a saved multi-objective noisy optimiser must not raise
+        UnsupportedError about unexpected batch dims in prune_inferior_points_multi_objective.
+
+        Root cause: GPyTorchSingleModel.gather_dicts_to_save was saving
+        model_with_data.train_inputs (a gpytorch tuple) instead of train_inputs[0] (the raw
+        tensor). On reload, torch.tensor(tuple_data) produced shape [1, n_points, n_vars]
+        instead of [n_points, n_vars], giving the reloaded model batch_shape=[1].
+        BoTorch's prune_inferior_points_multi_objective saw obj_vals.ndim=4 > 3 and raised
+        UnsupportedError("Models with multiple batch dims...").
+
+        Fix: save train_inputs[0] in gather_dicts_to_save so reload gives batch_shape=[]."""
+        import torch
+        torch.manual_seed(0)
+
+        noise_std = {f"DTLZ1 {i + 1}": 0.05 for i in range(2)}
+        objective = DTLZ1(n_variables=3, n_objectives=2, noise_std=noise_std)
+        optimiser = bayesian_optimiser(
+            n_initial_points=6,
+            n_bayesian_points=4,
+            n_evaluations_per_step=1,
+            objective=objective,
+            model={'training_settings': {'max_iter': 5, 'verbose': False}},
+        )
+
+        for _ in range(6):
+            optimiser.run_optimisation_step()
+
+        optimiser.settings.allow_automatic_json_updates = True
+        file_path = str(tmp_path / "test_multi_noisy_optimiser.json")
+        save_to_json(optimiser, file_path)
+
+        # This line used to raise:
+        #   botorch.exceptions.errors.UnsupportedError:
+        #   Models with multiple batch dims are currently unsupported by
+        #   `prune_inferior_points_multi_objective`.
+        loaded = load_optimiser_from_state(file_path)
+
+        assert loaded.model_has_been_trained
+
+        # batch_shape must be [] (no spurious batch dim from saved train_inputs tuple)
+        reloaded_mlgp = loaded.predictor.model.get_gpytorch_model()
+        assert reloaded_mlgp.batch_shape == torch.Size([]), (
+            f"Expected batch_shape=[], got {reloaded_mlgp.batch_shape}. "
+            "Saving train_inputs as a tuple introduced an extra batch dimension on reload."
+        )
+
+        # Verify noise values are correct after reload
+        noise_in_model = loaded._noise_std_in_model_space
+        assert noise_in_model is not None
+
+        for objective_index, single_model in enumerate(loaded.predictor.model._model_list):
+            expected_variance = float(noise_in_model[objective_index] ** 2)
+            actual_noise = float(single_model.model_with_data.likelihood.noise.detach())
+            assert abs(actual_noise - expected_variance) < 1e-9, (
+                f"Objective {objective_index}: expected variance {expected_variance:.2e} "
+                f"but model has {actual_noise:.2e}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Steps 7–8 — Acquisition function auto-selection
@@ -505,6 +564,8 @@ class TestJsonNoiseDesyncDetection:
 
         with pytest.raises(ValueError, match="Noise desync detected"):
             load_optimiser_from_state(file_path)
+
+
 
 
 

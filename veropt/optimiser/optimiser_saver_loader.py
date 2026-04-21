@@ -12,7 +12,7 @@ from veropt.optimiser.utility import get_arguments_of_function
 # Loaded so it is known by load_optimiser_from_state
 from veropt.interfaces.experiment_utility import ExperimentObjective  # noqa: F401
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 def save_to_json(
@@ -149,6 +149,9 @@ def migrate_json(file_path: str) -> None:
     if schema_version < 2:
         saved_dict = _migrate_v1_to_v2(saved_dict)
 
+    if schema_version < 3:
+        saved_dict = _migrate_v2_to_v3(saved_dict)
+
     with open(file_path_with_json, 'w') as json_file:
         json.dump(saved_dict, json_file, cls=TensorsAsListsEncoder, indent=2)
 
@@ -156,6 +159,45 @@ def migrate_json(file_path: str) -> None:
         f"Migration complete: schema v{schema_version} → v{CURRENT_SCHEMA_VERSION}. "
         f"Backup saved at '{backup_path}'."
     )
+
+
+def _migrate_v2_to_v3(saved_dict: dict) -> dict:
+    """Fix train_inputs serialised as a nested list (from gpytorch tuple wrapping).
+
+    In schema v2, gather_dicts_to_save saved model_with_data.train_inputs (a tuple),
+    producing [[...data...]] in JSON — shape [1, n_points, n_vars] on reload.
+    Schema v3 saves train_inputs[0] directly — shape [n_points, n_vars].
+    This migration unwraps the extra leading dimension if present.
+    """
+    try:
+        model_dicts = (
+            saved_dict
+            ['optimiser']
+            ['predictor']
+            ['state']
+            ['model']
+            ['state']
+            ['model_dicts']
+        )
+    except KeyError as missing_key:
+        raise RuntimeError(
+            f"Could not migrate JSON: unexpected structure. Missing key: {missing_key}. "
+            "This file may already be in a non-standard format."
+        ) from missing_key
+
+    for model_key, model_dict in model_dicts.items():
+        train_inputs = model_dict['state'].get('train_inputs')
+        if (
+            train_inputs is not None
+            and isinstance(train_inputs, list)
+            and len(train_inputs) == 1
+            and isinstance(train_inputs[0], list)
+        ):
+            model_dicts[model_key]['state']['train_inputs'] = train_inputs[0]
+
+    saved_dict['schema_version'] = CURRENT_SCHEMA_VERSION
+
+    return saved_dict
 
 
 def load_optimiser_from_settings(

@@ -22,10 +22,30 @@ from veropt.optimiser.utility import DataShape
 def choose_plot_point(
         optimiser: BayesianOptimiser,
         normalised: bool,
-        include_suggested_points: bool = True
+        include_suggested_points: bool = True,
+        point_selection: Optional[str] = None
 ) -> tuple[torch.Tensor, str]:
+    """
+    Resolve a plot evaluation point from a string selector or default to the best evaluated point.
 
-    if optimiser.suggested_points and include_suggested_points:
+    point_selection options:
+      None / "best"              -> best evaluated point (weighted sum of objectives)
+      "best {objective_name}"    -> best point for a specific objective
+      "suggested {n}"            -> nth suggested point (1-indexed)
+    """
+
+    if point_selection is not None and point_selection.startswith("suggested"):
+
+        assert optimiser.suggested_points is not None, (
+            "No active suggested points - cannot use 'suggested N' point selection."
+        )
+        assert include_suggested_points, "include_suggested_points=False but point_selection references a suggested point"
+
+        parts = point_selection.split()
+        assert len(parts) == 2 and parts[1].isdigit(), (
+            f"Expected 'suggested N' (1-indexed), got: '{point_selection}'"
+        )
+        suggested_point_number = int(parts[1])
 
         if normalised is False:
             assert optimiser.suggested_points_real_units is not None, "Internal error"
@@ -33,9 +53,34 @@ def choose_plot_point(
         else:
             suggested_variable_values = optimiser.suggested_points.variable_values
 
-        suggested_point_ind = 0  # In the future, might want the best one
+        n_suggested = suggested_variable_values.shape[0]
+        assert 1 <= suggested_point_number <= n_suggested, (
+            f"Suggested point number {suggested_point_number} out of range (1 to {n_suggested})"
+        )
+
+        suggested_point_ind = suggested_point_number - 1
         eval_point = deepcopy(suggested_variable_values[suggested_point_ind:suggested_point_ind + 1])
-        point_description = " at the first suggested step"
+        point_description = f" at suggested point {suggested_point_number}"
+
+    elif point_selection is not None and point_selection.startswith("best "):
+
+        objective_name = point_selection[len("best "):]
+        objective_names = optimiser.objective.objective_names
+        assert objective_name in objective_names, (
+            f"Objective '{objective_name}' not found. Available: {objective_names}"
+        )
+        objective_index = objective_names.index(objective_name)
+
+        if normalised is False:
+            variable_values = optimiser.evaluated_variables_real_units
+            objective_values = optimiser.evaluated_objectives_real_units
+        else:
+            variable_values = optimiser.evaluated_variable_values.tensor
+            objective_values = optimiser.evaluated_objective_values.tensor
+
+        best_index = int(objective_values[:, objective_index].argmax())
+        eval_point = deepcopy(variable_values[best_index:best_index + 1])
+        point_description = f" at the best point for '{objective_name}' (point no. {best_index})"
 
     else:
 
@@ -46,7 +91,7 @@ def choose_plot_point(
 
         max_ind = optimiser.get_best_points()['index']
         eval_point = deepcopy(variable_values[max_ind:max_ind + 1])
-        point_description = f" at the point with the highest known value (point no. {max_ind})"
+        point_description = f" at the best known point (point no. {max_ind})"
 
     return eval_point, point_description
 
