@@ -80,6 +80,7 @@ Example: Don't build a general strategy pattern if a simple `if/else` works. Add
 
 ### 2. Formatting
 - **Bug fix comments**: When fixing a bug, document the fix in `CHANGELOG.md`, not as a long comment in the code. Short inline comments (one line) are acceptable only when the code would otherwise be non-obvious.
+- **`type: ignore` usage**: Only use `# type: ignore` when fixing the error properly would substantially hurt code simplicity (e.g. fighting untyped third-party stubs). Every `type: ignore` must be accompanied by a short inline comment explaining why it is necessary. Example: `# type: ignore[assignment]  # os.environ stubs don't accept dict[str, Any] from json`
 - **Line length**: keep lines within 120 characters (PyCharm right-margin guide).
 - **Multi-line calls and dicts**: when a call or dict literal must be split across lines, put *every* argument/key on its own line — never mix some arguments on the opening line and others below. Either the whole call fits on one line, or each argument gets its own line.
 
@@ -227,8 +228,15 @@ python local_workflows/linting.py
 For significant changes, detailed implementation notes live in `changelog_reports/<version>/`.
 Each version folder contains one markdown per feature or fix area, plus a `README.md` index.
 
-**When to create a report**: any non-trivial change — new features, refactors, bug fixes with
-a root-cause story, or anything that touches multiple files.
+**When to create a report**: for changes that are non-trivial to understand from the
+code and commit message alone. Good candidates:
+- New features that touch multiple files and have a design rationale worth explaining
+- Refactors where the "why" and the before/after structure are not obvious
+- Bug fixes with a non-trivial root-cause story
+
+**When NOT to create a report**: small, self-contained changes are better described
+inline in `CHANGELOG.md` only. Examples: a single-function API extension, a one-line
+bug fix, a parameter rename, adding a test for existing behaviour.
 
 **Keeping reports accurate is critical.** A misleading report is worse than no report.
 Rules:

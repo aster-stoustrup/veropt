@@ -83,7 +83,7 @@ def test_noise_settings_broadcast_across_list_of_kernels() -> None:
     model = gpytorch_model(
         n_variables=n_variables,
         n_objectives=n_objectives,
-        kernels=['matern', 'matern'],
+        kernels=['matern', 'matern'],  # type: ignore[arg-type]
         noise_settings={'noise': custom_noise}
     )
 
@@ -102,7 +102,7 @@ def test_noise_settings_per_objective() -> None:
     model = gpytorch_model(
         n_variables=n_variables,
         n_objectives=n_objectives,
-        kernels=['matern', 'matern'],
+        kernels=['matern', 'matern'],  # type: ignore[arg-type]
         noise_settings=[
             {'noise': noise_per_objective[0]},
             {'noise': noise_per_objective[1]},
@@ -123,7 +123,6 @@ def test_noise_settings_list_wrong_length_raises() -> None:
         gpytorch_model(
             n_variables=3,
             n_objectives=2,
-            kernels=['matern', 'matern'],
+            kernels=['matern', 'matern'],  # type: ignore[arg-type]
             noise_settings=[{'noise': 1e-4}]  # length 1, but n_objectives=2
         )
-

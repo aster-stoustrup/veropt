@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -11,10 +12,12 @@ from veropt.optimiser.optimiser_saver_loader import (
     save_to_json,
     load_optimiser_from_state,
 )
+from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.practice_objectives import Hartmann
+from veropt.optimiser.prediction import BotorchPredictor
 
 
-def _make_minimal_optimiser(n_initial_points: int = 4, verbose: bool = False):
+def _make_minimal_optimiser(n_initial_points: int = 4, verbose: bool = False) -> BayesianOptimiser:
     """Create a small optimiser for use in saver/loader tests."""
     return bayesian_optimiser(
         n_initial_points=n_initial_points,
@@ -86,7 +89,7 @@ def _downgrade_to_v1(saved: dict) -> dict:
 
 # --- Schema version tests ---
 
-def test_save_produces_current_schema_version(tmp_path) -> None:
+def test_save_produces_current_schema_version(tmp_path: Path) -> None:
     """Saving an optimiser must stamp schema_version in the file."""
 
     optimiser = _make_minimal_optimiser()
@@ -99,7 +102,7 @@ def test_save_produces_current_schema_version(tmp_path) -> None:
     assert saved.get('schema_version') == CURRENT_SCHEMA_VERSION
 
 
-def test_save_noise_fields_at_state_level_not_inside_settings(tmp_path) -> None:
+def test_save_noise_fields_at_state_level_not_inside_settings(tmp_path: Path) -> None:
     """After save, each kernel's noise fields must be at state level, not inside 'settings'."""
 
     optimiser = _make_minimal_optimiser()
@@ -126,7 +129,7 @@ def test_save_noise_fields_at_state_level_not_inside_settings(tmp_path) -> None:
         assert 'train_noise' in state, f"'train_noise' missing from state top-level for {model_key}."
 
 
-def test_round_trip_save_load_preserves_noise_settings(tmp_path) -> None:
+def test_round_trip_save_load_preserves_noise_settings(tmp_path: Path) -> None:
     """Save → load must preserve noise values correctly."""
 
     custom_noise = 1e-5
@@ -148,6 +151,7 @@ def test_round_trip_save_load_preserves_noise_settings(tmp_path) -> None:
 
     loaded_optimiser = load_optimiser_from_state(save_path)
 
+    assert isinstance(loaded_optimiser.predictor, BotorchPredictor)
     for kernel in loaded_optimiser.predictor.model._model_list:
         assert kernel._noise_settings.noise == pytest.approx(custom_noise)
         assert kernel._noise_settings.noise_lower_bound == pytest.approx(custom_noise)
@@ -175,7 +179,7 @@ def test_migrate_v1_to_v2_moves_noise_fields() -> None:
     assert v2_dict['schema_version'] == CURRENT_SCHEMA_VERSION
 
 
-def test_migrate_json_creates_backup_and_updates_file(tmp_path) -> None:
+def test_migrate_json_creates_backup_and_updates_file(tmp_path: Path) -> None:
     """migrate_json must create a .bak file and write a v2 file in place."""
 
     optimiser = _make_minimal_optimiser()
@@ -207,7 +211,7 @@ def test_migrate_json_creates_backup_and_updates_file(tmp_path) -> None:
     assert 'noise' not in model_0_state['settings']
 
 
-def test_load_v1_json_raises_without_allow_flag(tmp_path) -> None:
+def test_load_v1_json_raises_without_allow_flag(tmp_path: Path) -> None:
     """Loading a v1 JSON when allow_automatic_json_updates=False must raise RuntimeError."""
 
     optimiser = _make_minimal_optimiser()
@@ -227,7 +231,7 @@ def test_load_v1_json_raises_without_allow_flag(tmp_path) -> None:
         load_optimiser_from_state(save_path)
 
 
-def test_load_v1_json_auto_migrates_with_allow_flag(tmp_path) -> None:
+def test_load_v1_json_auto_migrates_with_allow_flag(tmp_path: Path) -> None:
     """Loading a v1 JSON with allow_automatic_json_updates=True must succeed and migrate the file."""
 
     optimiser = _make_minimal_optimiser()
@@ -255,7 +259,7 @@ def test_load_v1_json_auto_migrates_with_allow_flag(tmp_path) -> None:
     assert migrated.get('schema_version') == CURRENT_SCHEMA_VERSION
 
 
-def test_migrate_json_is_no_op_on_current_version(tmp_path) -> None:
+def test_migrate_json_is_no_op_on_current_version(tmp_path: Path) -> None:
     """Calling migrate_json on an already-current file must be a no-op (no backup created)."""
 
     optimiser = _make_minimal_optimiser()

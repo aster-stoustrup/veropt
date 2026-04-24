@@ -500,11 +500,12 @@ No changes to the optimiser settings JSON are needed.  veropt then:
   Pareto front uses noise-aware dominance** (Step 10b below).
 
 ### Step 10b — Noise-aware dominance wired into visualisation
-`get_pareto_optimal_points` already implemented the Fieldsend & Everson (2015)
-"certainly dominated" criterion: point B certainly dominates A only if
-B_j − k·σ_j > A_j + k·σ_j for **all** j.  The visualisation functions now pass
-`noise_std_per_objective` to this function, so borderline points near the noise
-floor are not prematurely excluded from the highlighted front.
+`get_pareto_optimal_points` uses ε-dominance (Laumanns et al. 2002, IEEE TEC 6(3))
+with ε_j = epsilon_n_sigma · σ_j: point B dominates A only if B_j > A_j + ε_j for **all** j.
+The tolerance is set in units of the noise std; default epsilon_n_sigma=1 gives a 1σ margin.
+The visualisation functions pass `noise_std_per_objective` to this function so
+borderline points near the noise floor are not prematurely excluded from the highlighted
+front.
 
 ### Code (key fragments in `visualisation.py`)
 ```python

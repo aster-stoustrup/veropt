@@ -7,6 +7,5 @@ Detailed implementation notes for all changes in this release.
 | `noise_settings_refactor.md` | Kernel noise refactor (v1→v2 schema), `noise_settings` TypedDict, schema versioning & migration system (including v3 fix) |
 | `noise_v1_implementation.md` | V1 observation noise feature — normaliser scale transform, `noise_std` on `Objective`, GP model pinning, noisy acquisition functions, Pareto front uncertainty, interface exposure |
 | `rollback_implementation.md` | Experiment rollback utility — rolls back JSONs and simulation folders to a previous batch boundary |
-| `visualisation_improvements.md` | String-based point selection in prediction plots, `choose_plot_point` default changed to best evaluated point |
 | `bug_fixes.md` | NumPy 2.4 fix (issue #22), noisy multi-objective reload crash fix |
 

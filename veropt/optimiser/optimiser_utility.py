@@ -450,36 +450,33 @@ def get_pareto_optimal_points(
         weights: Optional[torch.Tensor] = None,
         sort_by_max_weighted_sum: bool = False,
         noise_std_per_objective: Optional[torch.Tensor] = None,
-        noise_confidence_k: float = 0.5
+        epsilon_n_sigma: float = 1.0
 ) -> ParetoOptimalPoints:
     """Return the Pareto-optimal (non-dominated) subset of the evaluated points.
 
-    When `noise_std_per_objective` is supplied the algorithm uses a noise-aware
-    dominance criterion (Fieldsend & Everson 2015): point A is *certainly dominated*
-    by B only if B_j − k·σ_j > A_j + k·σ_j for **all** objectives j, i.e. B beats A
-    by more than 2·k·σ_j after accounting for noise.  Points that are not certainly
-    dominated by any other point are kept.
+    When `noise_std_per_objective` is supplied the algorithm applies ε-dominance
+    (Laumanns et al. 2002, IEEE TEC 6(3)) with ε_j = epsilon_n_sigma · σ_j: point B
+    dominates A only if B_j > A_j + ε_j for **all** objectives j.  The tolerance is
+    set in units of the noise std, so epsilon_n_sigma=1 (default) means dominance must
+    exceed 1σ of noise per objective.  epsilon_n_sigma=0 recovers the standard noiseless
+    criterion.
+
+    Reference: Laumanns, M., Thiele, L., Deb, K., & Zitzler, E. (2002).
+    Combining convergence and diversity in evolutionary multiobjective optimization.
+    IEEE Transactions on Evolutionary Computation, 6(3), 263–276.
 
     Parameters
     ----------
     noise_std_per_objective:
         Tensor of shape [n_objectives] with the known noise std per objective.
         When None the standard (noiseless) Pareto criterion is used.
-    noise_confidence_k:
-        Multiplier on the noise std that controls how conservative the criterion is.
-        k=0.5 (default) gives a 1σ margin — a natural "within one standard deviation"
-        threshold.  k=1.0 gives a 2σ margin (more conservative).  k=0 reduces to the
-        standard noiseless Pareto criterion.
+    epsilon_n_sigma:
+        Number of noise standard deviations that define ε_j = epsilon_n_sigma · σ_j.
+        Default 1.0 (1σ margin).  Larger values are more conservative (fewer points
+        kept on the front).  0 reduces to the standard noiseless criterion.
     """
-    # When noise is provided, a point p is kept unless B *certainly* dominates it:
-    # B certainly dominates p  ⟺  for ALL j: B_j > p_j + 2·k·σ_j
-    # ⟺  for ALL j: B_j > p_j + margin_j
-    # Equivalently p is kept if for every B, EXISTS j: B_j ≤ p_j + margin_j
-    # The standard algorithm keeps p if EXISTS j: B_j > p_j.
-    # Setting effective threshold = value − margin gives the noisy version:
-    # keep p if EXISTS j: p_j > B_j − margin_j  ⟺  EXISTS j: B_j ≤ p_j + margin_j ✓
     margin = (
-        2.0 * noise_confidence_k * noise_std_per_objective
+        epsilon_n_sigma * noise_std_per_objective
         if noise_std_per_objective is not None
         else torch.zeros(objective_values.shape[DataShape.index_dimensions])
     )

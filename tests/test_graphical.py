@@ -153,12 +153,12 @@ class TestUncertainParetoFront:
             noise_std_per_objective=noise_std,
             uncertainty_style='ellipse',
         )
-        # 3 standard + 2 ellipse traces (one per point group: initial + bayesian)
-        assert len(figure.data) == 5
+        # 3 standard + 3 ellipse traces (initial non-pareto, bayesian non-pareto, dominating)
+        assert len(figure.data) == 6
         trace_names = [t.name for t in figure.data]
         assert 'Noise (±1σ)' in trace_names
 
-    def test_add_pareto_traces_2d_with_ellipse_noise_adds_extra_trace(self) -> None:
+    def test_add_pareto_traces_2d_with_error_bars_noise_no_extra_trace(self) -> None:
         """With error_bars style, no ellipse trace is added; error_y is set on scatter traces."""
         import plotly.graph_objects as go
         objective_values = torch.rand(20, 3)

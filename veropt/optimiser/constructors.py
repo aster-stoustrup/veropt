@@ -228,7 +228,7 @@ def gpytorch_single_model_list(
             f"'noise_settings' list must have one entry per objective. "
             f"Expected {n_objectives} but got {len(noise_settings)}."
         )
-        noise_settings_list = noise_settings
+        noise_settings_list = list(noise_settings)  # type: ignore[assignment]
     else:
         noise_settings_list = [noise_settings] * n_objectives
 

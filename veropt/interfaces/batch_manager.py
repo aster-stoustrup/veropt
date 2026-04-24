@@ -524,4 +524,3 @@ class FakeSubmitBatchManager(SubmitBatchManager):
     @property
     def n_batches_submitted(self) -> int:
         return len(self.submitted_batches)
-

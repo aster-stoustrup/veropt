@@ -11,6 +11,7 @@ Covers:
 - JSON noise desync detection on reload
 """
 import json
+from pathlib import Path
 from typing import Optional
 
 import pytest
@@ -21,15 +22,17 @@ from veropt.optimiser.kernels import MaternKernel
 from veropt.optimiser.model import GPyTorchFullModel, NoiseSettingsInputDict
 from veropt.optimiser.normalisation import NormaliserZeroMeanUnitVariance
 from veropt.optimiser.objective import Objective
+from veropt.optimiser.optimiser import BayesianOptimiser
 from veropt.optimiser.optimiser_saver_loader import save_to_json, load_optimiser_from_state
 from veropt.optimiser.practice_objectives import Hartmann, VehicleSafety, DTLZ1
+from veropt.optimiser.prediction import BotorchPredictor
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_single_objective_noisy_optimiser(n_initial: int = 4, n_bayesian: int = 4) -> ...:
+def _make_single_objective_noisy_optimiser(n_initial: int = 4, n_bayesian: int = 4) -> BayesianOptimiser:
     """Small Hartmann-6 optimiser with noise_std set."""
     objective = Hartmann(n_variables=6, noise_std={'Hartmann': 0.05})
     return bayesian_optimiser(
@@ -41,7 +44,7 @@ def _make_single_objective_noisy_optimiser(n_initial: int = 4, n_bayesian: int =
     )
 
 
-def _make_multi_objective_noisy_optimiser(n_initial: int = 4, n_bayesian: int = 4) -> ...:
+def _make_multi_objective_noisy_optimiser(n_initial: int = 4, n_bayesian: int = 4) -> BayesianOptimiser:
     """Small VehicleSafety optimiser with noise_std set on all three objectives."""
     noise_std = {f"VeSa {i + 1}": 0.1 for i in range(3)}
     objective = VehicleSafety(noise_std=noise_std)
@@ -195,7 +198,9 @@ class TestOptimiserNoiseConfiguration:
         optimiser = _make_single_objective_noisy_optimiser()
         # No data evaluated yet, so normaliser is not fitted
         assert not optimiser.normalisers_have_been_initialised
-        assert torch.allclose(optimiser._noise_std_in_model_space, torch.tensor([0.05]))
+        noise_in_model = optimiser._noise_std_in_model_space
+        assert noise_in_model is not None
+        assert torch.allclose(noise_in_model, torch.tensor([0.05]))
 
     def test_noise_std_in_model_space_with_normaliser_returns_scaled(self) -> None:
         """After normaliser is fitted, _noise_std_in_model_space is scaled."""
@@ -240,6 +245,7 @@ class TestApplyPhysicalNoise:
         noise_std = torch.tensor([0.1])
         model._apply_physical_noise(noise_std_in_model_space=noise_std)
         expected_variance = 0.1 ** 2
+        assert model._model_list[0].model_with_data is not None
         actual_noise = float(model._model_list[0].model_with_data.likelihood.noise)
         assert abs(actual_noise - expected_variance) < 1e-10
 
@@ -276,7 +282,7 @@ class TestPredictorNoiseThreading:
         # If we got here, noise threading through train_model worked
         assert optimiser.model_has_been_trained
 
-    def test_noise_applied_on_train_false_reload(self, tmp_path) -> None:
+    def test_noise_applied_on_train_false_reload(self, tmp_path: Path) -> None:
         """After save+load, the model noise should match objective.noise_std."""
         optimiser = _make_single_objective_noisy_optimiser(n_initial=4)
         for _ in range(4):
@@ -293,15 +299,16 @@ class TestPredictorNoiseThreading:
         noise_in_model = loaded._noise_std_in_model_space
         assert noise_in_model is not None
 
+        assert isinstance(loaded.predictor, BotorchPredictor)
         for objective_index, single_model in enumerate(loaded.predictor.model._model_list):
             expected_variance = float(noise_in_model[objective_index] ** 2)
-            actual_noise = float(single_model.model_with_data.likelihood.noise)
+            actual_noise = float(single_model.model_with_data.likelihood.noise)  # type: ignore[union-attr]
             assert abs(actual_noise - expected_variance) < 1e-9, (
                 f"Objective {objective_index}: expected variance {expected_variance:.2e} "
                 f"but model has {actual_noise:.2e}"
             )
 
-    def test_multi_objective_noisy_reload_does_not_crash(self, tmp_path) -> None:
+    def test_multi_objective_noisy_reload_does_not_crash(self, tmp_path: Path) -> None:
         """Regression test: loading a saved multi-objective noisy optimiser must not raise
         UnsupportedError about unexpected batch dims in prune_inferior_points_multi_objective.
 
@@ -341,6 +348,8 @@ class TestPredictorNoiseThreading:
 
         assert loaded.model_has_been_trained
 
+        assert isinstance(loaded.predictor, BotorchPredictor)
+
         # batch_shape must be [] (no spurious batch dim from saved train_inputs tuple)
         reloaded_mlgp = loaded.predictor.model.get_gpytorch_model()
         assert reloaded_mlgp.batch_shape == torch.Size([]), (
@@ -354,7 +363,7 @@ class TestPredictorNoiseThreading:
 
         for objective_index, single_model in enumerate(loaded.predictor.model._model_list):
             expected_variance = float(noise_in_model[objective_index] ** 2)
-            actual_noise = float(single_model.model_with_data.likelihood.noise.detach())
+            actual_noise = float(single_model.model_with_data.likelihood.noise.detach())  # type: ignore[union-attr]
             assert abs(actual_noise - expected_variance) < 1e-9, (
                 f"Objective {objective_index}: expected variance {expected_variance:.2e} "
                 f"but model has {actual_noise:.2e}"
@@ -393,6 +402,7 @@ class TestNoisyAcquisitionAutoSelection:
 
     def test_bayesian_optimiser_with_noisy_multi_objective_uses_qlogneHVI(self) -> None:
         optimiser = _make_multi_objective_noisy_optimiser()
+        assert isinstance(optimiser.predictor, BotorchPredictor)
         assert optimiser.predictor.acquisition_function.name == 'qlogneHVI'
 
     def test_bayesian_optimiser_without_noise_uses_qlogehvi(self) -> None:
@@ -404,6 +414,7 @@ class TestNoisyAcquisitionAutoSelection:
             objective=objective,
             model={'training_settings': {'max_iter': 5, 'verbose': False}},
         )
+        assert isinstance(optimiser.predictor, BotorchPredictor)
         assert optimiser.predictor.acquisition_function.name == 'qlogehvi'
 
     def test_noisy_optimiser_full_run(self) -> None:
@@ -508,6 +519,7 @@ class TestModelPosteriorVariance:
             noise_std_in_model_space=noise_tensor
         )
         expected_variance = noise_std ** 2
+        assert model._model_list[0].model_with_data is not None
         actual_noise = float(model._model_list[0].model_with_data.likelihood.noise)
         relative_error = abs(actual_noise - expected_variance) / expected_variance
         assert relative_error < 0.01, (
@@ -524,7 +536,7 @@ class TestJsonNoiseDesyncDetection:
     """Verify that editing the kernel noise in the JSON file (while objective.noise_std
     disagrees) raises a clear error on reload rather than silently overwriting."""
 
-    def _run_optimiser_and_save(self, tmp_path) -> str:
+    def _run_optimiser_and_save(self, tmp_path: Path) -> str:
         optimiser = _make_single_objective_noisy_optimiser(n_initial=4)
         for _ in range(4):
             optimiser.run_optimisation_step()
@@ -533,13 +545,13 @@ class TestJsonNoiseDesyncDetection:
         save_to_json(optimiser, file_path)
         return file_path
 
-    def test_clean_json_reloads_without_error(self, tmp_path) -> None:
+    def test_clean_json_reloads_without_error(self, tmp_path: Path) -> None:
         """Sanity check: an unmodified JSON should reload cleanly."""
         file_path = self._run_optimiser_and_save(tmp_path)
         loaded = load_optimiser_from_state(file_path)
         assert loaded.objective.noise_std is not None
 
-    def test_tampered_kernel_noise_raises_on_reload(self, tmp_path) -> None:
+    def test_tampered_kernel_noise_raises_on_reload(self, tmp_path: Path) -> None:
         """Manually changing the kernel likelihood noise in the JSON should raise ValueError."""
         file_path = self._run_optimiser_and_save(tmp_path)
 
@@ -564,6 +576,19 @@ class TestJsonNoiseDesyncDetection:
 
         with pytest.raises(ValueError, match="Noise desync detected"):
             load_optimiser_from_state(file_path)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

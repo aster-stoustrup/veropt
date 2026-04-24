@@ -24,7 +24,7 @@ import sys
 
 
 def _make_rollback_parser(subparsers: argparse.Action) -> None:
-    rollback_parser = subparsers.add_parser(  # type: ignore[union-attr]
+    rollback_parser = subparsers.add_parser(  # type: ignore[attr-defined]
         "rollback",
         help="Roll back an experiment to a specific point.",
         description="Roll back an experiment's state, optimiser, and simulation directories to a given point.",

@@ -219,8 +219,8 @@ def test_get_pareto_optimal_points_with_noise() -> None:
     assert noisy_indices == {0, 1, 2}, f"Expected noisy front {{0, 1, 2}}, got {noisy_indices}"
 
 
-def test_get_pareto_optimal_points_with_noise_high_k() -> None:
-    # Same setup but with k=2: margin = 2 * 2 * 0.2 = 0.8
+def test_get_pareto_optimal_points_with_noise_high_epsilon() -> None:
+    # Same setup but with epsilon_n_sigma=4: margin = 4 * 0.2 = 0.8
     # Even more conservative → same result (B still not certainly dominated)
     # Also verify that a point that IS certainly dominated gets excluded:
     #   D = [0.5, 0.4]: A certainly dominates D if A_j > D_j + margin for ALL j
@@ -236,15 +236,15 @@ def test_get_pareto_optimal_points_with_noise_high_k() -> None:
     ])
     noise_std = torch.tensor([0.2, 0.2])
 
-    # With k=2, margin=0.8: A certainly dominates E on both objectives
+    # With epsilon_n_sigma=4, margin=0.8: A certainly dominates E on both objectives
     result = get_pareto_optimal_points(
         variable_values=variable_values,
         objective_values=objective_values,
         noise_std_per_objective=noise_std,
-        noise_confidence_k=2.0
+        epsilon_n_sigma=4.0
     )
     # When only one point is on the front, index is squeezed to a scalar int
-    result_indices = {int(result['index'])}
+    result_indices = {result['index']} if isinstance(result['index'], int) else set(result['index'])
     assert result_indices == {0}, (
         f"Expected only point A (index 0) on the noisy front, got {result_indices}"
     )

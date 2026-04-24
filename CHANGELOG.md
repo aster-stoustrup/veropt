@@ -12,9 +12,10 @@ All notable changes to this project will be documented in this file.
   uncertainty ellipses (or error bars) on Pareto front plots.
   See `changelog_reports/v1.3.0/noise_v1_implementation.md` for full details.
 - **Noise-aware Pareto front**: `get_pareto_optimal_points` now accepts
-  `noise_std_per_objective` and uses the Fieldsend & Everson (2015) "certain dominance"
-  criterion. `plot_pareto_front` / `plot_pareto_front_grid` pass noise through automatically
-  and accept `uncertainty_style='ellipse'` (default) or `'error_bars'`.
+  `noise_std_per_objective` and applies ε-dominance (Laumanns et al. 2002, IEEE TEC 6(3))
+  with ε_j = epsilon_n_sigma · σ_j (default 1σ margin). `plot_pareto_front` /
+  `plot_pareto_front_grid` pass noise through automatically and accept
+  `uncertainty_style='ellipse'` (default) or `'error_bars'`.
 - **Noisy Pareto front example**: `examples/example_noisy_pareto_front.py`.
 - **Experiment rollback utility**: `veropt.interfaces.rollback.rollback_experiment` rolls
   an experiment back to a previous batch boundary, restoring JSON state and optionally
@@ -35,7 +36,6 @@ All notable changes to this project will be documented in this file.
   `plot_prediction_surface`, and `plot_prediction_surface_grid` now accept string
   selectors for `evaluated_point`: `"best"`, `"best {objective_name}"`, `"suggested N"`.
   `evaluated_point` on `plot_prediction_surface` is now optional (defaults to `None`).
-  See `changelog_reports/v1.3.0/visualisation_improvements.md`.
 - **`allow_automatic_json_updates` exposed to experiment constructors**: pass the flag
   directly to `experiment()` / `experiment_with_new_version()` to trigger a one-off JSON
   migration without editing the file by hand.

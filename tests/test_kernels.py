@@ -127,5 +127,5 @@ def test_noise_in_kernel_settings_raises_error() -> None:
         gpytorch_single_model(
             n_variables=2,
             kernel='matern',
-            settings={'noise': 1e-4}
+            settings={'noise': 1e-4}  # type: ignore[arg-type]
         )

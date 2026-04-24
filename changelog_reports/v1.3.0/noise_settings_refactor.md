@@ -436,4 +436,3 @@ This crash only appeared on **reload** — training ran fine on first use.
 ### `CURRENT_SCHEMA_VERSION = 3`
 Old files (v1 or v2) are automatically migrated in sequence:
 v1 → v2 → v3, provided `allow_automatic_json_updates=True`.
-

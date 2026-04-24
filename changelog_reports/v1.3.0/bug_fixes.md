@@ -63,4 +63,3 @@ which on reload produced tensors with shape `[1, n_points, n_vars]` instead of
 - Removed the `_apply_physical_noise` call on the reload path — the state dict
   already encodes the correct `raw_noise`.
 - Added schema v3 migration (`_migrate_v2_to_v3`) to fix existing JSON files.
-
