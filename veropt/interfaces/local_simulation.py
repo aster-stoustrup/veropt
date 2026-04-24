@@ -21,7 +21,8 @@ class VirtualEnvironmentManager(ABC):
             args=['/bin/bash', '-c', '%s && %s' % (source, dump)],
             stdout=subprocess.PIPE)
 
-        os.environ = json.loads(s=pipe.stdout.read())  # type: ignore
+        assert pipe.stdout is not None
+        os.environ = json.loads(s=pipe.stdout.read())  # type: ignore[assignment]  # os.environ is MutableMapping[str, str] but dict[str, Any] from json isn't accepted by stubs
 
     def run_in_virtual_environment(
             self,

@@ -1,6 +1,6 @@
 import abc
 from enum import Enum
-from typing import Union
+from typing import Optional, Union
 
 import torch
 
@@ -19,7 +19,8 @@ class Objective(SavableClass, metaclass=abc.ABCMeta):
             n_variables: int,
             n_objectives: int,
             variable_names: list[str],
-            objective_names: list[str]
+            objective_names: list[str],
+            noise_std: Optional[dict[str, float]] = None
     ):
         assert len(bounds_lower) == n_variables
         assert len(bounds_upper) == n_variables
@@ -30,6 +31,13 @@ class Objective(SavableClass, metaclass=abc.ABCMeta):
 
         self.variable_names = variable_names
         self.objective_names = objective_names
+
+        if noise_std is not None:
+            assert set(noise_std.keys()) == set(objective_names), (
+                f"noise_std keys {set(noise_std.keys())} must match objective_names {set(objective_names)}."
+            )
+
+        self.noise_std = noise_std
 
     def get_bounds(
             self,
@@ -54,6 +62,7 @@ class Objective(SavableClass, metaclass=abc.ABCMeta):
                 'n_objectives': self.n_objectives,
                 'variable_names': self.variable_names,
                 'objective_names': self.objective_names,
+                'noise_std': self.noise_std,
             }
         }
 

@@ -475,7 +475,7 @@ class ProximityPunishmentSequentialOptimiser(AcquisitionOptimiser):
             sample = acquisition_function(
                 variable_values=random_coordinates[coord_ind:coord_ind + 1, :]
             )
-            samples[coord_ind] = sample.detach().numpy()  # If this is not detached, it causes a memory leak o:)
+            samples[coord_ind] = sample.detach().item()
 
         return samples
 
