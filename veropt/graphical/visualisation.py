@@ -549,6 +549,7 @@ def plot_prediction_surface(
         n_points_per_dimension=n_points_per_dimension
     )
 
+    # TODO: This is wrong when we know the evaluated value of the point
     evaluated_point_objective_value = optimiser.predictor.predict_values(
         variable_values=evaluated_point,
         normalised=normalised

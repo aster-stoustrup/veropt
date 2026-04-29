@@ -514,12 +514,19 @@ class BayesianOptimiser(SavableClass):
 
         return best_point
 
-    def get_pareto_optimal_points(self) -> ParetoOptimalPoints:
+    def get_pareto_optimal_points(
+            self,
+            epsilon_n_sigma: float = 1.0
+    ) -> ParetoOptimalPoints:
+
+        noise_std = self._noise_std_in_model_space
 
         pareto_optimal_points = get_pareto_optimal_points(
             variable_values=self.evaluated_variable_values.tensor,
             objective_values=self.evaluated_objective_values.tensor,
-            weights=self.settings.objective_weights
+            weights=self.settings.objective_weights,
+            noise_std_per_objective=noise_std,
+            epsilon_n_sigma=epsilon_n_sigma
         )
 
         return pareto_optimal_points
