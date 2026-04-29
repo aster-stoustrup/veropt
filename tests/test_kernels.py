@@ -1,4 +1,8 @@
+import pytest
+import torch
+
 from veropt import bayesian_optimiser
+from veropt.optimiser.kernels import MaternKernel, DoubleMaternKernel
 from veropt.optimiser.practice_objectives import Hartmann
 
 
@@ -46,3 +50,82 @@ def test_run_optimisation_step_rq_matern_kernel() -> None:
 
     for i in range(3):
         optimiser.run_optimisation_step()
+
+
+def test_noise_settings_stored_on_kernel() -> None:
+
+    custom_noise = 1e-4
+    kernel = MaternKernel(
+        n_variables=3,
+        noise_settings={'noise': custom_noise, 'train_noise': True}
+    )
+
+    assert kernel._noise_settings.noise == pytest.approx(custom_noise)
+    assert kernel._noise_settings.train_noise is True
+    assert kernel.train_noise is True
+
+
+def test_noise_settings_defaults_when_not_provided() -> None:
+
+    kernel = MaternKernel(n_variables=3)
+
+    assert kernel._noise_settings.noise == pytest.approx(1e-8)
+    assert kernel._noise_settings.noise_lower_bound == pytest.approx(1e-8)
+    assert kernel._noise_settings.train_noise is False
+
+
+def test_noise_settings_applied_after_model_initialisation() -> None:
+
+    custom_noise = 1e-4
+    kernel = MaternKernel(
+        n_variables=2,
+        noise_settings={'noise': custom_noise, 'noise_lower_bound': custom_noise}
+    )
+
+    var_tensor = torch.rand(4, 2)
+    obj_tensor = torch.rand(4, 1)
+
+    kernel.initialise_model_with_data(
+        train_inputs=var_tensor,
+        train_targets=obj_tensor.squeeze()
+    )
+
+    assert kernel.model_with_data is not None
+    actual_noise = float(kernel.model_with_data.likelihood.noise.item())
+    assert actual_noise == pytest.approx(custom_noise, rel=0.01)
+
+
+def test_legacy_kernel_state_raises_key_error() -> None:
+    """Loading a v1-format state dict (noise inside 'settings') must raise KeyError —
+    the schema gate in load_optimiser_from_state is the only supported upgrade path."""
+
+    legacy_state = {
+        'n_variables': 2,
+        'settings': {
+            'lengthscale_lower_bound': 0.1,
+            'lengthscale_upper_bound': 2.0,
+            'nu': 2.5,
+            'noise': 1e-08,
+            'noise_lower_bound': 1e-08,
+            'train_noise': False,
+        },
+        'state_dict': {},
+        'train_inputs': [],
+        'train_targets': [],
+    }
+
+    with pytest.raises(KeyError):
+        MaternKernel.from_saved_state(legacy_state)
+
+
+def test_noise_in_kernel_settings_raises_error() -> None:
+    """Passing noise fields inside kernel_settings must raise an AssertionError via _validate_typed_dict."""
+
+    from veropt.optimiser.constructors import gpytorch_single_model
+
+    with pytest.raises(AssertionError, match="noise"):
+        gpytorch_single_model(
+            n_variables=2,
+            kernel='matern',
+            settings={'noise': 1e-4}  # type: ignore[arg-type]
+        )
